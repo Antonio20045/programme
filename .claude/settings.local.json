@@ -8,7 +8,9 @@
       "Bash(npx tsc:*)",
       "Bash(git -C /Users/efstathia/Downloads/videos/programme status)",
       "Bash(gh auth:*)",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Read(//Users/efstathia/Projects/openclaw-analyse/**)",
+      "Bash(xargs:*)"
     ]
   },
   "enabledMcpjsonServers": [

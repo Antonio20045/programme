@@ -45,7 +45,7 @@ apps/
 
 packages/
   gateway/          OpenClaw Fork (NUR 3 neue Dateien: config.ts, channels/in-app.ts, tool-router.ts)
-  tools/            ALLE Tools selbst geschrieben (ToolDefinition Interface)
+  tools/            ALLE Tools selbst geschrieben (AgentTool Interface)
     src/            web-search, filesystem, shell, browser, gmail, calendar, reminders, notes
     __tests__/      Verhalten + Security pro Tool
   relay/            Cloudflare Worker (WebSocket-Relay, Pairing, Push)
@@ -55,27 +55,53 @@ scripts/            sign-tools, audit-deps, build-installers
 .claude/            agents/, commands/, rules/, settings.json
 ```
 
-## Tool-Interface
+## Tool-Interface (OpenClaw AgentTool)
 
-Jedes Tool in `packages/tools/src/` implementiert:
+Jedes Tool in `packages/tools/src/` implementiert das OpenClaw `AgentTool`-Interface:
 
 ```typescript
-interface ToolDefinition {
+interface AgentTool {
   name: string
   description: string
-  permissions: string[]
-  actions: Record<string, Action>
-  requiresConfirmation: string[]
+  parameters: JSONSchema          // JSON Schema für Argumente
+  execute: (args: unknown) => Promise<unknown>
 }
 ```
 
+Tools werden via LLM-native Function Calling aufgerufen (nicht String-Parsing).
+Registrierung über `createOpenClawCodingTools()` in `pi-tools.ts`.
+
 Jedes Tool braucht Verhaltens-Tests UND Security-Tests (kein eval, kein unauthorisierter fetch, kein Path Traversal).
+
+## Channel-Adapter Interface (OpenClaw ChannelPlugin)
+
+Unser In-App Channel in `packages/gateway/channels/in-app.ts` implementiert:
+
+```typescript
+import type { ChannelPlugin, OpenClawPluginApi } from "openclaw/plugin-sdk"
+
+// ChannelPlugin<TAccount, TProbe> mit diesen Pflicht-Feldern:
+const inAppPlugin: ChannelPlugin<InAppAccount, InAppProbe> = {
+  id: "in-app",
+  meta:         { /* label, docs, blurb */ },
+  capabilities: { /* chatTypes, media, reactions */ },
+  config:       { /* list, resolve, create, delete accounts */ },
+  security:     { /* dmPolicy, pairing, allowlists */ },
+  gateway:      { /* startAccount, logoutAccount */ },
+  outbound:     { /* sendText, sendMedia */ },
+}
+
+// Registrierung im Plugin-Entry:
+// api.registerChannel({ plugin: inAppPlugin as ChannelPlugin })
+```
+
+Siehe `docs/openclaw-analyse.md` Abschnitt 3 für vollständiges Telegram-Beispiel.
 
 ## Nachrichtenfluss (Kurzfassung)
 
 User → POST /api/message → Gateway → LLM → Text-Antwort (SSE Stream) ODER Tool-Aufruf → Tool Router: Server-Tool direkt ausführen / Lokales Tool an Desktop Agent via WS → Ergebnis zurück an LLM → nächste Aktion oder fertig.
 
-Tools mit `requiresConfirmation`: SSE Event → Client zeigt Vorschau → User bestätigt → erst dann ausführen.
+Tools mit Bestätigungspflicht: SSE Event → Client zeigt Vorschau → User bestätigt → erst dann ausführen.
 
 ## Workflow
 
@@ -101,6 +127,7 @@ In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, 
 
 | Thema | Datei | Wann lesen |
 |-------|-------|------------|
+| OpenClaw Source-Analyse | `docs/openclaw-analyse.md` | Bei Arbeit am Gateway/Fork, Channel-Adapter, Tool-System |
 | Architektur-Diagramm + Flows | `docs/architecture.md` | Bei Architektur-Fragen oder neuen Komponenten |
 | Monorepo-Struktur | `docs/structure.md` | Wenn unklar wo eine Datei hingehört |
 | Security-Regeln (Detail) | `.claude/rules/security.md` | Bei Security-relevanter Arbeit |
@@ -109,6 +136,6 @@ In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, 
 
 ## Aktueller Stand
 
-Phase: 0 — Scaffolding abgeschlossen
-Nächster Schritt: Phase 1 — Gateway Setup (OpenClaw Fork + 3 additive Dateien)
-Letzter Commit: Phase 0 complete: Scaffolding with all checks green
+Phase: 2.2 — abgeschlossen
+Nächster Schritt: Phase 2.3 — Fork erstellen und integrieren
+Letzter Commit: OpenClaw Analyse abgeschlossen
