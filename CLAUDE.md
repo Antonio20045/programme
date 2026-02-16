@@ -109,6 +109,6 @@ In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, 
 
 ## Aktueller Stand
 
-Phase: 0 — Noch nicht gestartet
-Nächster Schritt: Phase 0.1 — Claude Code installieren
-Letzter Commit: (noch keiner)
+Phase: 0 — Scaffolding abgeschlossen
+Nächster Schritt: Phase 1 — Gateway Setup (OpenClaw Fork + 3 additive Dateien)
+Letzter Commit: Phase 0 complete: Scaffolding with all checks green
