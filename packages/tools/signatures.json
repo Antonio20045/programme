@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "signedAt": "2026-02-16T19:43:59.378Z",
+  "signatures": {
+    "browser.ts": {
+      "hash": "002c10d150d69e641e78776ee09fe9c0359b268571de8351470a0950163e0a52",
+      "signature": "84a08920722c1833085561c130548b44cf930ced4bff85b89f83483dc6b7313530d2f7bb0323a6010f66940afb16b81f26423049338f08a9bd6696998b13550b"
+    },
+    "calendar.ts": {
+      "hash": "e21035fc74c2a16836be0bd8c7493957e3e24483cc1515f6a3fa992928fafbf3",
+      "signature": "89850e728a76d32deb703c8b16a4aa719b5f9b96334b84ad0bc2fb02f98337cfe85e802135bcadcec0a6f1e2c2b62b0385071df9843700faea1bf921c165620e"
+    },
+    "filesystem.ts": {
+      "hash": "061658bb51ab8e02c7b5b0e735abee3ef18f2a51c2a1585ad3da7c3f1a253684",
+      "signature": "75a6f53c82d80f216ef8cdcce7d2ac5d4e76609ade4db284df650847fe6a2e3234f1288b14ab0dc037ab685106777a92fb7ff26418cb4d9039f7f53ac7c09808"
+    },
+    "gmail.ts": {
+      "hash": "739ecedc67cda03064948199ede3a687466a937d3115e2bd2e67d2e83597297e",
+      "signature": "d9af17d2f4d4499adf46f3579ae9794b56648fa3ae0ce2c2222b79cdfca79c0b072f1b1681c8a28ac81e6e110e170a79a3d1b6c93220d82cdce7c8d25f3ad601"
+    },
+    "notes.ts": {
+      "hash": "931bd9d90dd61b5bb18bd91875cfbc0324186ade66d975057f0ad53c9b7dae9d",
+      "signature": "1de426b917a92827dadc882200b21300d79196f91265cfead4a5725c1d0084805f94b3782d24f832b3a56c36eacdf2adf2247299b4289f22c6b88ee54d03bf05"
+    },
+    "reminders.ts": {
+      "hash": "af4ddc58aba3a5afec3282099ab1b15a734352dcad67cccae7ce85cec258fbab",
+      "signature": "32628c3f0d6ed44553446a20368fef7563aa78cb01c29a954733024e4c329896506a21e8c02d2ddd70ba33b740488fc463d3dd9b5649b4955a0cc14e4699b808"
+    },
+    "shell.ts": {
+      "hash": "c915bbbdf9b7e1bac97c051b1452ac311b50c2de4b85c6572f16fc67fc3698cf",
+      "signature": "c358bc2d011e6fc73fb488b87d21df9d515cb6706bcce3fbd10c05d7e8943b621c167eefd93cbfaab418282857aeb6e884620ed9fed0faa779f5bf0fc97ecb0a"
+    },
+    "web-search.ts": {
+      "hash": "09a502d5d8a74d64ca485b0497c20449e463e89e80bb7cc2c44988aa58174a3d",
+      "signature": "e68678932089ff494c32bc0d11a46aadfb1655f95fe4644a41853b3687bd736d3c674dd0a5adfb491ce2224ee03a6eda2f8e212d24a97f355cf45b28b6bf9c0c"
+    }
+  }
+}

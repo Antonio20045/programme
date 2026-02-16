@@ -23,11 +23,14 @@
       "Bash(xattr:*)",
       "Bash(claude mcp add:*)",
       "Bash(unset:*)",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "WebSearch",
+      "Bash(claude mcp remove:*)"
     ]
   },
   "enabledMcpjsonServers": [
     "github",
-    "context7"
+    "context7",
+    "playwright"
   ]
 }

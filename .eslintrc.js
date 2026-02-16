@@ -16,6 +16,7 @@ module.exports = {
     'no-implied-eval': 'error',
     'security/detect-non-literal-fs-filename': 'warn',
     'security/detect-child-process': 'error',
+    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/no-explicit-any': 'error',
   },
   ignorePatterns: ['node_modules/', 'dist/', 'packages/gateway/'],

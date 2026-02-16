@@ -26,6 +26,11 @@ pnpm audit-deps   # pnpm audit + Dangerous Pattern Scan + Secret Scan
 
 Einzelnen Test: `pnpm vitest run packages/tools/__tests__/gmail.test.ts`
 
+Tool-Signierung:
+```
+npx tsx scripts/sign-tools.ts  # Keypair generieren (wenn nötig) + alle Tools signieren
+```
+
 App-spezifisch:
 ```
 pnpm dev:desktop  |  pnpm build:desktop    # Electron
@@ -40,7 +45,7 @@ pnpm build:mobile                           # React Native
 - Relay: Zero Knowledge — kein console.log/info/debug, kein Message Storage
 - Mobile ↔ Gateway: E2E verschlüsselt (X25519 + XSalsa20-Poly1305, tweetnacl-js Client, sodium-native Server)
 - OAuth Tokens gehören in den OS Keychain, nicht in Config-Dateien
-- Tool-Signierung: Ed25519 via libsodium — Gateway prüft vor dem Laden
+- Tool-Signierung: Ed25519 — `sign-tools.ts` signiert mit libsodium, `verify.ts` prüft mit Node crypto (timingSafeEqual + crypto.verify). Private Key NUR in `.env`, Public Key in `public-key.ts`. Gateway ruft `verifyTool()` vor dem Laden auf.
 - Dependencies: Zero high/critical in npm audit
 - Kein fetch() in Tools außer an dokumentierte APIs (Gmail, Calendar, Search)
 - Pfad-Validierung gegen Whitelist bei jedem Dateizugriff (Path Traversal Schutz)
@@ -82,11 +87,14 @@ packages/
   gateway/          OpenClaw Fork (NUR 3 neue Dateien: config.ts, channels/in-app.ts, tool-router.ts)
   tools/            ALLE Tools selbst geschrieben (AgentTool Interface)
     src/            web-search, filesystem, shell, browser, gmail, calendar, reminders, notes
+    src/verify.ts   Tool-Signatur-Verifikation (Ed25519 via Node crypto, zero Dependencies)
+    src/public-key.ts Ed25519 Public Key (generiert von sign-tools.ts)
+    signatures.json Ed25519-Signaturen aller Tool-Dateien (generiert von sign-tools.ts)
     __tests__/      Verhalten + Security pro Tool
   relay/            Cloudflare Worker (WebSocket-Relay, Pairing, Push)
   shared/           Types, Encryption (X25519+XSalsa20), Constants
 
-scripts/            sign-tools, audit-deps, build-installers
+scripts/            sign-tools.ts, audit-deps.ts, generate-tray-icons.ts
 .claude/            agents/, commands/, hooks/, settings.json
 ```
 
@@ -104,7 +112,7 @@ interface AgentTool {
 ```
 
 Tools werden via LLM-native Function Calling aufgerufen (nicht String-Parsing).
-Registrierung über `createOpenClawCodingTools()` in `pi-tools.ts`.
+Registrierung über `createOpenClawCodingTools()` in `register.ts`.
 
 Jedes Tool braucht Verhaltens-Tests UND Security-Tests (kein eval, kein unauthorisierter fetch, kein Path Traversal).
 
@@ -185,6 +193,6 @@ In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, 
 
 ## Aktueller Stand
 
-Phase: 4 — abgeschlossen
-Nächster Schritt: Phase 5 — Selbstgeschriebene Tools
-Letzter Commit: Phase 4 complete: Chat Interface mit allen Komponenten integriert
+Phase: 5 — abgeschlossen
+Nächster Schritt: Phase 6 — Setup Wizard + Admin
+Letzter Commit: Phase 5 complete: Tool-Signierung mit Ed25519 (sign + verify + tests)
