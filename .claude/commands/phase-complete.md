@@ -1,5 +1,5 @@
 ---
-description: Phase abschließen mit allen Checks, Security-Scan, CLAUDE.md Update, Commit und Pull Request
+description: Phase abschließen mit allen Checks, Security-Scan, CLAUDE.md Update, Commit und Merge in main
 argument_hint: "[phase-nr] | [nächster-schritt]"
 ---
 
@@ -22,13 +22,11 @@ Phase abschließen: $ARGUMENTS
    f) Wenn CLAUDE.md über 300 Zeilen: Inhalte in .claude/rules/ auslagern.
 7. git add -A && git commit -m '[passende commit message]'
 8. git push
-9. Erstelle einen Pull Request via GitHub MCP:
-   - Titel: 'Phase [nr] abgeschlossen'
-   - Beschreibung: Was in dieser Phase gemacht wurde
-   - Base: main
-   - Head: aktueller Branch
-10. Warte auf automatisches Review von Claude
-11. Zeige mir das Review-Ergebnis
+9. Merge aktuellen Branch in main:
+   - git checkout main
+   - git merge aktueller-branch
+   - git push origin main
+   - git branch -d aktueller-branch
 
 Wenn ein Check fehlschlägt: FIX IT bevor du weitergehst. NIE mit Fehlern committen.
 Wenn das Review Probleme findet: Fixen, erneut committen und pushen.

@@ -19,7 +19,12 @@ C) SECURITY (Pflicht für jedes Tool in packages/tools/): Kein eval/Function, ke
 
 4. Führe die Tests aus: pnpm test
 5. Bei Fehlern: analysiere ob der Test falsch ist oder der Code einen Bug hat
-6. Report: Anzahl Tests, Passed, Failed, Coverage-Lücken
+6. Wenn Tests fehlschlagen:
+   - Fixe den Test oder den Code (je nachdem wo der Bug ist)
+   - Tests erneut ausführen
+   - Wiederholen bis alle Tests grün sind
+   - Erst dann: "QA bestanden ✅"
+7. Report: Anzahl Tests, Passed, Failed, Coverage-Lücken
 
 REGELN:
 - Jeder Test muss unabhängig laufen (kein shared state)

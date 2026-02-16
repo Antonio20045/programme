@@ -1,7 +1,7 @@
 ---
 name: ui-reviewer
 description: UI review via screenshots. Checks layout, spacing, states, visual bugs.
-tools: Read, Write, Edit, Bash, Grep, Glob, mcp__puppeteer
+tools: Read, Write, Edit, Bash, Grep, Glob, mcp__playwright
 model: inherit
 ---
 

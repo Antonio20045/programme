@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import fs from 'fs'
 import path from 'path'
 import { GatewayManager } from './gateway-manager'
 import { TrayManager } from './tray'
@@ -77,6 +78,52 @@ function setupGateway(): void {
 
 ipcMain.handle('gateway:get-status', () => {
   return gatewayManager?.getStatus() ?? 'offline'
+})
+
+ipcMain.handle('shell:open-external', (_event, url: unknown) => {
+  if (typeof url !== 'string') return
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'https:') {
+      void shell.openExternal(url)
+    }
+  } catch {
+    // Invalid URL — ignore silently
+  }
+})
+
+const ALLOWED_EXTENSIONS = ['txt', 'pdf', 'md', 'csv', 'json', 'png', 'jpg', 'docx']
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+
+ipcMain.handle('dialog:open-file', async () => {
+  const win = mainWindow
+  if (!win || win.isDestroyed()) return null
+
+  const result = await dialog.showOpenDialog(win, {
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Erlaubte Dateien', extensions: ALLOWED_EXTENSIONS },
+    ],
+  })
+
+  if (result.canceled || result.filePaths.length === 0) return null
+
+  const files: Array<{ name: string; size: number; path: string; buffer: string }> = []
+
+  for (const filePath of result.filePaths) {
+    const stat = fs.statSync(filePath)
+    if (stat.size > MAX_FILE_SIZE) continue
+
+    const buffer = fs.readFileSync(filePath)
+    files.push({
+      name: path.basename(filePath),
+      size: stat.size,
+      path: filePath,
+      buffer: buffer.toString('base64'),
+    })
+  }
+
+  return files.length > 0 ? files : null
 })
 
 app.whenReady().then(() => {
