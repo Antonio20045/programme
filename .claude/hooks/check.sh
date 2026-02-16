@@ -1,6 +1,6 @@
 #!/bin/bash
-# Hook: TypeScript type-check after .ts/.tsx changes and on Stop
-# Used by PostToolUse (Write|Edit) and Stop events
+# Hook: TypeScript + ESLint after .ts/.tsx changes and on Stop
+# Zero output on success, max 5 error lines on failure
 
 INPUT=$(cat)
 
@@ -18,12 +18,22 @@ if [ -n "$FILE" ] && [[ "$FILE" != *.ts && "$FILE" != *.tsx ]]; then
 fi
 
 # Run TypeScript type checking
-OUTPUT=$(npx tsc --noEmit 2>&1)
-STATUS=$?
+TS_OUTPUT=$(npx tsc --noEmit 2>&1)
+TS_STATUS=$?
 
-if [ $STATUS -ne 0 ]; then
-  echo "TypeScript errors found:" >&2
-  echo "$OUTPUT" >&2
+if [ $TS_STATUS -ne 0 ]; then
+  echo "TypeScript:" >&2
+  echo "$TS_OUTPUT" | head -5 >&2
+  exit 2
+fi
+
+# Run ESLint (only after successful TypeScript)
+LINT_OUTPUT=$(npx eslint --no-error-on-unmatched-pattern 'apps/**/*.{ts,tsx}' 'packages/**/*.{ts,tsx}' 2>&1)
+LINT_STATUS=$?
+
+if [ $LINT_STATUS -ne 0 ]; then
+  echo "ESLint:" >&2
+  echo "$LINT_OUTPUT" | head -5 >&2
   exit 2
 fi
 

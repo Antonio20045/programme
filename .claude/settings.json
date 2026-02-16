@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Read",
       "Bash(git *)",
       "Bash(pnpm *)",
       "Bash(grep *)",
@@ -26,7 +27,37 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/typecheck.sh",
+            "command": "bash .claude/hooks/check.sh",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/security-check.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/test-check.sh",
+            "timeout": 60
+          }
+        ]
+      },
+      {
+        "matcher": "Write:package.json|Edit:package.json",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/dependency-check.sh",
             "timeout": 30
           }
         ]
@@ -37,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/typecheck.sh",
+            "command": "bash .claude/hooks/check.sh",
             "timeout": 60
           }
         ]
