@@ -14,4 +14,12 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.removeListener('gateway:status', handler)
     }
   },
+
+  openExternal: (url: string): Promise<void> => {
+    return ipcRenderer.invoke('shell:open-external', url)
+  },
+
+  openFileDialog: (): Promise<Array<{ name: string; size: number; path: string; buffer: string }> | null> => {
+    return ipcRenderer.invoke('dialog:open-file')
+  },
 })

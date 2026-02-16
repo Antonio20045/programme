@@ -59,10 +59,21 @@ apps/
   desktop/          Electron (electron-vite + React + Tailwind + TS)
     src/main/       Main Process: index.ts, gateway-manager.ts, tray.ts
     src/renderer/   React UI (HashRouter): App.tsx, pages/, components/, hooks/
-      src/pages/    Chat.tsx, Settings.tsx
-      src/components/ Sidebar.tsx (Navigation + Gateway-Status)
-      src/hooks/    useGatewayStatus.ts
-    src/preload/    IPC-Bridge (contextBridge)
+      src/pages/    Chat.tsx (Message-UI + File-Upload), Settings.tsx
+      src/components/
+        Sidebar.tsx         Navigation + SessionList + Gateway-Status
+        SessionList.tsx     Session-Liste mit Erstellen/Löschen
+        MarkdownMessage.tsx Markdown-Rendering für Assistant-Nachrichten
+        ToolExecution.tsx   Collapsible Tool-Ausführungs-Anzeige
+        FileDropZone.tsx    Drag&Drop-Zone für Datei-Upload
+        FilePreview.tsx     Vorschau angehängter Dateien
+        AttachmentButton.tsx Datei-Auswahl-Button
+      src/hooks/
+        useChat.ts          Chat-Logik (SSE-Stream, Tool-Events, File-Upload)
+        useSessions.ts      Session-Verwaltung (CRUD + aktive Session)
+        useGatewayStatus.ts Gateway-Status via IPC
+      src/config.ts   GATEWAY_URL Konfiguration
+    src/preload/    IPC-Bridge (contextBridge): openExternal, openFileDialog
   mobile/           React Native + Expo
     src/screens/    Pairing, Chat, Settings
     src/services/   relay.ts, encryption.ts, push.ts
@@ -123,7 +134,11 @@ Siehe `docs/openclaw-analyse.md` Abschnitt 3 für vollständiges Telegram-Beispi
 
 ## Nachrichtenfluss (Kurzfassung)
 
-User → POST /api/message → Gateway → LLM → Text-Antwort (SSE Stream) ODER Tool-Aufruf → Tool Router: Server-Tool direkt ausführen / Lokales Tool an Desktop Agent via WS → Ergebnis zurück an LLM → nächste Aktion oder fertig.
+User → POST /api/message (JSON oder FormData mit Dateien) → Gateway → LLM → Text-Antwort (SSE Stream) ODER Tool-Aufruf → Tool Router: Server-Tool direkt ausführen / Lokales Tool an Desktop Agent via WS → Ergebnis zurück an LLM → nächste Aktion oder fertig.
+
+SSE Events: `token` (Text-Chunks), `tool_start` (JSON: toolName + params), `tool_result` (JSON: toolName + result), `done`, `error`.
+
+Client: useChat verwaltet Messages-State, öffnet EventSource nach POST, baut Assistant-Nachricht aus token-Events, zeigt Tool-Ausführungen als ToolExecution-Komponente. Session-ID wird via Ref persistiert.
 
 Tools mit Bestätigungspflicht: SSE Event → Client zeigt Vorschau → User bestätigt → erst dann ausführen.
 
@@ -170,6 +185,6 @@ In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, 
 
 ## Aktueller Stand
 
-Phase: 3 — abgeschlossen
-Nächster Schritt: Phase 4 — Chat Interface
-Letzter Commit: Phase 3 complete
+Phase: 4 — abgeschlossen
+Nächster Schritt: Phase 5 — Selbstgeschriebene Tools
+Letzter Commit: Phase 4 complete: Chat Interface mit allen Komponenten integriert
