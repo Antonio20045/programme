@@ -18,5 +18,5 @@ module.exports = {
     'security/detect-child-process': 'error',
     '@typescript-eslint/no-explicit-any': 'error',
   },
-  ignorePatterns: ['node_modules/', 'dist/'],
+  ignorePatterns: ['node_modules/', 'dist/', 'packages/gateway/'],
 }

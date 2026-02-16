@@ -17,12 +17,18 @@ if [ ! -f "$FILE" ]; then
   exit 0
 fi
 
+# Skip scanner scripts (they contain patterns as search strings)
+BASENAME=$(basename "$FILE")
+if [[ "$BASENAME" == "audit-deps.ts" || "$BASENAME" == "security-check.sh" ]]; then
+  exit 0
+fi
+
 FOUND=0
 while IFS= read -r line; do
   LINENO_NUM=$(echo "$line" | cut -d: -f1)
   for pattern in 'eval(' 'new Function(' '.exec(' 'innerHTML' 'dangerouslySetInnerHTML' 'sk-' 'PRIVATE_KEY' 'password='; do
     if echo "$line" | grep -qF "$pattern"; then
-      echo "SECURITY: [$pattern] in $FILE:$LINENO_NUM" >&2
+      echo "SECURITY: [$pattern] in \"$FILE\":$LINENO_NUM" >&2
       FOUND=1
     fi
   done

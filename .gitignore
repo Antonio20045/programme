@@ -4,3 +4,6 @@ dist/
 .DS_Store
 *.tsbuildinfo
 .mcp.json
+
+# OpenClaw Fork — eigenes Git-Repo, separat verwaltet
+packages/gateway/

@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 Persönlicher KI-Assistent für Nicht-Entwickler. Electron Desktop + React Native Mobile als Wrapper um eine geforkte OpenClaw-Engine. 60-Sekunden-Onboarding, alle Tools selbstgeschrieben und signiert.
 
 ## WICHTIG — Absolute Regeln
@@ -14,10 +16,20 @@ Persönlicher KI-Assistent für Nicht-Entwickler. Electron Desktop + React Nativ
 ## Befehle — nach JEDER Änderung ausführen
 
 ```
-pnpm typecheck    # TypeScript strict
-pnpm lint         # ESLint + Security
+pnpm typecheck    # TypeScript strict (noUncheckedIndexedAccess + noImplicitAny)
+pnpm lint         # ESLint + eslint-plugin-security
 pnpm test         # Vitest
-pnpm audit-deps   # npm audit + Dangerous Pattern Scan
+pnpm audit-deps   # pnpm audit + Dangerous Pattern Scan + Secret Scan
+```
+
+Einzelnen Test: `pnpm vitest run packages/tools/__tests__/gmail.test.ts`
+
+App-spezifisch:
+```
+pnpm dev:desktop  |  pnpm build:desktop    # Electron
+pnpm dev:gateway                            # Gateway
+pnpm dev:relay                              # Relay
+pnpm build:mobile                           # React Native
 ```
 
 ## Caveats
@@ -30,8 +42,11 @@ pnpm audit-deps   # npm audit + Dangerous Pattern Scan
 - Dependencies: Zero high/critical in npm audit
 - Kein fetch() in Tools außer an dokumentierte APIs (Gmail, Calendar, Search)
 - Pfad-Validierung gegen Whitelist bei jedem Dateizugriff (Path Traversal Schutz)
+- Gateway-Fork ist von typecheck, lint, test und audit-deps excludet (eigene tsconfig, zu groß für Root-Checks)
 
 ## Projektstruktur
+
+pnpm Monorepo mit Workspaces (`apps/*`, `packages/*`). TypeScript path aliases: `@ki-assistent/shared` → `packages/shared/src`, `@ki-assistent/tools` → `packages/tools/src`.
 
 ```
 apps/
@@ -52,7 +67,7 @@ packages/
   shared/           Types, Encryption (X25519+XSalsa20), Constants
 
 scripts/            sign-tools, audit-deps, build-installers
-.claude/            agents/, commands/, rules/, settings.json
+.claude/            agents/, commands/, hooks/, settings.json
 ```
 
 ## Tool-Interface (OpenClaw AgentTool)
@@ -103,6 +118,16 @@ User → POST /api/message → Gateway → LLM → Text-Antwort (SSE Stream) ODE
 
 Tools mit Bestätigungspflicht: SSE Event → Client zeigt Vorschau → User bestätigt → erst dann ausführen.
 
+## Hooks (automatisch bei Write/Edit)
+
+PostToolUse-Hooks laufen nach jeder Dateiänderung. Zero output bei Erfolg, max 5 Zeilen bei Fehler:
+- `check.sh` — TypeScript + ESLint (nur .ts/.tsx)
+- `security-check.sh` — Pattern-Scan (eval, exec, innerHTML, Secrets) pro Datei
+- `test-check.sh` — Test-Existenz + Ausführung für src/-Dateien
+- `dependency-check.sh` — pnpm audit bei package.json-Änderungen
+
+Stop-Hook: `check.sh` läuft auch beim Beenden.
+
 ## Workflow
 
 1. **Plan Mode zuerst** — Shift+Tab bis "Plan". 1 Minute Planung spart 10 Minuten Bauen.
@@ -115,7 +140,7 @@ Tools mit Bestätigungspflicht: SSE Event → Client zeigt Vorschau → User bes
 
 ## Verfügbare Agents
 
-In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, devils-advocate.
+In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, devils-advocate, pentester.
 
 ## Custom Commands
 
@@ -136,6 +161,6 @@ In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, 
 
 ## Aktueller Stand
 
-Phase: 2.2 — abgeschlossen
-Nächster Schritt: Phase 2.3 — Fork erstellen und integrieren
-Letzter Commit: OpenClaw Analyse abgeschlossen
+Phase: 2 — abgeschlossen
+Nächster Schritt: Phase 3.1 — Electron Projekt erstellen
+Letzter Commit: Phase 2 complete
