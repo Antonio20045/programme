@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(node --version:*)",
+      "Bash(pnpm:*)",
+      "Bash(test:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git -C /Users/efstathia/Downloads/videos/programme status)",
+      "Bash(gh auth:*)",
+      "Bash(gh:*)"
+    ]
+  }
+}

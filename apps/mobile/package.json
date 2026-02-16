@@ -1,0 +1,8 @@
+{
+  "name": "@ki-assistent/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
