@@ -12,6 +12,8 @@ Persönlicher KI-Assistent für Nicht-Entwickler. Electron Desktop + React Nativ
 - **NUR tun was im Prompt steht.** Komponente erstellen ≠ anderswo einsetzen. Tool erstellen ≠ in anderen Dateien aufrufen. Im Zweifel: fragen.
 - **NIE mit Fehlern committen.** Alle Checks grün, dann committen.
 - **Keine neuen Dependencies** ohne explizite Erlaubnis.
+- **Nach JEDER Änderung an .tsx oder .css Dateien:** ui-reviewer Agent aufrufen bevor du weitermachst.
+- **Bei externen Libraries** (electron-vite, vitest, tailwind, react-router, etc.): IMMER zuerst Context7 nutzen um aktuelle Dokumentation zu lesen, bevor du Code schreibst. Nicht auf Trainingswissen verlassen.
 
 ## Befehle — nach JEDER Änderung ausführen
 
@@ -43,6 +45,10 @@ pnpm build:mobile                           # React Native
 - Kein fetch() in Tools außer an dokumentierte APIs (Gmail, Calendar, Search)
 - Pfad-Validierung gegen Whitelist bei jedem Dateizugriff (Path Traversal Schutz)
 - Gateway-Fork ist von typecheck, lint, test und audit-deps excludet (eigene tsconfig, zu groß für Root-Checks)
+- Electron: `will-navigate` blockiert, `setWindowOpenHandler` deny — keine externen URLs, keine neuen Fenster
+- Electron: `contextIsolation: true`, `sandbox: true`, kein `nodeIntegration`, kein `remote`
+- Electron: HashRouter statt BrowserRouter (Electron nutzt `file://` in Production)
+- Electron: IPC-Daten werden mit Type Guard validiert bevor sie in den Renderer State gehen
 
 ## Projektstruktur
 
@@ -50,9 +56,12 @@ pnpm Monorepo mit Workspaces (`apps/*`, `packages/*`). TypeScript path aliases: 
 
 ```
 apps/
-  desktop/          Electron (electron-vite + React + TS)
-    src/main/       Main Process: index.ts, agent.ts, tray.ts, updater.ts
-    src/renderer/   React UI: Chat.tsx, Admin.tsx, Setup.tsx, components/, hooks/
+  desktop/          Electron (electron-vite + React + Tailwind + TS)
+    src/main/       Main Process: index.ts, gateway-manager.ts, tray.ts
+    src/renderer/   React UI (HashRouter): App.tsx, pages/, components/, hooks/
+      src/pages/    Chat.tsx, Settings.tsx
+      src/components/ Sidebar.tsx (Navigation + Gateway-Status)
+      src/hooks/    useGatewayStatus.ts
     src/preload/    IPC-Bridge (contextBridge)
   mobile/           React Native + Expo
     src/screens/    Pairing, Chat, Settings
@@ -161,6 +170,6 @@ In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, 
 
 ## Aktueller Stand
 
-Phase: 2 — abgeschlossen
-Nächster Schritt: Phase 3.1 — Electron Projekt erstellen
-Letzter Commit: Phase 2 complete
+Phase: 3 — abgeschlossen
+Nächster Schritt: Phase 4 — Chat Interface
+Letzter Commit: Phase 3 complete

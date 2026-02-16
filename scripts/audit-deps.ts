@@ -3,21 +3,44 @@ import { exit } from 'node:process'
 
 let failed = false
 
-// 1. pnpm audit for high/critical vulnerabilities
+// 1. pnpm audit for high/critical vulnerabilities (gateway excluded per CLAUDE.md)
 console.log('=== pnpm audit ===')
 try {
-  const auditOutput = execFileSync('pnpm', ['audit', '--audit-level=high'], {
+  execFileSync('pnpm', ['audit', '--audit-level=high', '--json'], {
     encoding: 'utf-8',
     stdio: ['pipe', 'pipe', 'pipe'],
   })
-  console.log(auditOutput)
+  console.log('No high/critical vulnerabilities found.')
 } catch (err: unknown) {
   const error = err as { status?: number; stdout?: string; stderr?: string }
-  if (error.status && error.status > 0) {
-    console.error('pnpm audit found vulnerabilities:')
-    if (error.stdout) console.error(error.stdout)
-    if (error.stderr) console.error(error.stderr)
-    failed = true
+  if (error.status && error.status > 0 && error.stdout) {
+    const audit = JSON.parse(error.stdout) as {
+      advisories?: Record<string, {
+        severity: string
+        module_name: string
+        title: string
+        findings: Array<{ paths: string[] }>
+      }>
+    }
+    const advisories = audit.advisories ?? {}
+    let nonGatewayCount = 0
+    for (const [, advisory] of Object.entries(advisories)) {
+      if (advisory.severity !== 'high' && advisory.severity !== 'critical') continue
+      const nonGatewayPaths = advisory.findings.flatMap((f) =>
+        f.paths.filter((p) => !p.startsWith('packages__gateway')),
+      )
+      if (nonGatewayPaths.length > 0) {
+        console.error(`  ${advisory.severity}: ${advisory.module_name} — ${advisory.title}`)
+        for (const p of nonGatewayPaths) console.error(`    Path: ${p}`)
+        nonGatewayCount++
+      }
+    }
+    if (nonGatewayCount > 0) {
+      console.error(`pnpm audit: ${String(nonGatewayCount)} non-gateway vulnerabilities found`)
+      failed = true
+    } else {
+      console.log('pnpm audit: only gateway vulnerabilities found (excluded per CLAUDE.md)')
+    }
   }
 }
 
