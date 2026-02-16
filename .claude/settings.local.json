@@ -12,7 +12,18 @@
       "Read(//Users/efstathia/Projects/openclaw-analyse/**)",
       "Bash(xargs:*)",
       "Bash(git commit:*)",
-      "Bash(shellcheck:*)"
+      "Bash(shellcheck:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(pkill:*)",
+      "Bash(node:*)",
+      "Bash(ELECTRON_CACHE=\"\" node:*)",
+      "Bash(/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron:*)",
+      "Bash(npx electron:*)",
+      "Bash(xattr:*)",
+      "Bash(claude mcp add:*)",
+      "Bash(unset:*)",
+      "Bash(npx:*)"
     ]
   },
   "enabledMcpjsonServers": [

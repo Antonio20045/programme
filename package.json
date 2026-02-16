@@ -12,6 +12,9 @@
     "build:desktop": "pnpm --filter @ki-assistent/desktop build",
     "build:mobile": "pnpm --filter @ki-assistent/mobile build"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild"]
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
