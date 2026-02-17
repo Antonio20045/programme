@@ -160,6 +160,9 @@ PostToolUse-Hooks laufen nach jeder Dateiänderung. Zero output bei Erfolg, max 
 
 Stop-Hook: `check.sh` läuft auch beim Beenden.
 
+PreToolUse-Hook:
+- `block-unnecessary-docs.sh` — Blockiert Erstellen von .md/.txt außerhalb von docs/, README.md, CLAUDE.md
+
 ## Workflow
 
 1. **Plan Mode zuerst** — Shift+Tab bis "Plan". 1 Minute Planung spart 10 Minuten Bauen.
@@ -179,6 +182,8 @@ In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, 
 - `/new-tool [name] | [beschreibung]` — Tool mit Tests und Security-Checks erstellen
 - `/security-scan` — Vierfach-Audit mit adversarialer Devil's-Advocate-Debate
 - `/phase-complete [nr] | [nächster-schritt]` — Phase abschließen mit allen Checks
+- `/learn` — Patterns aus aktueller Session extrahieren und in docs/learnings.md speichern
+- `/agentshield` — AgentShield Security-Scan auf Claude Code Konfiguration
 
 ## Weitere Dokumentation
 
