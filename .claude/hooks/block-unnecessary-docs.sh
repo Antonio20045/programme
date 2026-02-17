@@ -22,8 +22,8 @@ case "$BASENAME" in
     ;;
 esac
 
-# Erlaubte Pfade
-if [[ "$FILE" == docs/* || "$FILE" == .claude/* || "$FILE" == *SKILL.md ]]; then
+# Erlaubte Pfade (relativ und absolut)
+if [[ "$FILE" == docs/* || "$FILE" == */docs/* || "$FILE" == .claude/* || "$FILE" == */.claude/* || "$FILE" == *SKILL.md || "$FILE" == *.plan.md ]]; then
   exit 0
 fi
 
