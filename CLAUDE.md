@@ -54,6 +54,7 @@ pnpm build:mobile                           # React Native
 - Electron: `contextIsolation: true`, `sandbox: true`, kein `nodeIntegration`, kein `remote`
 - Electron: HashRouter statt BrowserRouter (Electron nutzt `file://` in Production)
 - Electron: IPC-Daten werden mit Type Guard validiert bevor sie in den Renderer State gehen
+- MCP-Server: `.mcp.json` steht in `.gitignore` (enthält potenziell Tokens). Nach einem frischen Clone muss sie manuell erstellt werden mit den Einträgen für `github`, `context7` und `playwright`. Zusätzlich muss `enabledMcpjsonServers` in `.claude/settings.local.json` die gleichen Server-Namen enthalten.
 
 ## Projektstruktur
 
@@ -175,12 +176,12 @@ PreToolUse-Hook:
 
 ## Verfügbare Agents
 
-In `.claude/agents/`: code-reviewer, security-auditor, researcher (Sonnet), qa, devils-advocate, pentester.
+In `.claude/agents/`: code-reviewer, security-auditor (OWASP+Electron+LLM-aware), researcher (Sonnet), qa, devils-advocate (3 Modi: Security-Debate, Architektur-Debate, Risk-Assessment), pentester (aktive Exploit-Verifikation mit Proof-of-Concepts, model: opus).
 
 ## Custom Commands
 
 - `/new-tool [name] | [beschreibung]` — Tool mit Tests und Security-Checks erstellen
-- `/security-scan` — Vierfach-Audit mit adversarialer Devil's-Advocate-Debate
+- `/security-scan [--full]` — Fünffach-Audit mit adversarialer Debate (optional Pentest bei `--full`)
 - `/phase-complete [nr] | [nächster-schritt]` — Phase abschließen mit allen Checks
 - `/learn` — Patterns aus aktueller Session extrahieren und in docs/learnings.md speichern
 - `/agentshield` — AgentShield Security-Scan auf Claude Code Konfiguration
