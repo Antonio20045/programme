@@ -22,4 +22,8 @@ contextBridge.exposeInMainWorld('api', {
   openFileDialog: (): Promise<Array<{ name: string; size: number; path: string; buffer: string }> | null> => {
     return ipcRenderer.invoke('dialog:open-file')
   },
+
+  getSetupRequired: (): Promise<boolean> => {
+    return ipcRenderer.invoke('setup:get-required')
+  },
 })

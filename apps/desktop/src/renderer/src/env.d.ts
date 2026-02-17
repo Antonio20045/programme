@@ -14,6 +14,7 @@ interface ElectronApi {
   onGatewayStatus: (callback: (status: GatewayStatus) => void) => () => void
   openExternal: (url: string) => Promise<void>
   openFileDialog: () => Promise<SelectedFile[] | null>
+  getSetupRequired: () => Promise<boolean>
 }
 
 interface Window {

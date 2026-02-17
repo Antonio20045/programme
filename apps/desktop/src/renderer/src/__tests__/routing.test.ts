@@ -17,6 +17,7 @@ vi.stubGlobal('window', {
   api: {
     getGatewayStatus: vi.fn<[], Promise<string>>().mockResolvedValue('online'),
     onGatewayStatus: vi.fn<[(status: string) => void], () => void>().mockReturnValue(vi.fn()),
+    getSetupRequired: vi.fn<[], Promise<boolean>>().mockResolvedValue(false),
   },
 })
 
