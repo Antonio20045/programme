@@ -40,7 +40,7 @@ export default function ToolExecution({
   }, [])
 
   return (
-    <div className="my-1 rounded border border-gray-700 bg-gray-800/50">
+    <div className="my-1 rounded-lg border border-gray-700 bg-gray-800/50">
       <button
         type="button"
         onClick={handleToggle}

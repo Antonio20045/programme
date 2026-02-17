@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { GATEWAY_URL } from '../config'
 import type { ChatMessage } from './useChat'
 
 interface Session {
@@ -77,20 +76,18 @@ export function useSessions(): UseSessionsReturn {
 
   const refreshSessions = useCallback(() => {
     setIsLoading(true)
-    fetch(`${GATEWAY_URL}/api/sessions`)
+    window.api.gatewayFetch({ method: 'GET', path: '/api/sessions' })
       .then((res) => {
         if (!res.ok) throw new Error(`Status ${res.status.toString()}`)
-        return res.json() as Promise<unknown>
-      })
-      .then((data) => {
+        const data: unknown = res.data
         if (!isSessionArray(data)) throw new Error('Ungültige Session-Daten')
 
         // Fetch titles for each session by loading first messages
         const titlePromises = data.map((s) =>
-          fetch(`${GATEWAY_URL}/api/sessions/${s.id}/messages`)
+          window.api.gatewayFetch({ method: 'GET', path: `/api/sessions/${encodeURIComponent(s.id)}/messages` })
             .then((r) => {
               if (!r.ok) return [] as MessageResponse[]
-              return r.json() as Promise<unknown>
+              return r.data as unknown
             })
             .then((msgs): Session => {
               const validMsgs = isMessageArray(msgs) ? msgs : []
@@ -127,12 +124,10 @@ export function useSessions(): UseSessionsReturn {
   const selectSession = useCallback((id: string) => {
     setActiveSessionId(id)
     // Load messages for the selected session
-    fetch(`${GATEWAY_URL}/api/sessions/${id}/messages`)
+    window.api.gatewayFetch({ method: 'GET', path: `/api/sessions/${encodeURIComponent(id)}/messages` })
       .then((res) => {
         if (!res.ok) throw new Error(`Status ${res.status.toString()}`)
-        return res.json() as Promise<unknown>
-      })
-      .then((data) => {
+        const data: unknown = res.data
         if (!isMessageArray(data)) throw new Error('Ungültige Nachrichten')
         const chatMessages: ChatMessage[] = data.map((m) => ({
           id: m.id,
@@ -155,7 +150,7 @@ export function useSessions(): UseSessionsReturn {
 
   const deleteSession = useCallback(
     (id: string) => {
-      fetch(`${GATEWAY_URL}/api/sessions/${id}`, { method: 'DELETE' })
+      window.api.gatewayFetch({ method: 'DELETE', path: `/api/sessions/${encodeURIComponent(id)}` })
         .then((res) => {
           if (!res.ok) throw new Error(`Status ${res.status.toString()}`)
           setSessions((prev) => prev.filter((s) => s.id !== id))

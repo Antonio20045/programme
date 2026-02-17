@@ -1,0 +1,41 @@
+# =============================================================================
+# KI-Assistent — Docker Compose
+# =============================================================================
+# Usage:
+#   cp .env.example .env   # fill in your API keys
+#   docker compose up -d   # start gateway
+#   docker compose logs -f # follow logs
+# =============================================================================
+
+services:
+  gateway:
+    build:
+      context: ./packages/gateway
+      dockerfile: ../../docker/gateway.Dockerfile
+    image: ki-assistent-gateway:local
+    container_name: ki-assistent-gateway
+    init: true
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+    volumes:
+      - gateway-config:/home/node/.openclaw
+      - gateway-workspace:/home/node/.openclaw/workspace
+    ports:
+      - "${GATEWAY_PORT:-18789}:18789"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:18789/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    command: >
+      node openclaw.mjs gateway
+      --allow-unconfigured
+      --bind ${GATEWAY_BIND:-loopback}
+
+volumes:
+  gateway-config:
+  gateway-workspace:

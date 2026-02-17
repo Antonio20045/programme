@@ -167,11 +167,12 @@ describe('TrayManager', () => {
 
       const template = getLastMenuTemplate()
 
-      expect(template).toHaveLength(4)
+      expect(template).toHaveLength(5)
       expect(template[0]?.label).toBe('Öffnen')
-      expect(template[1]?.label).toMatch(/^Status: /)
-      expect(template[2]?.type).toBe('separator')
-      expect(template[3]?.label).toBe('Beenden')
+      expect(template[1]?.label).toMatch(/^Modus: /)
+      expect(template[2]?.label).toMatch(/^Status: /)
+      expect(template[3]?.type).toBe('separator')
+      expect(template[4]?.label).toBe('Beenden')
     })
 
     it('shows Status: Offline by default', () => {
@@ -179,7 +180,7 @@ describe('TrayManager', () => {
       manager.create()
 
       const template = getLastMenuTemplate()
-      expect(template[1]?.label).toBe('Status: Offline')
+      expect(template[2]?.label).toBe('Status: Offline')
     })
 
     it('status item is not clickable (enabled: false)', () => {
@@ -187,7 +188,7 @@ describe('TrayManager', () => {
       manager.create()
 
       const template = getLastMenuTemplate()
-      expect(template[1]?.enabled).toBe(false)
+      expect(template[2]?.enabled).toBe(false)
     })
 
     it('Öffnen shows and focuses the window', () => {
@@ -218,7 +219,7 @@ describe('TrayManager', () => {
       manager.create()
 
       const template = getLastMenuTemplate()
-      template[3]?.click?.()
+      template[4]?.click?.()
 
       expect(onQuit).toHaveBeenCalledTimes(1)
     })
@@ -310,7 +311,7 @@ describe('TrayManager', () => {
       manager.updateStatus('online')
 
       const template = getLastMenuTemplate()
-      expect(template[1]?.label).toBe('Status: Online')
+      expect(template[2]?.label).toBe('Status: Online')
     })
 
     it('shows correct German labels for each status', () => {
@@ -327,7 +328,7 @@ describe('TrayManager', () => {
       for (const [status, expectedLabel] of Object.entries(expectedLabels)) {
         manager.updateStatus(status as 'starting' | 'online' | 'offline' | 'error')
         const template = getLastMenuTemplate()
-        expect(template[1]?.label).toBe(expectedLabel)
+        expect(template[2]?.label).toBe(expectedLabel)
       }
     })
 

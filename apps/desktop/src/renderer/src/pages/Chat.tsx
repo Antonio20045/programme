@@ -2,11 +2,13 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useChat } from '../hooks/useChat'
 import type { ChatMessage } from '../hooks/useChat'
 import { useGatewayStatus } from '../hooks/useGatewayStatus'
+import { useGatewayConfig } from '../hooks/useGatewayConfig'
 import MarkdownMessage from '../components/MarkdownMessage'
 import FileDropZone from '../components/FileDropZone'
 import FilePreview from '../components/FilePreview'
 import AttachmentButton from '../components/AttachmentButton'
 import ToolExecution from '../components/ToolExecution'
+import ToolConfirmation from '../components/ToolConfirmation'
 
 interface ChatProps {
   readonly activeSessionId: string | null
@@ -23,8 +25,36 @@ function TypingIndicator(): JSX.Element {
   )
 }
 
-function MessageBubble({ message }: { readonly message: ChatMessage }): JSX.Element {
+function MessageBubble({
+  message,
+  onConfirmTool,
+}: {
+  readonly message: ChatMessage
+  readonly onConfirmTool: (
+    toolCallId: string,
+    decision: 'execute' | 'reject',
+    modifiedParams?: Record<string, unknown>,
+  ) => void
+}): JSX.Element {
   const isUser = message.role === 'user'
+
+  // Tool confirmation pending
+  if (
+    message.toolConfirmPending === true &&
+    message.toolCallId !== undefined &&
+    message.toolName !== undefined &&
+    message.toolConfirmPreview !== undefined
+  ) {
+    return (
+      <ToolConfirmation
+        toolName={message.toolName}
+        params={message.toolParams ?? {}}
+        toolCallId={message.toolCallId}
+        preview={message.toolConfirmPreview}
+        onConfirm={onConfirmTool}
+      />
+    )
+  }
 
   // Tool execution message
   if (message.toolStartedAt !== undefined && message.toolName !== undefined) {
@@ -61,15 +91,29 @@ function MessageBubble({ message }: { readonly message: ChatMessage }): JSX.Elem
 }
 
 export default function Chat({ activeSessionId, onSessionCreated }: ChatProps): JSX.Element {
-  const { messages, isLoading, error, sendMessage } = useChat({ activeSessionId, onSessionCreated })
+  const { messages, isLoading, error, sendMessage, confirmTool } = useChat({ activeSessionId, onSessionCreated })
   const gatewayStatus = useGatewayStatus()
+  const { mode } = useGatewayConfig()
   const [input, setInput] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [fileError, setFileError] = useState<string | null>(null)
+  const [agentStatus, setAgentStatus] = useState<string>('local')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const isOffline = gatewayStatus !== 'online' && gatewayStatus !== 'starting'
+  const agentOffline = mode === 'server' && agentStatus === 'disconnected'
+
+  useEffect(() => {
+    if (mode !== 'server') return
+    void window.api.agentStatus().then((s) => {
+      setAgentStatus(typeof s === 'string' ? s : 'local')
+    })
+    const unsubscribe = window.api.onAgentStatus((s) => {
+      setAgentStatus(typeof s === 'string' ? s : 'local')
+    })
+    return unsubscribe
+  }, [mode])
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -133,7 +177,7 @@ export default function Chat({ activeSessionId, onSessionCreated }: ChatProps): 
               </p>
             )}
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble key={msg.id} message={msg} onConfirmTool={confirmTool} />
             ))}
             {isLoading && <TypingIndicator />}
             <div ref={messagesEndRef} />
@@ -158,6 +202,13 @@ export default function Chat({ activeSessionId, onSessionCreated }: ChatProps): 
         {isOffline && (
           <div className="border-t border-amber-800 bg-amber-950 px-4 py-2 text-center text-sm text-amber-300">
             Gateway nicht erreichbar
+          </div>
+        )}
+
+        {/* Agent offline banner (server mode only) */}
+        {agentOffline && !isOffline && (
+          <div className="border-t border-amber-800 bg-amber-950 px-4 py-2 text-center text-sm text-amber-300">
+            Desktop-Agent nicht verbunden — lokale Tools nicht verf&uuml;gbar
           </div>
         )}
 

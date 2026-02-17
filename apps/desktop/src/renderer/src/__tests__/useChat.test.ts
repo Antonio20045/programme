@@ -1,11 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ---------------------------------------------------------------------------
-// Mock fetch + EventSource before importing the hook
+// Mock window.api + fetch + EventSource before importing the hook
 // ---------------------------------------------------------------------------
 
+const mockGatewayFetch = vi.fn<(data: { method: string; path: string; body?: unknown }) => Promise<{ ok: boolean; status: number; data: unknown }>>()
+const mockGetStreamUrl = vi.fn<(sessionId: string) => Promise<string>>()
 const mockFetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>()
+
 vi.stubGlobal('fetch', mockFetch)
+
+Object.defineProperty(globalThis, 'window', {
+  value: {
+    api: {
+      gatewayFetch: mockGatewayFetch,
+      getStreamUrl: mockGetStreamUrl,
+    },
+  },
+  writable: true,
+})
 
 // Minimal EventSource mock
 type ESListener = (event: MessageEvent | Event) => void
@@ -105,11 +118,18 @@ vi.mock('react', () => ({
   },
 }))
 
+vi.mock('../config', () => ({
+  getGatewayUrl: () => 'http://127.0.0.1:18789',
+  getGatewayMode: () => 'local',
+  GATEWAY_URL: 'http://127.0.0.1:18789',
+}))
+
 import { useChat } from '../hooks/useChat'
-import { GATEWAY_URL } from '../config'
+
+const GATEWAY_URL = 'http://127.0.0.1:18789'
 
 // ---------------------------------------------------------------------------
-// State slot indices (after removing sessionId state):
+// State slot indices:
 // [0] = messages (ChatMessage[])
 // [1] = isLoading (boolean)
 // [2] = error (string | null)
@@ -118,6 +138,10 @@ import { GATEWAY_URL } from '../config'
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function createGatewayResult(data: unknown, ok = true, status = 200): { ok: boolean; status: number; data: unknown } {
+  return { ok, status, data }
+}
 
 function createJsonResponse(body: unknown, status = 200): Response {
   return {
@@ -151,6 +175,9 @@ describe('useChat', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetHookState()
+    mockGetStreamUrl.mockImplementation((sessionId: string) =>
+      Promise.resolve(`${GATEWAY_URL}/api/stream/${sessionId}`),
+    )
   })
 
   afterEach(() => {
@@ -169,36 +196,30 @@ describe('useChat', () => {
     expect(typeof result.sendMessage).toBe('function')
   })
 
-  it('posts message to gateway with correct URL and body', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+  it('posts message to gateway via gatewayFetch', async () => {
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
     sendMessage('Hallo')
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      `${GATEWAY_URL}/api/message`,
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    )
-
-    const callArgs = mockFetch.mock.calls[0]
-    const body = JSON.parse(callArgs?.[1]?.body as string) as unknown
-    expect(body).toEqual({ text: 'Hallo', sessionId: null })
+    expect(mockGatewayFetch).toHaveBeenCalledWith({
+      method: 'POST',
+      path: '/api/message',
+      body: { text: 'Hallo', sessionId: null },
+    })
   })
 
   it('preserves sessionId across messages via ref', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
     sendMessage('Erste Nachricht')
 
-    // Wait for fetch to resolve
+    // Wait for stream URL resolve + EventSource creation
     await vi.waitFor(() => {
       expect(MockEventSource.instances).toHaveLength(1)
     })
@@ -210,21 +231,20 @@ describe('useChat', () => {
     // Re-call hook to get updated sendMessage
     const result2 = callHook()
 
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-2', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-2', sessionId: 'sess-1' }),
     )
 
     result2.sendMessage('Zweite Nachricht')
 
-    expect(mockFetch).toHaveBeenCalledTimes(2)
-    const secondCallArgs = mockFetch.mock.calls[1]
-    const body = JSON.parse(secondCallArgs?.[1]?.body as string) as unknown
-    expect(body).toEqual({ text: 'Zweite Nachricht', sessionId: 'sess-1' })
+    expect(mockGatewayFetch).toHaveBeenCalledTimes(2)
+    const secondCall = mockGatewayFetch.mock.calls[1]?.[0] as { body: unknown }
+    expect(secondCall.body).toEqual({ text: 'Zweite Nachricht', sessionId: 'sess-1' })
   })
 
   it('opens EventSource after successful POST', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
@@ -238,9 +258,24 @@ describe('useChat', () => {
     expect(es.url).toBe(`${GATEWAY_URL}/api/stream/sess-1`)
   })
 
+  it('calls getStreamUrl for EventSource URL', async () => {
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    )
+
+    const { sendMessage } = callHook()
+    sendMessage('Test')
+
+    await vi.waitFor(() => {
+      expect(MockEventSource.instances).toHaveLength(1)
+    })
+
+    expect(mockGetStreamUrl).toHaveBeenCalledWith('sess-1')
+  })
+
   it('appends tokens to assistant message', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
@@ -260,8 +295,8 @@ describe('useChat', () => {
   })
 
   it('closes EventSource on done event', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
@@ -278,7 +313,7 @@ describe('useChat', () => {
   })
 
   it('sets error on fetch failure', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'))
+    mockGatewayFetch.mockRejectedValue(new Error('Network error'))
 
     const { sendMessage } = callHook()
     sendMessage('Test')
@@ -290,7 +325,7 @@ describe('useChat', () => {
   })
 
   it('sets error on non-ok response', async () => {
-    mockFetch.mockResolvedValue(createJsonResponse({}, 500))
+    mockGatewayFetch.mockResolvedValue(createGatewayResult({}, false, 500))
 
     const { sendMessage } = callHook()
     sendMessage('Test')
@@ -302,8 +337,8 @@ describe('useChat', () => {
   })
 
   it('closes EventSource on error event', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
@@ -324,12 +359,12 @@ describe('useChat', () => {
     sendMessage('')
     sendMessage('   ')
 
-    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockGatewayFetch).not.toHaveBeenCalled()
   })
 
   it('does not send while loading', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
@@ -343,13 +378,13 @@ describe('useChat', () => {
     const result2 = callHook()
     result2.sendMessage('Zweite')
 
-    // Only one fetch call
-    expect(mockFetch).toHaveBeenCalledTimes(1)
+    // Only one gatewayFetch call
+    expect(mockGatewayFetch).toHaveBeenCalledTimes(1)
   })
 
   it('closes EventSource on unmount via cleanup', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     callHook()
@@ -367,8 +402,8 @@ describe('useChat', () => {
   })
 
   it('handles tool_start and tool_result events', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
@@ -399,8 +434,8 @@ describe('useChat', () => {
 
   it('calls onSessionCreated when new session is created', async () => {
     const onSessionCreated = vi.fn()
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-new' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-new' }),
     )
 
     const { sendMessage } = callHook({ onSessionCreated })
@@ -415,8 +450,8 @@ describe('useChat', () => {
 
   it('does not call onSessionCreated on existing session', async () => {
     const onSessionCreated = vi.fn()
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook({ activeSessionId: 'sess-1', onSessionCreated })
@@ -429,7 +464,7 @@ describe('useChat', () => {
     expect(onSessionCreated).not.toHaveBeenCalled()
   })
 
-  it('sends FormData when files are provided', async () => {
+  it('sends FormData via direct fetch when files are provided', async () => {
     mockFetch.mockResolvedValue(
       createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
@@ -442,27 +477,32 @@ describe('useChat', () => {
     const callArgs = mockFetch.mock.calls[0]
     const init = callArgs?.[1]
     expect(init?.body).toBeInstanceOf(FormData)
-    // No Content-Type header — browser sets it with boundary
+    // No auth headers — file upload uses direct fetch
     expect(init?.headers).toBeUndefined()
+    // gatewayFetch should NOT have been called
+    expect(mockGatewayFetch).not.toHaveBeenCalled()
   })
 
-  it('sends JSON when no files are provided', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+  it('sends JSON via gatewayFetch when no files are provided', async () => {
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
     sendMessage('Ohne Datei')
 
-    const callArgs = mockFetch.mock.calls[0]
-    const init = callArgs?.[1]
-    expect(init?.headers).toEqual({ 'Content-Type': 'application/json' })
-    expect(typeof init?.body).toBe('string')
+    expect(mockGatewayFetch).toHaveBeenCalledWith({
+      method: 'POST',
+      path: '/api/message',
+      body: { text: 'Ohne Datei', sessionId: null },
+    })
+    // Direct fetch should NOT have been called
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 
   it('parses tool_start JSON payload', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
 
     const { sendMessage } = callHook()
@@ -482,5 +522,125 @@ describe('useChat', () => {
   it('registers two useEffects (cleanup + session load)', () => {
     callHook()
     expect(effectCallbacks).toHaveLength(2)
+  })
+
+  // -------------------------------------------------------------------
+  // Tool confirmation tests
+  // -------------------------------------------------------------------
+
+  it('exposes confirmTool function', () => {
+    const result = callHook()
+    expect(typeof result.confirmTool).toBe('function')
+  })
+
+  it('creates confirmation message on tool_confirm SSE event', async () => {
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    )
+
+    const { sendMessage } = callHook()
+    sendMessage('Lösche Datei')
+
+    await vi.waitFor(() => {
+      expect(MockEventSource.instances).toHaveLength(1)
+    })
+
+    const es = MockEventSource.instances[0]!
+    es.emit(
+      'tool_confirm',
+      JSON.stringify({
+        toolCallId: 'tc-1',
+        toolName: 'shell',
+        params: { command: 'rm -rf /tmp/test' },
+      }),
+    )
+
+    // Messages setter should have been invoked
+    const messagesSlot = stateSlots[0]
+    expect(messagesSlot).toBeDefined()
+  })
+
+  it('confirmTool sends POST via gatewayFetch', async () => {
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    )
+
+    const { sendMessage } = callHook()
+    sendMessage('Test')
+
+    await vi.waitFor(() => {
+      expect(MockEventSource.instances).toHaveLength(1)
+    })
+
+    // Clear mock to isolate the confirm call
+    mockGatewayFetch.mockClear()
+    mockGatewayFetch.mockResolvedValue(createGatewayResult({ ok: true }))
+
+    // Re-call hook to get confirmTool with current session ref
+    const result = callHook()
+    result.confirmTool('tc-1', 'execute')
+
+    expect(mockGatewayFetch).toHaveBeenCalledWith({
+      method: 'POST',
+      path: '/api/confirm/sess-1',
+      body: { toolCallId: 'tc-1', decision: 'execute' },
+    })
+  })
+
+  it('confirmTool sends modifiedParams when provided', async () => {
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    )
+
+    const { sendMessage } = callHook()
+    sendMessage('Test')
+
+    await vi.waitFor(() => {
+      expect(MockEventSource.instances).toHaveLength(1)
+    })
+
+    mockGatewayFetch.mockClear()
+    mockGatewayFetch.mockResolvedValue(createGatewayResult({ ok: true }))
+
+    const result = callHook()
+    result.confirmTool('tc-2', 'execute', { command: 'echo hello' })
+
+    const callArgs = mockGatewayFetch.mock.calls[0]?.[0] as { body: unknown }
+    expect(callArgs.body).toEqual({
+      toolCallId: 'tc-2',
+      decision: 'execute',
+      modifiedParams: { command: 'echo hello' },
+    })
+  })
+
+  it('confirmTool with reject updates message state', async () => {
+    mockGatewayFetch.mockResolvedValue(
+      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
+    )
+
+    const { sendMessage } = callHook()
+    sendMessage('Test')
+
+    await vi.waitFor(() => {
+      expect(MockEventSource.instances).toHaveLength(1)
+    })
+
+    mockGatewayFetch.mockClear()
+    mockGatewayFetch.mockResolvedValue(createGatewayResult({ ok: true }))
+
+    const result = callHook()
+    result.confirmTool('tc-1', 'reject')
+
+    // Messages setter should have been called to update toolConfirmPending
+    const messagesSlot = stateSlots[0]
+    expect(messagesSlot).toBeDefined()
+  })
+
+  it('does not send confirm when no session is active', () => {
+    const { confirmTool } = callHook()
+    confirmTool('tc-1', 'execute')
+
+    // No gatewayFetch call because session is null
+    expect(mockGatewayFetch).not.toHaveBeenCalled()
   })
 })

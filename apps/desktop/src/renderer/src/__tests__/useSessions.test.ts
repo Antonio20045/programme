@@ -1,11 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ---------------------------------------------------------------------------
-// Mock fetch before importing the hook
+// Mock window.api before importing the hook
 // ---------------------------------------------------------------------------
 
-const mockFetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>()
-vi.stubGlobal('fetch', mockFetch)
+const mockGatewayFetch = vi.fn<(data: { method: string; path: string; body?: unknown }) => Promise<{ ok: boolean; status: number; data: unknown }>>()
+
+Object.defineProperty(globalThis, 'window', {
+  value: {
+    api: {
+      gatewayFetch: mockGatewayFetch,
+    },
+  },
+  writable: true,
+})
 
 // ---------------------------------------------------------------------------
 // Mock React hooks to test without DOM
@@ -44,18 +52,13 @@ vi.mock('react', () => ({
 }))
 
 import { useSessions } from '../hooks/useSessions'
-import { GATEWAY_URL } from '../config'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createJsonResponse(body: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(body),
-  } as Response
+function createGatewayResult(data: unknown, ok = true, status = 200): { ok: boolean; status: number; data: unknown } {
+  return { ok, status, data }
 }
 
 function resetHookState(): void {
@@ -91,13 +94,13 @@ describe('useSessions', () => {
     expect(typeof result.refreshSessions).toBe('function')
   })
 
-  it('refreshSessions fetches from correct URL', () => {
-    mockFetch.mockResolvedValue(createJsonResponse([]))
+  it('refreshSessions calls gatewayFetch with correct path', () => {
+    mockGatewayFetch.mockResolvedValue(createGatewayResult([]))
 
     const { refreshSessions } = callHook()
     refreshSessions()
 
-    expect(mockFetch).toHaveBeenCalledWith(`${GATEWAY_URL}/api/sessions`)
+    expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions' })
   })
 
   it('refreshSessions parses session list and fetches titles', async () => {
@@ -115,24 +118,24 @@ describe('useSessions', () => {
       { id: 'msg-3', role: 'user', content: 'Zweiter Chat' },
     ]
 
-    mockFetch
-      .mockResolvedValueOnce(createJsonResponse(sessionsData))
-      .mockResolvedValueOnce(createJsonResponse(messages1))
-      .mockResolvedValueOnce(createJsonResponse(messages2))
+    mockGatewayFetch
+      .mockResolvedValueOnce(createGatewayResult(sessionsData))
+      .mockResolvedValueOnce(createGatewayResult(messages1))
+      .mockResolvedValueOnce(createGatewayResult(messages2))
 
     const { refreshSessions } = callHook()
     refreshSessions()
 
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(3)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(3)
     })
 
-    expect(mockFetch).toHaveBeenCalledWith(`${GATEWAY_URL}/api/sessions/sess-1/messages`)
-    expect(mockFetch).toHaveBeenCalledWith(`${GATEWAY_URL}/api/sessions/sess-2/messages`)
+    expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions/sess-1/messages' })
+    expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions/sess-2/messages' })
   })
 
   it('refreshSessions sets isLoading during fetch', () => {
-    mockFetch.mockResolvedValue(createJsonResponse([]))
+    mockGatewayFetch.mockResolvedValue(createGatewayResult([]))
 
     const { refreshSessions } = callHook()
     refreshSessions()
@@ -143,7 +146,7 @@ describe('useSessions', () => {
   })
 
   it('refreshSessions handles fetch error gracefully', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'))
+    mockGatewayFetch.mockRejectedValue(new Error('Network error'))
 
     const { refreshSessions } = callHook()
     refreshSessions()
@@ -155,7 +158,7 @@ describe('useSessions', () => {
   })
 
   it('refreshSessions handles invalid data gracefully', async () => {
-    mockFetch.mockResolvedValue(createJsonResponse('not-an-array'))
+    mockGatewayFetch.mockResolvedValue(createGatewayResult('not-an-array'))
 
     const { refreshSessions } = callHook()
     refreshSessions()
@@ -172,12 +175,12 @@ describe('useSessions', () => {
       { id: 'msg-2', role: 'assistant', content: 'Hi!' },
     ]
 
-    mockFetch.mockResolvedValue(createJsonResponse(messagesData))
+    mockGatewayFetch.mockResolvedValue(createGatewayResult(messagesData))
 
     const { selectSession } = callHook()
     selectSession('sess-1')
 
-    expect(mockFetch).toHaveBeenCalledWith(`${GATEWAY_URL}/api/sessions/sess-1/messages`)
+    expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions/sess-1/messages' })
 
     // activeSessionId setter should have been called
     const activeSlot = stateSlots[1]
@@ -186,26 +189,26 @@ describe('useSessions', () => {
   })
 
   it('selectSession handles fetch error gracefully', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'))
+    mockGatewayFetch.mockRejectedValue(new Error('Network error'))
 
     const { selectSession } = callHook()
     selectSession('sess-1')
 
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(1)
     })
 
     // Should not throw
   })
 
   it('selectSession handles invalid message data', async () => {
-    mockFetch.mockResolvedValue(createJsonResponse('invalid'))
+    mockGatewayFetch.mockResolvedValue(createGatewayResult('invalid'))
 
     const { selectSession } = callHook()
     selectSession('sess-1')
 
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -221,20 +224,17 @@ describe('useSessions', () => {
     expect(activeSlot!.value).toBeNull()
   })
 
-  it('deleteSession sends DELETE request to correct URL', () => {
-    mockFetch.mockResolvedValue(createJsonResponse(null))
+  it('deleteSession sends DELETE request to correct path', () => {
+    mockGatewayFetch.mockResolvedValue(createGatewayResult(null))
 
     const { deleteSession } = callHook()
     deleteSession('sess-1')
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      `${GATEWAY_URL}/api/sessions/sess-1`,
-      { method: 'DELETE' },
-    )
+    expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'DELETE', path: '/api/sessions/sess-1' })
   })
 
   it('deleteSession removes session from list on success', async () => {
-    mockFetch.mockResolvedValue(createJsonResponse(null))
+    mockGatewayFetch.mockResolvedValue(createGatewayResult(null))
 
     const { deleteSession } = callHook()
 
@@ -248,25 +248,25 @@ describe('useSessions', () => {
     deleteSession('sess-1')
 
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(1)
     })
   })
 
   it('deleteSession handles fetch error gracefully', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'))
+    mockGatewayFetch.mockRejectedValue(new Error('Network error'))
 
     const { deleteSession } = callHook()
     deleteSession('sess-1')
 
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(1)
     })
 
     // Should not throw
   })
 
   it('deleteSession resets active session if deleted session is active', async () => {
-    mockFetch.mockResolvedValue(createJsonResponse(null))
+    mockGatewayFetch.mockResolvedValue(createGatewayResult(null))
 
     callHook()
 
@@ -280,12 +280,12 @@ describe('useSessions', () => {
     deleteWithActive('sess-1')
 
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(1)
     })
   })
 
   it('loads sessions on mount via useEffect', () => {
-    mockFetch.mockResolvedValue(createJsonResponse([]))
+    mockGatewayFetch.mockResolvedValue(createGatewayResult([]))
 
     callHook()
 
@@ -295,7 +295,7 @@ describe('useSessions', () => {
     // Execute the mount effect
     effectCallbacks[0]!()
 
-    expect(mockFetch).toHaveBeenCalledWith(`${GATEWAY_URL}/api/sessions`)
+    expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions' })
   })
 
   it('title is derived from first user message content', async () => {
@@ -308,15 +308,15 @@ describe('useSessions', () => {
       { id: 'msg-1', role: 'user', content: longMessage },
     ]
 
-    mockFetch
-      .mockResolvedValueOnce(createJsonResponse(sessionsData))
-      .mockResolvedValueOnce(createJsonResponse(messagesData))
+    mockGatewayFetch
+      .mockResolvedValueOnce(createGatewayResult(sessionsData))
+      .mockResolvedValueOnce(createGatewayResult(messagesData))
 
     const { refreshSessions } = callHook()
     refreshSessions()
 
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -329,20 +329,20 @@ describe('useSessions', () => {
       { id: 'msg-1', role: 'assistant', content: 'Hallo!' },
     ]
 
-    mockFetch
-      .mockResolvedValueOnce(createJsonResponse(sessionsData))
-      .mockResolvedValueOnce(createJsonResponse(messagesData))
+    mockGatewayFetch
+      .mockResolvedValueOnce(createGatewayResult(sessionsData))
+      .mockResolvedValueOnce(createGatewayResult(messagesData))
 
     const { refreshSessions } = callHook()
     refreshSessions()
 
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(2)
     })
   })
 
-  it('uses GATEWAY_URL from config for all requests', () => {
-    mockFetch.mockResolvedValue(createJsonResponse([]))
+  it('all requests go through gatewayFetch proxy', () => {
+    mockGatewayFetch.mockResolvedValue(createGatewayResult([]))
 
     const { refreshSessions, selectSession, deleteSession } = callHook()
 
@@ -350,26 +350,11 @@ describe('useSessions', () => {
     selectSession('test-id')
     deleteSession('test-id')
 
-    const urls = mockFetch.mock.calls.map((c) => c[0] as string)
-
-    for (const url of urls) {
-      expect(url).toMatch(/^http:\/\/127\.0\.0\.1:18789\//)
-    }
-  })
-
-  it('does not use 0.0.0.0 for any requests', () => {
-    mockFetch.mockResolvedValue(createJsonResponse([]))
-
-    const { refreshSessions, selectSession, deleteSession } = callHook()
-
-    refreshSessions()
-    selectSession('test-id')
-    deleteSession('test-id')
-
-    const urls = mockFetch.mock.calls.map((c) => c[0] as string)
-
-    for (const url of urls) {
-      expect(url).not.toContain('0.0.0.0')
+    // All 3 calls should go through gatewayFetch
+    expect(mockGatewayFetch).toHaveBeenCalledTimes(3)
+    for (const call of mockGatewayFetch.mock.calls) {
+      const arg = call[0] as { path: string }
+      expect(arg.path).toMatch(/^\/api\//)
     }
   })
 })

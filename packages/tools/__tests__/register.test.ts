@@ -80,7 +80,7 @@ describe('bridgeToOpenClaw', () => {
     expect(receivedArgs).toEqual(params)
   })
 
-  it('strips permissions, requiresConfirmation, and runsOn', () => {
+  it('strips permissions but preserves requiresConfirmation and runsOn', () => {
     const original = makeTool({
       permissions: ['fs.read', 'fs.write'],
       requiresConfirmation: true,
@@ -88,8 +88,14 @@ describe('bridgeToOpenClaw', () => {
     })
     const bridged = bridgeToOpenClaw(original)
     expect(bridged).not.toHaveProperty('permissions')
-    expect(bridged).not.toHaveProperty('requiresConfirmation')
-    expect(bridged).not.toHaveProperty('runsOn')
+    expect(bridged.runsOn).toBe('desktop')
+    expect(bridged.requiresConfirmation).toBe(true)
+  })
+
+  it('preserves runsOn: server', () => {
+    const original = makeTool({ runsOn: 'server' })
+    const bridged = bridgeToOpenClaw(original)
+    expect(bridged.runsOn).toBe('server')
   })
 
   it('accepts optional AbortSignal parameter', async () => {

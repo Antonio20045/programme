@@ -10,6 +10,8 @@ export interface OpenClawTool {
   readonly name: string
   readonly description: string
   readonly parameters: ExtendedAgentTool['parameters']
+  readonly requiresConfirmation: boolean
+  readonly runsOn: 'server' | 'desktop'
   readonly execute: (
     toolCallId: string,
     params: Record<string, unknown>,
@@ -22,6 +24,8 @@ export function bridgeToOpenClaw(tool: ExtendedAgentTool): OpenClawTool {
     name: tool.name,
     description: tool.description,
     parameters: tool.parameters,
+    requiresConfirmation: tool.requiresConfirmation,
+    runsOn: tool.runsOn,
     execute: async (
       _toolCallId: string,
       params: Record<string, unknown>,

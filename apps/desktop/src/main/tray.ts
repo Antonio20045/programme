@@ -32,6 +32,7 @@ export interface TrayManagerDeps {
 export class TrayManager {
   private tray: Tray | null = null
   private status: GatewayStatus = 'offline'
+  private mode: 'local' | 'server' = 'local'
   private readonly getWindow: () => BrowserWindow | null
   private readonly onQuit: () => void
   private readonly icons: Record<GatewayStatus, NativeImage>
@@ -55,6 +56,12 @@ export class TrayManager {
     this.status = status
     if (!this.tray) return
     this.tray.setImage(this.icons[status])
+    this.rebuildMenu()
+  }
+
+  updateMode(mode: 'local' | 'server'): void {
+    if (mode === this.mode) return
+    this.mode = mode
     this.rebuildMenu()
   }
 
@@ -82,8 +89,10 @@ export class TrayManager {
   private rebuildMenu(): void {
     if (!this.tray) return
 
+    const modeLabel = this.mode === 'server' ? 'Server' : 'Lokal'
     const menu = Menu.buildFromTemplate([
       { label: 'Öffnen', click: () => this.showWindow() },
+      { label: `Modus: ${modeLabel}`, enabled: false },
       { label: `Status: ${STATUS_LABELS[this.status]}`, enabled: false },
       { type: 'separator' },
       { label: 'Beenden', click: () => this.onQuit() },

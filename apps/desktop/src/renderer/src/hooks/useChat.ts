@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { GATEWAY_URL } from '../config'
+import { getGatewayUrl, getGatewayMode } from '../config'
 
 interface ChatMessage {
   readonly id: string
@@ -10,6 +10,9 @@ interface ChatMessage {
   readonly toolResult?: unknown
   readonly toolStartedAt?: number
   readonly toolFinishedAt?: number
+  readonly toolConfirmPending?: boolean
+  readonly toolCallId?: string
+  readonly toolConfirmPreview?: ToolPreview
 }
 
 interface UseChatOptions {
@@ -22,6 +25,11 @@ interface UseChatReturn {
   readonly isLoading: boolean
   readonly error: string | null
   sendMessage: (text: string, files?: File[]) => void
+  confirmTool: (
+    toolCallId: string,
+    decision: 'execute' | 'reject',
+    modifiedParams?: Record<string, unknown>,
+  ) => void
 }
 
 interface MessageResponse {
@@ -92,6 +100,87 @@ function isToolResultPayload(data: unknown): data is ToolResultPayload {
   )
 }
 
+interface ToolConfirmPayload {
+  readonly toolCallId: string
+  readonly toolName: string
+  readonly params: Record<string, unknown>
+}
+
+function isToolConfirmPayload(data: unknown): data is ToolConfirmPayload {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'toolCallId' in data &&
+    typeof (data as ToolConfirmPayload).toolCallId === 'string' &&
+    'toolName' in data &&
+    typeof (data as ToolConfirmPayload).toolName === 'string'
+  )
+}
+
+function buildToolPreview(
+  toolName: string,
+  params: Record<string, unknown>,
+): ToolPreview {
+  const str = (v: unknown): string =>
+    typeof v === 'string' ? v : JSON.stringify(v ?? '')
+
+  switch (toolName) {
+    case 'gmail': {
+      const body = str(params['body'] ?? params['text'] ?? '')
+      const bodyPreview = body.split('\n').slice(0, 3).join('\n')
+      return {
+        type: 'email',
+        fields: {
+          Empfänger: str(params['to'] ?? params['recipient'] ?? ''),
+          Betreff: str(params['subject'] ?? ''),
+          Nachricht: bodyPreview,
+        },
+      }
+    }
+    case 'calendar':
+      return {
+        type: 'calendar',
+        fields: {
+          Titel: str(params['title'] ?? params['summary'] ?? ''),
+          Datum: str(params['date'] ?? params['startDate'] ?? ''),
+          Uhrzeit: str(params['time'] ?? params['startTime'] ?? ''),
+          Teilnehmer: str(params['attendees'] ?? ''),
+        },
+      }
+    case 'shell':
+      return {
+        type: 'shell',
+        fields: {
+          Befehl: str(params['command'] ?? ''),
+          Argumente: str(params['args'] ?? ''),
+        },
+        warning: 'Shell-Befehle können das System verändern. Bitte prüfe den Befehl sorgfältig.',
+      }
+    case 'filesystem':
+      return {
+        type: 'filesystem',
+        fields: {
+          Pfad: str(params['path'] ?? ''),
+          Aktion: str(params['action'] ?? params['operation'] ?? ''),
+        },
+      }
+    case 'notes':
+      return {
+        type: 'notes',
+        fields: {
+          Titel: str(params['title'] ?? ''),
+        },
+      }
+    default: {
+      const fields: Record<string, string> = {}
+      for (const [key, value] of Object.entries(params)) {
+        fields[key] = str(value)
+      }
+      return { type: 'generic', fields }
+    }
+  }
+}
+
 export function useChat(options?: UseChatOptions): UseChatReturn {
   const activeSessionId = options?.activeSessionId ?? null
   const onSessionCreated = options?.onSessionCreated
@@ -128,12 +217,10 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
       return
     }
 
-    fetch(`${GATEWAY_URL}/api/sessions/${activeSessionId}/messages`)
+    window.api.gatewayFetch({ method: 'GET', path: `/api/sessions/${encodeURIComponent(activeSessionId)}/messages` })
       .then((res) => {
         if (!res.ok) throw new Error(`Status ${res.status.toString()}`)
-        return res.json() as Promise<unknown>
-      })
-      .then((data) => {
+        const data: unknown = res.data
         if (!isStoredMessageArray(data)) throw new Error('Ungültige Nachrichten')
         const chatMessages: ChatMessage[] = data.map((m) => ({
           id: m.id,
@@ -173,8 +260,18 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
       const sessionId = currentSessionIdRef.current
 
       // Build request — multipart/form-data when files attached, JSON otherwise
-      let fetchInit: RequestInit
+      let postPromise: Promise<unknown>
       if (files !== undefined && files.length > 0) {
+        // Security: file upload uses direct fetch which cannot carry auth tokens.
+        // In server mode the remote gateway requires Authorization headers,
+        // so file uploads are blocked until an IPC-based multipart proxy exists.
+        if (getGatewayMode() === 'server') {
+          setIsLoading(false)
+          setError('Datei-Upload ist im Server-Modus noch nicht verfügbar')
+          return
+        }
+
+        // File upload: direct fetch to gateway URL (local mode only)
         const formData = new FormData()
         formData.append('text', trimmed)
         if (sessionId !== null) {
@@ -183,23 +280,24 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
         for (const file of files) {
           formData.append('files', file)
         }
-        fetchInit = { method: 'POST', body: formData }
-      } else {
-        fetchInit = {
+        postPromise = fetch(`${getGatewayUrl()}/api/message`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: trimmed, sessionId }),
-        }
+          body: formData,
+        }).then((res) => {
+          if (!res.ok) throw new Error(`Gateway antwortet mit Status ${res.status.toString()}`)
+          return res.json() as Promise<unknown>
+        })
+      } else {
+        postPromise = window.api
+          .gatewayFetch({ method: 'POST', path: '/api/message', body: { text: trimmed, sessionId } })
+          .then((res) => {
+            if (!res.ok) throw new Error(`Gateway antwortet mit Status ${res.status.toString()}`)
+            return res.data
+          })
       }
 
       // POST to gateway
-      fetch(`${GATEWAY_URL}/api/message`, fetchInit)
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error(`Gateway antwortet mit Status ${res.status.toString()}`)
-          }
-          return res.json() as Promise<unknown>
-        })
+      postPromise
         .then((data) => {
           if (!isMessageResponse(data)) {
             throw new Error('Ungültige Antwort vom Gateway')
@@ -222,11 +320,15 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
           }
           setMessages((prev) => [...prev, assistantMsg])
 
-          // Open SSE stream
-          const es = new EventSource(
-            `${GATEWAY_URL}/api/stream/${data.sessionId}`,
-          )
-          eventSourceRef.current = es
+          // Open SSE stream — URL with token is constructed by main process
+          return window.api.getStreamUrl(data.sessionId).then((streamUrl) => {
+            const es = new EventSource(streamUrl)
+            eventSourceRef.current = es
+            return es
+          })
+        })
+        .then((es) => {
+          if (!es) return
 
           es.addEventListener('token', (e: MessageEvent<string>) => {
             assistantBufferRef.current += e.data
@@ -261,6 +363,28 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
               toolStartedAt: Date.now(),
             }
             setMessages((prev) => [...prev, toolMsg])
+          })
+
+          es.addEventListener('tool_confirm', (e: MessageEvent<string>) => {
+            try {
+              const parsed: unknown = JSON.parse(e.data)
+              if (!isToolConfirmPayload(parsed)) return
+              const preview = buildToolPreview(parsed.toolName, parsed.params)
+              const confirmMsg: ChatMessage = {
+                id: `confirm-${Date.now().toString(36)}`,
+                role: 'assistant',
+                content: '',
+                toolName: parsed.toolName,
+                toolParams: parsed.params,
+                toolCallId: parsed.toolCallId,
+                toolConfirmPending: true,
+                toolConfirmPreview: preview,
+                toolStartedAt: Date.now(),
+              }
+              setMessages((prev) => [...prev, confirmMsg])
+            } catch {
+              // invalid payload — ignore
+            }
           })
 
           es.addEventListener('tool_result', (e: MessageEvent<string>) => {
@@ -325,7 +449,49 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
     [isLoading, onSessionCreated],
   )
 
-  return { messages, isLoading, error, sendMessage }
+  const confirmTool = useCallback(
+    (
+      toolCallId: string,
+      decision: 'execute' | 'reject',
+      modifiedParams?: Record<string, unknown>,
+    ) => {
+      const sessionId = currentSessionIdRef.current
+      if (sessionId === null) return
+
+      const body: Record<string, unknown> = { toolCallId, decision }
+      if (modifiedParams !== undefined) {
+        body['modifiedParams'] = modifiedParams
+      }
+
+      window.api.gatewayFetch({
+        method: 'POST',
+        path: `/api/confirm/${encodeURIComponent(sessionId)}`,
+        body,
+      }).catch(() => {
+        // Confirmation delivery failed — ignore silently
+      })
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.toolCallId === toolCallId
+            ? {
+                ...m,
+                toolConfirmPending: false,
+                ...(decision === 'reject'
+                  ? {
+                      toolResult: { rejected: true, reason: 'User hat abgelehnt' },
+                      toolFinishedAt: Date.now(),
+                    }
+                  : {}),
+              }
+            : m,
+        ),
+      )
+    },
+    [],
+  )
+
+  return { messages, isLoading, error, sendMessage, confirmTool }
 }
 
 export type { ChatMessage, UseChatReturn, UseChatOptions }

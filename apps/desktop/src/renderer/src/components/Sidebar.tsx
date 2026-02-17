@@ -1,6 +1,7 @@
-import { useCallback } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useGatewayStatus } from '../hooks/useGatewayStatus'
+import { useGatewayConfig } from '../hooks/useGatewayConfig'
 import SessionList from './SessionList'
 import type { Session } from '../hooks/useSessions'
 
@@ -16,6 +17,16 @@ const STATUS_COLORS: Record<GatewayStatus, string> = {
   online: 'bg-emerald-500',
   offline: 'bg-gray-500',
   error: 'bg-red-500',
+}
+
+const AGENT_LABELS: Record<string, string> = {
+  connected: 'Agent verbunden',
+  disconnected: 'Agent offline',
+}
+
+const AGENT_COLORS: Record<string, string> = {
+  connected: 'bg-emerald-500',
+  disconnected: 'bg-red-500',
 }
 
 interface SidebarProps {
@@ -36,6 +47,19 @@ export default function Sidebar({
   const location = useLocation()
   const navigate = useNavigate()
   const status = useGatewayStatus()
+  const { mode } = useGatewayConfig()
+  const [agentStatus, setAgentStatus] = useState<string>('local')
+
+  useEffect(() => {
+    if (mode !== 'server') return
+    void window.api.agentStatus().then((s) => {
+      setAgentStatus(typeof s === 'string' ? s : 'local')
+    })
+    const unsubscribe = window.api.onAgentStatus((s) => {
+      setAgentStatus(typeof s === 'string' ? s : 'local')
+    })
+    return unsubscribe
+  }, [mode])
 
   const handleSelectSession = useCallback(
     (id: string) => {
@@ -92,6 +116,14 @@ export default function Sidebar({
           />
           <span className="text-gray-400">{STATUS_LABELS[status]}</span>
         </div>
+        {mode === 'server' && (
+          <div className="mt-1 flex items-center gap-2 text-xs">
+            <span
+              className={`inline-block h-2.5 w-2.5 rounded-full ${AGENT_COLORS[agentStatus] ?? 'bg-gray-500'}`}
+            />
+            <span className="text-gray-400">{AGENT_LABELS[agentStatus] ?? ''}</span>
+          </div>
+        )}
       </div>
     </aside>
   )

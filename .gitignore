@@ -2,9 +2,12 @@ node_modules/
 dist/
 out/
 .env*
+!.env.example
 .DS_Store
 *.tsbuildinfo
 .mcp.json
+
+test-results/
 
 # OpenClaw Fork — eigenes Git-Repo, separat verwaltet
 packages/gateway/

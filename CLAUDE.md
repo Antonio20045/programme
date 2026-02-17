@@ -54,6 +54,9 @@ pnpm build:mobile                           # React Native
 - Electron: `contextIsolation: true`, `sandbox: true`, kein `nodeIntegration`, kein `remote`
 - Electron: HashRouter statt BrowserRouter (Electron nutzt `file://` in Production)
 - Electron: IPC-Daten werden mit Type Guard validiert bevor sie in den Renderer State gehen
+- Electron: Auth-Token bleibt im Main Process — Renderer nutzt `gateway:fetch` Proxy für authentifizierte API-Calls. `getStreamUrl` IPC liefert SSE-URL mit Token nur für Server-Modus.
+- Electron: Gateway-Modus (Lokal/Server) konfigurierbar in Settings. Config in `~/.openclaw/openclaw.json`, Token in `~/.openclaw/agent-token` (0o600).
+- Electron: URL-Validierung bei Gateway-Config — nur http:// und https:// erlaubt (kein file://, javascript: etc.)
 - MCP-Server: `.mcp.json` steht in `.gitignore` (enthält potenziell Tokens). Nach einem frischen Clone muss sie manuell erstellt werden mit den Einträgen für `github`, `context7` und `playwright`. Zusätzlich muss `enabledMcpjsonServers` in `.claude/settings.local.json` die gleichen Server-Namen enthalten.
 
 ## Projektstruktur
@@ -63,14 +66,16 @@ pnpm Monorepo mit Workspaces (`apps/*`, `packages/*`). TypeScript path aliases: 
 ```
 apps/
   desktop/          Electron (electron-vite + React + Tailwind + TS)
-    src/main/       Main Process: index.ts, gateway-manager.ts, tray.ts
+    src/main/       Main Process: index.ts, gateway-manager.ts, agent.ts, tray.ts, oauth-server.ts, memory-reader.ts
     src/renderer/   React UI (HashRouter): App.tsx, pages/, components/, hooks/
-      src/pages/    Chat.tsx (Message-UI + File-Upload), Settings.tsx
+      src/pages/    Chat.tsx (Message-UI + File-Upload), Settings.tsx, Setup.tsx
       src/components/
-        Sidebar.tsx         Navigation + SessionList + Gateway-Status
+        Sidebar.tsx         Navigation + SessionList + Gateway/Agent-Status
         SessionList.tsx     Session-Liste mit Erstellen/Löschen
         MarkdownMessage.tsx Markdown-Rendering für Assistant-Nachrichten
         ToolExecution.tsx   Collapsible Tool-Ausführungs-Anzeige
+        ToolConfirmation.tsx Tool-Bestätigungs-Dialog
+        Toast.tsx           Toast-Benachrichtigungen
         FileDropZone.tsx    Drag&Drop-Zone für Datei-Upload
         FilePreview.tsx     Vorschau angehängter Dateien
         AttachmentButton.tsx Datei-Auswahl-Button
@@ -78,8 +83,10 @@ apps/
         useChat.ts          Chat-Logik (SSE-Stream, Tool-Events, File-Upload)
         useSessions.ts      Session-Verwaltung (CRUD + aktive Session)
         useGatewayStatus.ts Gateway-Status via IPC
-      src/config.ts   GATEWAY_URL Konfiguration
-    src/preload/    IPC-Bridge (contextBridge): openExternal, openFileDialog
+        useGatewayConfig.ts Gateway-Config (Modus, URL, Token) via IPC
+      src/config.ts   Gateway-URL + Modus-Cache (dynamisch)
+      src/constants.ts Provider/Model/Tone-Konstanten
+    src/preload/    IPC-Bridge (contextBridge): Gateway-Proxy, Config, Integrations
   mobile/           React Native + Expo
     src/screens/    Pairing, Chat, Settings
     src/services/   relay.ts, encryption.ts, push.ts
@@ -147,7 +154,7 @@ User → POST /api/message (JSON oder FormData mit Dateien) → Gateway → LLM 
 
 SSE Events: `token` (Text-Chunks), `tool_start` (JSON: toolName + params), `tool_result` (JSON: toolName + result), `done`, `error`.
 
-Client: useChat verwaltet Messages-State, öffnet EventSource nach POST, baut Assistant-Nachricht aus token-Events, zeigt Tool-Ausführungen als ToolExecution-Komponente. Session-ID wird via Ref persistiert.
+Client: useChat verwaltet Messages-State, postet via `gateway:fetch` Proxy (JSON) oder direkten `fetch` (FormData), öffnet EventSource nach POST (URL via `getStreamUrl` IPC), baut Assistant-Nachricht aus token-Events, zeigt Tool-Ausführungen als ToolExecution-Komponente. Session-ID wird via Ref persistiert.
 
 Tools mit Bestätigungspflicht: SSE Event → Client zeigt Vorschau → User bestätigt → erst dann ausführen.
 
@@ -199,6 +206,6 @@ In `.claude/agents/`: code-reviewer, security-auditor (OWASP+Electron+LLM-aware)
 
 ## Aktueller Stand
 
-Phase: 5 — abgeschlossen
-Nächster Schritt: Phase 6 — Setup Wizard + Admin
-Letzter Commit: Phase 5 complete: Tool-Signierung mit Ed25519 (sign + verify + tests)
+Phase: 7 — abgeschlossen
+Nächster Schritt: Phase 8 — Mobile App + Relay
+Letzter Commit: Phase 7: Server-Modus UI + gateway:fetch Proxy + Security-Hardening

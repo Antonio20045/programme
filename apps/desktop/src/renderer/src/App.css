@@ -1,1 +1,49 @@
 @import "tailwindcss";
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Screen transition: slide from right */
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(60px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@utility animate-slide-in {
+  animation: slide-in 0.4s ease-out;
+}
+
+/* Done screen: circle draws itself */
+@keyframes draw-circle {
+  from { stroke-dashoffset: 166; }
+  to   { stroke-dashoffset: 0; }
+}
+@utility animate-check-circle {
+  animation: draw-circle 0.8s ease-out forwards;
+}
+
+/* Done screen: checkmark after circle */
+@keyframes draw-check {
+  from { stroke-dashoffset: 50; }
+  to   { stroke-dashoffset: 0; }
+}
+@utility animate-check-mark {
+  animation: draw-check 0.4s ease-out 0.8s forwards;
+}
+
+/* Delayed fade-in (text + button after checkmark) */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@utility animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out 1.3s both;
+}
+@utility animate-fade-in-up-late {
+  animation: fade-in-up 0.5s ease-out 1.8s both;
+}

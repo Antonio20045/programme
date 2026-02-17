@@ -1,0 +1,23 @@
+# =============================================================================
+# KI-Assistent — Environment Variables
+# =============================================================================
+# Rename to .env in the project root and fill in your values:
+#   cp docker/env-example .env
+# =============================================================================
+
+# LLM Provider (required)
+# ANTHROPIC_API_KEY=
+
+# Fallback LLM Provider (optional)
+# OPENROUTER_API_KEY=
+
+# Auth token for Gateway API access (recommended for production)
+# OPENCLAW_GATEWAY_TOKEN=
+
+# Host port mapping for Gateway container (default: 18789)
+# GATEWAY_PORT=18789
+
+# Bind mode inside container:
+#   loopback  — localhost only (default, healthcheck still works)
+#   lan       — all interfaces (required for host access via port mapping)
+# GATEWAY_BIND=loopback

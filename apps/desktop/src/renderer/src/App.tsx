@@ -9,6 +9,7 @@ import Setup from './pages/Setup'
 
 export default function App(): JSX.Element {
   const [setupRequired, setSetupRequired] = useState<boolean | null>(null)
+  const [setupDone, setSetupDone] = useState(false)
 
   useEffect(() => {
     window.api.getSetupRequired().then(setSetupRequired)
@@ -41,10 +42,10 @@ export default function App(): JSX.Element {
   }
 
   // First run — full-screen setup wizard (no sidebar)
-  if (setupRequired) {
+  if (setupRequired && !setupDone) {
     return (
       <Routes>
-        <Route path="/setup" element={<Setup />} />
+        <Route path="/setup" element={<Setup onSetupComplete={() => setSetupDone(true)} />} />
         <Route path="*" element={<Navigate to="/setup" replace />} />
       </Routes>
     )
