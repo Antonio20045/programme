@@ -3,6 +3,19 @@ import { exit } from 'node:process'
 
 let failed = false
 
+/** Paths that are dev/build-tool transitive deps — not in production bundles.
+ *  We log them as warnings but don't fail the build. */
+const DEV_TOOL_PATH_PREFIXES = [
+  'apps__mobile>expo>',           // Expo CLI tooling
+  'apps__desktop>electron-builder>', // Build tooling
+  '.>eslint',                     // Linter
+  '.>@typescript-eslint/',        // Linter plugins
+  'apps__mobile>babel-plugin-',   // Babel build tooling
+]
+
+const isDevToolPath = (p: string): boolean =>
+  DEV_TOOL_PATH_PREFIXES.some((prefix) => p.startsWith(prefix))
+
 // 1. pnpm audit for high/critical vulnerabilities (gateway excluded per CLAUDE.md)
 console.log('=== pnpm audit ===')
 try {
@@ -23,22 +36,35 @@ try {
       }>
     }
     const advisories = audit.advisories ?? {}
-    let nonGatewayCount = 0
+    let prodCount = 0
+    let devToolCount = 0
     for (const [, advisory] of Object.entries(advisories)) {
       if (advisory.severity !== 'high' && advisory.severity !== 'critical') continue
       const nonGatewayPaths = advisory.findings.flatMap((f) =>
         f.paths.filter((p) => !p.startsWith('packages__gateway')),
       )
-      if (nonGatewayPaths.length > 0) {
+      if (nonGatewayPaths.length === 0) continue
+      const prodPaths = nonGatewayPaths.filter((p) => !isDevToolPath(p))
+      const devPaths = nonGatewayPaths.filter((p) => isDevToolPath(p))
+      if (prodPaths.length > 0) {
         console.error(`  ${advisory.severity}: ${advisory.module_name} — ${advisory.title}`)
-        for (const p of nonGatewayPaths) console.error(`    Path: ${p}`)
-        nonGatewayCount++
+        for (const p of prodPaths) console.error(`    Path: ${p}`)
+        prodCount++
+      }
+      if (devPaths.length > 0) {
+        console.warn(`  [dev-tool] ${advisory.severity}: ${advisory.module_name} — ${advisory.title}`)
+        for (const p of devPaths) console.warn(`    Path: ${p}`)
+        devToolCount++
       }
     }
-    if (nonGatewayCount > 0) {
-      console.error(`pnpm audit: ${String(nonGatewayCount)} non-gateway vulnerabilities found`)
+    if (prodCount > 0) {
+      console.error(`pnpm audit: ${String(prodCount)} production vulnerabilities found`)
       failed = true
-    } else {
+    }
+    if (devToolCount > 0) {
+      console.warn(`pnpm audit: ${String(devToolCount)} dev-tool-only vulnerabilities (not blocking)`)
+    }
+    if (prodCount === 0 && devToolCount === 0) {
       console.log('pnpm audit: only gateway vulnerabilities found (excluded per CLAUDE.md)')
     }
   }
@@ -59,7 +85,9 @@ for (const pattern of dangerousPatterns) {
         '--include=*.js',
         '--exclude-dir=node_modules',
         '--exclude-dir=dist',
+        '--exclude-dir=out',
         '--exclude-dir=gateway',
+        '--exclude-dir=release',
         pattern,
         'apps/',
         'packages/',
@@ -101,7 +129,9 @@ for (const pattern of secretPatterns) {
         '--include=*.js',
         '--exclude-dir=node_modules',
         '--exclude-dir=dist',
+        '--exclude-dir=out',
         '--exclude-dir=gateway',
+        '--exclude-dir=release',
         pattern,
         'apps/',
         'packages/',

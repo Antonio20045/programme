@@ -50,6 +50,7 @@ pnpm build:mobile                           # React Native
 - Kein fetch() in Tools außer an dokumentierte APIs (Gmail, Calendar, Search)
 - Pfad-Validierung gegen Whitelist bei jedem Dateizugriff (Path Traversal Schutz)
 - Gateway-Fork ist von typecheck, lint, test und audit-deps excludet (eigene tsconfig, zu groß für Root-Checks)
+- audit-deps: Build-Output (`out/`, `release/`, `dist/`) wird vom Secret/Pattern-Scan excludet. Dev-Tool-Transitive-Deps (expo, electron-builder, eslint) sind als Warnings geloggt, blockieren nicht.
 - Electron: `will-navigate` blockiert, `setWindowOpenHandler` deny — keine externen URLs, keine neuen Fenster
 - Electron: `contextIsolation: true`, `sandbox: true`, kein `nodeIntegration`, kein `remote`
 - Electron: HashRouter statt BrowserRouter (Electron nutzt `file://` in Production)
@@ -213,6 +214,6 @@ In `.claude/agents/`: code-reviewer, security-auditor (OWASP+Electron+LLM-aware)
 
 ## Aktueller Stand
 
-Phase: 7.x — Cost Optimizer Session 3 (Middleware + Runtime Integration)
-Naechster Schritt: Cost Optimizer Session 4 (Volle Model-Override Integration + Desktop Settings UI)
-Letzter Commit: DB-6: Gmail/Calendar Factory + Tool-Factory Integration
+Phase: 11 — Prototyp finalisieren (App bauen, Chat end-to-end testen)
+Naechster Schritt: Phase 12 — Chat end-to-end testen (manuell), dann Stabilisierung
+Letzter Commit: Phase 11: Gateway-Startup-Fixes + Security-Hardening

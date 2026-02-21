@@ -48,12 +48,18 @@ describe("OfflineQueue", () => {
   })
 
   it("drain returns messages in FIFO order", async () => {
-    // Enqueue 3 messages with small delays to ensure ordering
+    // Mock Date.now to return distinct timestamps for stable FIFO ordering
+    let fakeTime = 1700000000000
+    const originalDateNow = Date.now
+    vi.spyOn(Date, "now").mockImplementation(() => fakeTime++)
+
     for (let i = 0; i < 3; i++) {
       await queue.fetch(
         makeRequest("/enqueue", "POST", { from: "device-a", payload: `message-${i}` })
       )
     }
+
+    Date.now = originalDateNow
 
     const resp = await queue.fetch(makeRequest("/drain", "GET"))
     expect(resp.status).toBe(200)
