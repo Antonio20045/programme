@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ExtendedAgentTool } from '../src/types'
 import { _resetRegistry, registerTool } from '../src/index'
-import { bridgeToOpenClaw, createOpenClawCodingTools } from '../src/register'
+import { bridgeToOpenClaw, createOpenClawCodingTools, withUserTools, _resetInitialized } from '../src/register'
 
 function makeTool(overrides: Partial<ExtendedAgentTool> = {}): ExtendedAgentTool {
   return {
@@ -19,19 +19,100 @@ function makeTool(overrides: Partial<ExtendedAgentTool> = {}): ExtendedAgentTool
 describe('createOpenClawCodingTools', () => {
   afterEach(() => {
     _resetRegistry()
+    _resetInitialized()
   })
 
-  it('returns empty array when no tools registered', () => {
+  it('auto-initializes tools when registry is empty', () => {
     const tools = createOpenClawCodingTools()
-    expect(tools).toEqual([])
+    expect(tools.length).toBeGreaterThan(0)
+    expect(tools.map((t) => t.name)).toContain('calculator')
+    expect(tools.map((t) => t.name)).toContain('weather')
+    expect(tools.map((t) => t.name)).toContain('clipboard')
+    expect(tools.map((t) => t.name)).toContain('screenshot')
+    // New desktop tools (always registered, even without allowedDirs)
+    expect(tools.map((t) => t.name)).toContain('media-control')
+    expect(tools.map((t) => t.name)).toContain('git-tools')
+    expect(tools.map((t) => t.name)).toContain('app-launcher')
   })
 
-  it('returns bridged tools for all registered tools', () => {
+  it('returns bridged tools for manually registered tools', () => {
     registerTool(makeTool({ name: 'tool-a' }))
     registerTool(makeTool({ name: 'tool-b' }))
     const tools = createOpenClawCodingTools()
-    expect(tools).toHaveLength(2)
-    expect(tools.map((t) => t.name)).toEqual(['tool-a', 'tool-b'])
+    // auto-init adds default tools + our 2 manual ones
+    expect(tools.map((t) => t.name)).toContain('tool-a')
+    expect(tools.map((t) => t.name)).toContain('tool-b')
+  })
+})
+
+describe('withUserTools', () => {
+  afterEach(() => {
+    _resetRegistry()
+    _resetInitialized()
+  })
+
+  it('makes user tools visible inside the callback', async () => {
+    registerTool(makeTool({ name: 'global-tool' }))
+
+    const userTool = makeTool({ name: 'user-notes' })
+
+    await withUserTools([userTool], async () => {
+      const tools = createOpenClawCodingTools()
+      const names = tools.map((t) => t.name)
+      expect(names).toContain('global-tool')
+      expect(names).toContain('user-notes')
+    })
+  })
+
+  it('user tools are NOT visible outside the callback', async () => {
+    registerTool(makeTool({ name: 'global-tool' }))
+
+    const userTool = makeTool({ name: 'user-notes' })
+
+    await withUserTools([userTool], async () => {
+      // Inside — visible
+      expect(createOpenClawCodingTools().map((t) => t.name)).toContain('user-notes')
+    })
+
+    // Outside — not visible
+    const toolsAfter = createOpenClawCodingTools()
+    expect(toolsAfter.map((t) => t.name)).not.toContain('user-notes')
+  })
+
+  it('two parallel withUserTools calls are isolated', async () => {
+    registerTool(makeTool({ name: 'shared' }))
+
+    const toolA = makeTool({ name: 'tool-a' })
+    const toolB = makeTool({ name: 'tool-b' })
+
+    const resultA = withUserTools([toolA], async () => {
+      // Small delay to ensure overlap
+      await new Promise((r) => setTimeout(r, 5))
+      const names = createOpenClawCodingTools().map((t) => t.name)
+      expect(names).toContain('tool-a')
+      expect(names).not.toContain('tool-b')
+      return 'a'
+    })
+
+    const resultB = withUserTools([toolB], async () => {
+      await new Promise((r) => setTimeout(r, 5))
+      const names = createOpenClawCodingTools().map((t) => t.name)
+      expect(names).toContain('tool-b')
+      expect(names).not.toContain('tool-a')
+      return 'b'
+    })
+
+    const [a, b] = await Promise.all([resultA, resultB])
+    expect(a).toBe('a')
+    expect(b).toBe('b')
+  })
+
+  it('without withUserTools context, no user tools appear', () => {
+    registerTool(makeTool({ name: 'only-global' }))
+    const tools = createOpenClawCodingTools()
+    expect(tools.map((t) => t.name)).toContain('only-global')
+    // Only global tools — count should match registry size
+    expect(tools.length).toBe(1)
   })
 })
 

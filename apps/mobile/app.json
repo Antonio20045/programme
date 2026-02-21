@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "KI-Assistent",
+    "slug": "ki-assistent",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "ki-assistent",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.kiassistent.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera access is needed to scan the QR code for pairing with your desktop."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.kiassistent.mobile",
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Camera access is needed to scan the QR code for pairing with your desktop."
+        }
+      ],
+      "expo-secure-store",
+      "expo-local-authentication",
+      "expo-notifications"
+    ]
+  }
+}

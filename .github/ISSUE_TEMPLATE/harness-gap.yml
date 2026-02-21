@@ -1,0 +1,57 @@
+name: "Harness Gap"
+description: "Production Regression die durch das Risk Policy Harness hätte gefangen werden müssen"
+title: "[Harness Gap] "
+labels: ["harness-gap", "regression"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Ziel: Dieser Bug wird NIE wieder durchkommen. Jedes Harness Gap Issue MUSS mit einem neuen Testcase geschlossen werden.**
+
+  - type: input
+    id: component
+    attributes:
+      label: "Betroffene Komponente"
+      description: "Welche Komponente/welches Package ist betroffen?"
+      placeholder: "z.B. packages/tools/src/shell.ts"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk-tier
+    attributes:
+      label: "Risk Tier laut risk-policy.json"
+      description: "In welchem Tier liegt die betroffene Datei?"
+      options:
+        - critical
+        - high
+        - low
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: "Was ist passiert?"
+      description: "Beschreibe die Regression und ihren Impact"
+      placeholder: "Was ist schief gelaufen? Wer war betroffen?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-missed
+    attributes:
+      label: "Warum haben die bestehenden Checks das nicht gefangen?"
+      description: "Fehlender Test? Falsche Tier-Zuordnung? Unzureichender Check?"
+      placeholder: "Root Cause Analyse warum das Harness versagt hat"
+    validations:
+      required: true
+
+  - type: textarea
+    id: new-testcase
+    attributes:
+      label: "Neuer Testcase"
+      description: "Wird vor Close ausgefüllt — welcher Test verhindert diesen Bug in Zukunft?"
+      placeholder: "Link zum Commit/PR mit dem neuen Test"
+    validations:
+      required: false

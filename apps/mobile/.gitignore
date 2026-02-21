@@ -1,0 +1,21 @@
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native
+ios/
+android/
+
+# Node
+node_modules/
+
+# Testing
+coverage/
+
+# Metro
+.metro-health-check*
+
+# Environment
+.env
+.env.local

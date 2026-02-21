@@ -46,3 +46,20 @@ export interface ExtendedAgentTool {
   readonly runsOn: ToolRunsOn
   readonly execute: (args: unknown) => Promise<AgentToolResult>
 }
+
+/**
+ * Minimal database pool interface.
+ * Compatible with pg.Pool — tools don't depend on pg directly.
+ */
+export interface DbPool {
+  query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>
+}
+
+export interface GoogleOAuthContext {
+  readonly accessToken: string
+  readonly refreshToken: string
+  readonly clientId: string
+  readonly clientSecret: string
+  readonly expiresAt: number // Unix timestamp ms, 0 = unknown
+  readonly onTokenRefreshed?: (newAccessToken: string, newExpiresAt: number) => Promise<void>
+}

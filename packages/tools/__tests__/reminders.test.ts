@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { vi, beforeEach, describe, expect, it } from 'vitest'
 import { assertNoEval } from './helpers'
+import type { DbPool } from '../src/types'
 import type { RemindersInstance } from '../src/reminders'
-import { createRemindersInstance } from '../src/reminders'
+import { createRemindersInstance, parseArgs } from '../src/reminders'
 
 // ---------------------------------------------------------------------------
 // Source code for security audit
@@ -13,6 +14,15 @@ import { createRemindersInstance } from '../src/reminders'
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const SOURCE_PATH = resolve(currentDir, '../src/reminders.ts')
 const sourceCode = readFileSync(SOURCE_PATH, 'utf-8')
+
+// ---------------------------------------------------------------------------
+// Mock pool
+// ---------------------------------------------------------------------------
+
+const mockQuery = vi.fn()
+const mockPool: DbPool = { query: mockQuery }
+const USER_A = 'user-a-uuid'
+const USER_B = 'user-b-uuid'
 
 // ---------------------------------------------------------------------------
 // Helper to parse tool result text
@@ -34,11 +44,8 @@ describe('reminders tool', () => {
   let instance: RemindersInstance
 
   beforeEach(() => {
-    instance = createRemindersInstance(':memory:')
-  })
-
-  afterEach(() => {
-    instance.close()
+    mockQuery.mockReset()
+    instance = createRemindersInstance(USER_A, mockPool)
   })
 
   // -------------------------------------------------------------------------
@@ -69,6 +76,10 @@ describe('reminders tool', () => {
 
   describe('setReminder', () => {
     it('creates a reminder and returns it with id', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: 'Buy milk', datetime: '2026-03-01T10:00:00.000Z', created_at: '2026-02-18T12:00:00Z' }],
+      })
+
       const result = await instance.tool.execute({
         action: 'setReminder',
         text: 'Buy milk',
@@ -88,31 +99,48 @@ describe('reminders tool', () => {
       expect(data.created_at).toBeTruthy()
     })
 
-    it('auto-increments ids', async () => {
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'First',
-        datetime: '2026-03-01T10:00:00Z',
-      })
-      const result = await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Second',
-        datetime: '2026-03-02T10:00:00Z',
+    it('passes userId as first parameter', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: 'T', datetime: '2026-03-01T10:00:00.000Z', created_at: '2026-01-01' }],
       })
 
-      const data = parseResult(result) as { id: number }
-      expect(data.id).toBe(2)
+      await instance.tool.execute({
+        action: 'setReminder',
+        text: 'Test',
+        datetime: '2026-03-01T10:00:00Z',
+      })
+
+      const params = mockQuery.mock.calls[0]![1] as unknown[]
+      expect(params[0]).toBe(USER_A)
     })
 
     it('normalizes datetime to ISO 8601', async () => {
-      const result = await instance.tool.execute({
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: 'Meeting', datetime: '2026-06-15T14:30:00.000Z', created_at: '2026-01-01' }],
+      })
+
+      await instance.tool.execute({
         action: 'setReminder',
         text: 'Meeting',
         datetime: '2026-06-15 14:30',
       })
 
-      const data = parseResult(result) as { datetime: string }
-      expect(data.datetime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
+      // parseArgs normalizes datetime before it reaches the DB
+      const params = mockQuery.mock.calls[0]![1] as unknown[]
+      const sentDatetime = params[2] as string
+      expect(sentDatetime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
+    })
+
+    it('throws when DB returns no rows', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+
+      await expect(
+        instance.tool.execute({
+          action: 'setReminder',
+          text: 'Test',
+          datetime: '2026-03-01T10:00:00Z',
+        }),
+      ).rejects.toThrow('Failed to create reminder')
     })
 
     it('rejects empty text', async () => {
@@ -152,43 +180,31 @@ describe('reminders tool', () => {
 
   describe('listReminders', () => {
     it('lists all reminders', async () => {
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'A',
-        datetime: '2026-03-01T10:00:00Z',
-      })
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'B',
-        datetime: '2026-03-02T10:00:00Z',
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          { id: 1, text: 'A', datetime: '2026-03-01T10:00:00Z', created_at: '2026-01-01', notified: false },
+          { id: 2, text: 'B', datetime: '2026-03-02T10:00:00Z', created_at: '2026-01-01', notified: false },
+        ],
       })
 
-      const result = await instance.tool.execute({
-        action: 'listReminders',
-      })
-
-      const data = parseResult(result) as {
-        reminders: { text: string }[]
-      }
+      const result = await instance.tool.execute({ action: 'listReminders' })
+      const data = parseResult(result) as { reminders: { text: string }[] }
       expect(data.reminders).toHaveLength(2)
       expect(data.reminders[0]?.text).toBe('A')
       expect(data.reminders[1]?.text).toBe('B')
     })
 
     it('returns empty list when no reminders exist', async () => {
-      const result = await instance.tool.execute({
-        action: 'listReminders',
-      })
+      mockQuery.mockResolvedValueOnce({ rows: [] })
 
+      const result = await instance.tool.execute({ action: 'listReminders' })
       const data = parseResult(result) as { reminders: unknown[] }
       expect(data.reminders).toEqual([])
     })
 
-    it('filters pending reminders (notified = 0)', async () => {
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Pending one',
-        datetime: '2026-03-01T10:00:00Z',
+    it('uses pending filter SQL (notified = FALSE)', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: 'Pending', datetime: '2026-03-01T10:00:00Z', created_at: '2026-01-01', notified: false }],
       })
 
       const result = await instance.tool.execute({
@@ -196,51 +212,41 @@ describe('reminders tool', () => {
         filter: 'pending',
       })
 
-      const data = parseResult(result) as {
-        reminders: { text: string; notified: number }[]
-      }
+      const sql = mockQuery.mock.calls[0]![0] as string
+      expect(sql).toContain('notified = FALSE')
+
+      const data = parseResult(result) as { reminders: { notified: boolean }[] }
       expect(data.reminders).toHaveLength(1)
-      expect(data.reminders[0]?.notified).toBe(0)
+      expect(data.reminders[0]?.notified).toBe(false)
     })
 
-    it('filters past reminders (datetime in the past)', async () => {
-      // Create one in the past and one in the future
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Past',
-        datetime: '2020-01-01T00:00:00Z',
-      })
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Future',
-        datetime: '2099-12-31T23:59:59Z',
+    it('uses past filter SQL (datetime <= NOW())', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: 'Past', datetime: '2020-01-01T00:00:00Z', created_at: '2019-01-01', notified: false }],
       })
 
-      const result = await instance.tool.execute({
+      await instance.tool.execute({
         action: 'listReminders',
         filter: 'past',
       })
 
-      const data = parseResult(result) as {
-        reminders: { text: string }[]
-      }
-      expect(data.reminders).toHaveLength(1)
-      expect(data.reminders[0]?.text).toBe('Past')
+      const sql = mockQuery.mock.calls[0]![0] as string
+      expect(sql).toContain('datetime <= NOW()')
     })
 
     it('defaults to "all" when no filter given', async () => {
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Any',
-        datetime: '2026-03-01T10:00:00Z',
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: 'Any', datetime: '2026-03-01T10:00:00Z', created_at: '2026-01-01', notified: false }],
       })
 
-      const result = await instance.tool.execute({
-        action: 'listReminders',
-      })
-
+      const result = await instance.tool.execute({ action: 'listReminders' })
       const data = parseResult(result) as { reminders: unknown[] }
       expect(data.reminders).toHaveLength(1)
+
+      // "all" query should NOT contain notified filter or NOW()
+      const sql = mockQuery.mock.calls[0]![0] as string
+      expect(sql).not.toContain('notified = FALSE')
+      expect(sql).not.toContain('NOW()')
     })
 
     it('rejects invalid filter', async () => {
@@ -259,11 +265,7 @@ describe('reminders tool', () => {
 
   describe('cancelReminder', () => {
     it('deletes a reminder by id', async () => {
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'To delete',
-        datetime: '2026-03-01T10:00:00Z',
-      })
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 1 }] })
 
       const deleteResult = await instance.tool.execute({
         action: 'cancelReminder',
@@ -272,32 +274,23 @@ describe('reminders tool', () => {
 
       const data = parseResult(deleteResult) as { deleted: number }
       expect(data.deleted).toBe(1)
-
-      // Verify it's gone
-      const listResult = await instance.tool.execute({
-        action: 'listReminders',
-      })
-      const list = parseResult(listResult) as { reminders: unknown[] }
-      expect(list.reminders).toHaveLength(0)
-    })
-
-    it('throws error on double delete', async () => {
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Once only',
-        datetime: '2026-03-01T10:00:00Z',
-      })
-
-      await instance.tool.execute({ action: 'cancelReminder', id: 1 })
-
-      await expect(
-        instance.tool.execute({ action: 'cancelReminder', id: 1 }),
-      ).rejects.toThrow('not found')
     })
 
     it('throws error for non-existent id', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+
       await expect(
         instance.tool.execute({ action: 'cancelReminder', id: 999 }),
+      ).rejects.toThrow('not found')
+    })
+
+    it('throws error on double delete', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 1 }] })
+      await instance.tool.execute({ action: 'cancelReminder', id: 1 })
+
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+      await expect(
+        instance.tool.execute({ action: 'cancelReminder', id: 1 }),
       ).rejects.toThrow('not found')
     })
 
@@ -321,72 +314,115 @@ describe('reminders tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // getDueReminders (for cron)
+  // getDueReminders (for cron) — now async
   // -------------------------------------------------------------------------
 
   describe('getDueReminders', () => {
     it('returns reminders due at or before the given time', async () => {
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Due now',
-        datetime: '2026-02-16T10:00:00Z',
-      })
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Due later',
-        datetime: '2099-12-31T23:59:59Z',
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: 'Due now', datetime: '2026-02-16T10:00:00Z', created_at: '2026-01-01', notified: false }],
       })
 
-      const due = instance.getDueReminders(new Date('2026-02-16T12:00:00Z'))
+      const due = await instance.getDueReminders(new Date('2026-02-16T12:00:00Z'))
 
       expect(due).toHaveLength(1)
       expect(due[0]?.text).toBe('Due now')
     })
 
-    it('returns empty array when nothing is due', async () => {
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Far future',
-        datetime: '2099-12-31T23:59:59Z',
-      })
+    it('passes userId and ISO datetime as parameters', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] })
 
-      const due = instance.getDueReminders(new Date('2026-01-01T00:00:00Z'))
+      const now = new Date('2026-02-16T12:00:00Z')
+      await instance.getDueReminders(now)
+
+      const params = mockQuery.mock.calls[0]![1] as unknown[]
+      expect(params[0]).toBe(USER_A)
+      expect(params[1]).toBe(now.toISOString())
+    })
+
+    it('returns empty array when nothing is due', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+
+      const due = await instance.getDueReminders(new Date('2026-01-01T00:00:00Z'))
       expect(due).toHaveLength(0)
     })
 
-    it('does not return already-notified reminders', async () => {
-      // The notified flag starts at 0, so all newly created reminders
-      // will be returned by getDueReminders if their datetime has passed.
-      // We can't directly set notified=1 through the tool API (that's
-      // the cron's job), but we can verify the initial state is correct.
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Past due',
-        datetime: '2020-01-01T00:00:00Z',
+    it('filters by notified = FALSE in SQL', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+
+      await instance.getDueReminders(new Date('2026-02-16T12:00:00Z'))
+
+      const sql = mockQuery.mock.calls[0]![0] as string
+      expect(sql).toContain('notified = FALSE')
+    })
+
+    it('returns rows with notified as boolean', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: 'Past due', datetime: '2020-01-01T00:00:00Z', created_at: '2019-01-01', notified: false }],
       })
 
-      const due = instance.getDueReminders(new Date('2026-02-16T12:00:00Z'))
-      expect(due).toHaveLength(1)
-      expect(due[0]?.notified).toBe(0)
+      const due = await instance.getDueReminders(new Date('2026-02-16T12:00:00Z'))
+      expect(due[0]?.notified).toBe(false)
     })
 
     it('returns multiple due reminders sorted by datetime', async () => {
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Later',
-        datetime: '2026-02-16T12:00:00Z',
-      })
-      await instance.tool.execute({
-        action: 'setReminder',
-        text: 'Earlier',
-        datetime: '2026-02-16T08:00:00Z',
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          { id: 2, text: 'Earlier', datetime: '2026-02-16T08:00:00Z', created_at: '2026-01-01', notified: false },
+          { id: 1, text: 'Later', datetime: '2026-02-16T12:00:00Z', created_at: '2026-01-01', notified: false },
+        ],
       })
 
-      const due = instance.getDueReminders(new Date('2026-02-16T15:00:00Z'))
+      const due = await instance.getDueReminders(new Date('2026-02-16T15:00:00Z'))
 
       expect(due).toHaveLength(2)
       expect(due[0]?.text).toBe('Earlier')
       expect(due[1]?.text).toBe('Later')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // User isolation
+  // -------------------------------------------------------------------------
+
+  describe('user isolation', () => {
+    it('every query includes userId as first parameter', async () => {
+      const instanceB = createRemindersInstance(USER_B, mockPool)
+
+      // setReminder
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: 'T', datetime: '2026-03-01T10:00:00.000Z', created_at: '2026-01-01' }],
+      })
+      await instanceB.tool.execute({
+        action: 'setReminder',
+        text: 'Test',
+        datetime: '2026-03-01T10:00:00Z',
+      })
+      expect((mockQuery.mock.calls[0]![1] as unknown[])[0]).toBe(USER_B)
+
+      // listReminders
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+      await instanceB.tool.execute({ action: 'listReminders' })
+      expect((mockQuery.mock.calls[1]![1] as unknown[])[0]).toBe(USER_B)
+
+      // cancelReminder
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+      await instanceB.tool.execute({ action: 'cancelReminder', id: 1 }).catch(() => {})
+      expect((mockQuery.mock.calls[2]![1] as unknown[])[0]).toBe(USER_B)
+
+      // getDueReminders
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+      await instanceB.getDueReminders(new Date())
+      expect((mockQuery.mock.calls[3]![1] as unknown[])[0]).toBe(USER_B)
+    })
+
+    it('User B cannot cancel User A reminder (DB returns empty)', async () => {
+      const instanceB = createRemindersInstance(USER_B, mockPool)
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+
+      await expect(
+        instanceB.tool.execute({ action: 'cancelReminder', id: 1 }),
+      ).rejects.toThrow('not found')
     })
   })
 
@@ -409,34 +445,30 @@ describe('reminders tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // SQL Injection
+  // SQL Injection — verify parameterized queries
   // -------------------------------------------------------------------------
 
   describe('SQL injection protection', () => {
-    it('handles malicious text without damage', async () => {
+    it('malicious text is passed as parameter, not interpolated', async () => {
       const malicious = "'; DROP TABLE reminders; --"
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: malicious, datetime: '2026-03-01T10:00:00.000Z', created_at: '2026-01-01' }],
+      })
 
-      // Create reminder with SQL injection attempt in text
       await instance.tool.execute({
         action: 'setReminder',
         text: malicious,
         datetime: '2026-03-01T10:00:00Z',
       })
 
-      // Table still exists and works
-      const result = await instance.tool.execute({
-        action: 'listReminders',
-      })
-
-      const data = parseResult(result) as {
-        reminders: { text: string }[]
-      }
-      expect(data.reminders).toHaveLength(1)
-      expect(data.reminders[0]?.text).toBe(malicious)
+      const sql = mockQuery.mock.calls[0]![0] as string
+      const params = mockQuery.mock.calls[0]![1] as unknown[]
+      expect(sql).toContain('$1')
+      expect(sql).not.toContain(malicious)
+      expect(params).toContain(malicious)
     })
 
-    it('handles malicious datetime without damage', async () => {
-      // This will fail validation (not a valid date), which is the correct behavior
+    it('malicious datetime is rejected by parseArgs validation', async () => {
       await expect(
         instance.tool.execute({
           action: 'setReminder',
@@ -444,27 +476,22 @@ describe('reminders tool', () => {
           datetime: "2026-01-01'; DROP TABLE reminders;--",
         }),
       ).rejects.toThrow('Invalid datetime')
-
-      // But even if somehow a weird string got through,
-      // prepared statements would prevent injection
     })
 
     it('stores and retrieves special characters correctly', async () => {
       const special = "O'Reilly & \"Partners\" <test> (100%)"
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 1, text: special, datetime: '2026-03-01T10:00:00.000Z', created_at: '2026-01-01' }],
+      })
+
       await instance.tool.execute({
         action: 'setReminder',
         text: special,
         datetime: '2026-03-01T10:00:00Z',
       })
 
-      const result = await instance.tool.execute({
-        action: 'listReminders',
-      })
-
-      const data = parseResult(result) as {
-        reminders: { text: string }[]
-      }
-      expect(data.reminders[0]?.text).toBe(special)
+      const params = mockQuery.mock.calls[0]![1] as unknown[]
+      expect(params).toContain(special)
     })
   })
 
@@ -477,42 +504,57 @@ describe('reminders tool', () => {
       assertNoEval(sourceCode)
     })
 
-    it('uses only prepared statements (no string concat in SQL)', () => {
-      // Verify no SQL string concatenation patterns
-      // All SQL should be static literals, never built from variables
-      const sqlConcatPattern = /(?:prepare|query)\s*\([^)]*\+/
+    it('uses only parameterized queries (no string concat in SQL)', () => {
+      const sqlConcatPattern = /(?:pool\.query)\s*\([^)]*\+/
       expect(sourceCode).not.toMatch(sqlConcatPattern)
     })
 
-    it('uses no template literals in SQL statements', () => {
-      // Prepared statements should use ? placeholders, not template literals
-      const sqlTemplatePattern = /prepare\s*\(\s*`/
+    it('uses $-placeholders in all SQL queries', () => {
+      // Every pool.query call should use $N placeholders
+      const queryCount = (sourceCode.match(/pool\.query\(/g) ?? []).length
+      // setReminder, listReminders, cancelReminder, getDueReminders = 4
+      expect(queryCount).toBeGreaterThanOrEqual(4)
+
+      // No template literals in SQL
+      const sqlTemplatePattern = /pool\.query\s*\(\s*`[^`]*\$\{/
       expect(sourceCode).not.toMatch(sqlTemplatePattern)
     })
   })
 
   // -------------------------------------------------------------------------
-  // Instance lifecycle
+  // parseArgs (standalone)
   // -------------------------------------------------------------------------
 
-  describe('lifecycle', () => {
-    it('separate instances have isolated data', async () => {
-      const other = createRemindersInstance(':memory:')
-
-      await instance.tool.execute({
+  describe('parseArgs', () => {
+    it('parses setReminder correctly', () => {
+      const result = parseArgs({
         action: 'setReminder',
-        text: 'In first',
+        text: 'Buy milk',
         datetime: '2026-03-01T10:00:00Z',
       })
-
-      const result = await other.tool.execute({
-        action: 'listReminders',
+      expect(result).toEqual({
+        action: 'setReminder',
+        text: 'Buy milk',
+        datetime: '2026-03-01T10:00:00.000Z',
       })
+    })
 
-      const data = parseResult(result) as { reminders: unknown[] }
-      expect(data.reminders).toHaveLength(0)
+    it('parses listReminders with default filter', () => {
+      const result = parseArgs({ action: 'listReminders' })
+      expect(result).toEqual({ action: 'listReminders', filter: 'all' })
+    })
 
-      other.close()
+    it('parses cancelReminder', () => {
+      const result = parseArgs({ action: 'cancelReminder', id: 5 })
+      expect(result).toEqual({ action: 'cancelReminder', id: 5 })
+    })
+
+    it('rejects non-object args', () => {
+      expect(() => parseArgs(null)).toThrow('Arguments must be an object')
+    })
+
+    it('rejects unknown action', () => {
+      expect(() => parseArgs({ action: 'explode' })).toThrow('action must be')
     })
   })
 })

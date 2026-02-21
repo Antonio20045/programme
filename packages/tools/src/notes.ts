@@ -1,32 +1,12 @@
 /**
  * Notes tool — create, search, update, delete, and list notes.
- * Storage: SQLite via built-in node:sqlite with FTS5 full-text search.
+ * Storage: PostgreSQL with tsvector full-text search (German config).
  *
- * All queries use prepared statements — zero string concatenation in SQL.
- * Database path configurable via NOTES_DB_PATH environment variable.
- * Confirmable actions: deleteNote.
+ * All queries use parameterized $-placeholders — zero string concatenation in SQL.
+ * User isolation: every query is scoped by userId.
  */
 
-// Type-only import — erased at compile time, does not trigger Vite resolution
-import type { DatabaseSync } from 'node:sqlite'
-import type { AgentToolResult, ExtendedAgentTool, JSONSchema } from './types'
-// createRequire from node:module is a well-known core module that Vite externalizes.
-// We use it to load node:sqlite via Node's native require, bypassing Vite's bundler.
-import { createRequire } from 'node:module'
-
-// ---------------------------------------------------------------------------
-// Runtime loader — bypasses Vite's module resolution for node:sqlite
-// ---------------------------------------------------------------------------
-
-const nodeRequire = createRequire(import.meta.url)
-
-interface SqliteModule {
-  DatabaseSync: typeof import('node:sqlite').DatabaseSync
-}
-
-function loadSqliteSync(): SqliteModule {
-  return nodeRequire('node:sqlite') as SqliteModule
-}
+import type { AgentToolResult, DbPool, ExtendedAgentTool, JSONSchema } from './types'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -86,65 +66,16 @@ type NotesArgs =
   | ListNotesArgs
 
 // ---------------------------------------------------------------------------
-// Database initialization
+// Row conversion (pg → typed NoteRow)
 // ---------------------------------------------------------------------------
-
-const INIT_STATEMENTS: readonly string[] = [
-  `CREATE TABLE IF NOT EXISTS notes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )`,
-  `CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-    title, content, content=notes, content_rowid=id
-  )`,
-  `CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON notes BEGIN
-    INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
-  END`,
-  `CREATE TRIGGER IF NOT EXISTS notes_fts_delete AFTER DELETE ON notes BEGIN
-    INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
-  END`,
-  `CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE ON notes BEGIN
-    INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
-    INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
-  END`,
-]
-
-function initDb(dbPath: string): DatabaseSync {
-  const { DatabaseSync: DbSync } = loadSqliteSync()
-  const db = new DbSync(dbPath)
-  for (const sql of INIT_STATEMENTS) {
-    db.prepare(sql).run()
-  }
-  return db
-}
-
-// ---------------------------------------------------------------------------
-// Row type guard
-// ---------------------------------------------------------------------------
-
-function isNoteRow(row: Record<string, unknown>): row is Record<string, unknown> & NoteRow {
-  return (
-    typeof row['id'] === 'number' &&
-    typeof row['title'] === 'string' &&
-    typeof row['content'] === 'string' &&
-    typeof row['created_at'] === 'string' &&
-    typeof row['updated_at'] === 'string'
-  )
-}
 
 function toNoteRow(row: Record<string, unknown>): NoteRow {
-  if (!isNoteRow(row)) {
-    throw new Error('Unexpected row format from database')
-  }
   return {
-    id: row.id,
-    title: row.title,
-    content: row.content,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    id: Number(row['id']),
+    title: String(row['title'] ?? ''),
+    content: String(row['content'] ?? ''),
+    created_at: String(row['created_at'] ?? ''),
+    updated_at: String(row['updated_at'] ?? ''),
   }
 }
 
@@ -221,142 +152,72 @@ function parseArgs(args: unknown): NotesArgs {
 }
 
 // ---------------------------------------------------------------------------
-// Action executors
+// Action executors (async, parameterized, user-scoped)
 // ---------------------------------------------------------------------------
 
-function executeCreateNote(
-  db: DatabaseSync,
-  title: string,
-  content: string,
-): AgentToolResult {
-  const stmt = db.prepare(
-    'INSERT INTO notes (title, content) VALUES (?, ?)',
+async function executeCreateNote(
+  pool: DbPool, userId: string, title: string, content: string,
+): Promise<AgentToolResult> {
+  const { rows } = await pool.query(
+    `INSERT INTO notes (user_id, title, content)
+     VALUES ($1, $2, $3)
+     RETURNING id, title, content, created_at, updated_at`,
+    [userId, title, content],
   )
-  const result = stmt.run(title, content)
-  const id = result.lastInsertRowid as number
-
-  const row = db.prepare('SELECT * FROM notes WHERE id = ?').get(id)
-  if (!row) {
-    throw new Error('Failed to retrieve created note')
-  }
-
-  const note = toNoteRow(row as Record<string, unknown>)
-  return {
-    content: [{ type: 'text', text: JSON.stringify({ note }) }],
-  }
+  const row = rows[0]
+  if (!row) throw new Error('Failed to retrieve created note')
+  return { content: [{ type: 'text', text: JSON.stringify({ note: toNoteRow(row) }) }] }
 }
 
-function executeSearchNotes(
-  db: DatabaseSync,
-  query: string,
-): AgentToolResult {
-  const stmt = db.prepare(
-    `SELECT notes.id, notes.title, notes.content, notes.created_at, notes.updated_at
-     FROM notes_fts
-     JOIN notes ON notes.id = notes_fts.rowid
-     WHERE notes_fts MATCH ?
-     ORDER BY rank`,
+async function executeSearchNotes(
+  pool: DbPool, userId: string, query: string,
+): Promise<AgentToolResult> {
+  const { rows } = await pool.query(
+    `SELECT id, title, content, created_at, updated_at
+     FROM notes
+     WHERE user_id = $1 AND search_vector @@ plainto_tsquery('german', $2)
+     ORDER BY ts_rank(search_vector, plainto_tsquery('german', $2)) DESC
+     LIMIT 20`,
+    [userId, query],
   )
-
-  const rows = stmt.all(query)
-  const notes = rows.map((row) => toNoteRow(row as Record<string, unknown>))
-
-  return {
-    content: [
-      { type: 'text', text: JSON.stringify({ notes, count: notes.length }) },
-    ],
-  }
+  const notes = rows.map(toNoteRow)
+  return { content: [{ type: 'text', text: JSON.stringify({ notes, count: notes.length }) }] }
 }
 
-function executeUpdateNote(
-  db: DatabaseSync,
-  id: number,
-  content: string,
-): AgentToolResult {
-  const existing = db.prepare('SELECT id FROM notes WHERE id = ?').get(id)
-  if (!existing) {
-    throw new Error(`Note with id ${String(id)} not found`)
-  }
-
-  db.prepare(
-    "UPDATE notes SET content = ?, updated_at = datetime('now') WHERE id = ?",
-  ).run(content, id)
-
-  const row = db.prepare('SELECT * FROM notes WHERE id = ?').get(id)
-  if (!row) {
-    throw new Error('Failed to retrieve updated note')
-  }
-
-  const note = toNoteRow(row as Record<string, unknown>)
-  return {
-    content: [{ type: 'text', text: JSON.stringify({ note }) }],
-  }
-}
-
-function executeDeleteNote(db: DatabaseSync, id: number): AgentToolResult {
-  const existing = db.prepare('SELECT id FROM notes WHERE id = ?').get(id)
-  if (!existing) {
-    throw new Error(`Note with id ${String(id)} not found`)
-  }
-
-  db.prepare('DELETE FROM notes WHERE id = ?').run(id)
-
-  return {
-    content: [
-      { type: 'text', text: JSON.stringify({ deleted: true, id }) },
-    ],
-  }
-}
-
-function executeListNotes(
-  db: DatabaseSync,
-  limit: number,
-): AgentToolResult {
-  const stmt = db.prepare(
-    'SELECT * FROM notes ORDER BY created_at DESC LIMIT ?',
+async function executeUpdateNote(
+  pool: DbPool, userId: string, id: number, content: string,
+): Promise<AgentToolResult> {
+  const { rows } = await pool.query(
+    `UPDATE notes SET content = $3, updated_at = NOW()
+     WHERE id = $2 AND user_id = $1
+     RETURNING id, title, content, created_at, updated_at`,
+    [userId, id, content],
   )
-  const rows = stmt.all(limit)
-  const notes = rows.map((row) => toNoteRow(row as Record<string, unknown>))
-
-  return {
-    content: [
-      { type: 'text', text: JSON.stringify({ notes, count: notes.length }) },
-    ],
-  }
+  const row = rows[0]
+  if (!row) throw new Error(`Note with id ${String(id)} not found`)
+  return { content: [{ type: 'text', text: JSON.stringify({ note: toNoteRow(row) }) }] }
 }
 
-// ---------------------------------------------------------------------------
-// Tool factory
-// ---------------------------------------------------------------------------
+async function executeDeleteNote(
+  pool: DbPool, userId: string, id: number,
+): Promise<AgentToolResult> {
+  const { rows } = await pool.query(
+    'DELETE FROM notes WHERE id = $2 AND user_id = $1 RETURNING id',
+    [userId, id],
+  )
+  if (rows.length === 0) throw new Error(`Note with id ${String(id)} not found`)
+  return { content: [{ type: 'text', text: JSON.stringify({ deleted: true, id }) }] }
+}
 
-function createNotesTool(dbPath: string): ExtendedAgentTool {
-  const db = initDb(dbPath)
-
-  return {
-    name: 'notes',
-    description:
-      'Create, search, update, delete, and list personal notes with full-text search. Actions: createNote(title, content); searchNotes(query) full-text search; updateNote(id, content); deleteNote(id) requires confirmation; listNotes(limit?) lists recent notes.',
-    parameters: notesParameters,
-    permissions: [],
-    requiresConfirmation: true,
-    runsOn: 'server',
-    execute: async (args: unknown): Promise<AgentToolResult> => {
-      const parsed = parseArgs(args)
-
-      switch (parsed.action) {
-        case 'createNote':
-          return executeCreateNote(db, parsed.title, parsed.content)
-        case 'searchNotes':
-          return executeSearchNotes(db, parsed.query)
-        case 'updateNote':
-          return executeUpdateNote(db, parsed.id, parsed.content)
-        case 'deleteNote':
-          return executeDeleteNote(db, parsed.id)
-        case 'listNotes':
-          return executeListNotes(db, parsed.limit)
-      }
-    },
-  }
+async function executeListNotes(
+  pool: DbPool, userId: string, limit: number,
+): Promise<AgentToolResult> {
+  const { rows } = await pool.query(
+    'SELECT id, title, content, created_at, updated_at FROM notes WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2',
+    [userId, limit],
+  )
+  const notes = rows.map(toNoteRow)
+  return { content: [{ type: 'text', text: JSON.stringify({ notes, count: notes.length }) }] }
 }
 
 // ---------------------------------------------------------------------------
@@ -402,7 +263,39 @@ const notesParameters: JSONSchema = {
   required: ['action'],
 }
 
-const defaultDbPath = process.env['NOTES_DB_PATH'] ?? ':memory:'
-export const notesTool: ExtendedAgentTool = createNotesTool(defaultDbPath)
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
 
-export { createNotesTool, parseArgs, initDb }
+function createNotesTool(userId: string, pool: DbPool): ExtendedAgentTool {
+  return {
+    name: 'notes',
+    description:
+      'Create, search, update, delete, and list personal notes with full-text search. Actions: createNote(title, content); searchNotes(query) full-text search; updateNote(id, content); deleteNote(id) requires confirmation; listNotes(limit?) lists recent notes.',
+    parameters: notesParameters,
+    permissions: [],
+    requiresConfirmation: true,
+    runsOn: 'server',
+    execute: async (args: unknown): Promise<AgentToolResult> => {
+      const parsed = parseArgs(args)
+      switch (parsed.action) {
+        case 'createNote':
+          return executeCreateNote(pool, userId, parsed.title, parsed.content)
+        case 'searchNotes':
+          return executeSearchNotes(pool, userId, parsed.query)
+        case 'updateNote':
+          return executeUpdateNote(pool, userId, parsed.id, parsed.content)
+        case 'deleteNote':
+          return executeDeleteNote(pool, userId, parsed.id)
+        case 'listNotes':
+          return executeListNotes(pool, userId, parsed.limit)
+      }
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
+
+export { createNotesTool, parseArgs }

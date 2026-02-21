@@ -1,0 +1,23 @@
+# Railway-specific ignore (used with: railway up --no-gitignore)
+# Unlike .gitignore, this does NOT exclude packages/gateway/
+
+node_modules/
+.git/
+dist/
+out/
+.env*
+.DS_Store
+*.tsbuildinfo
+.mcp.json
+
+# Apps — not needed in gateway Docker image
+apps/desktop/out/
+apps/desktop/release/
+apps/mobile/node_modules/
+
+# Dev/CI files
+test-results/
+release/
+
+# Broken symlinks in OpenClaw fork
+packages/gateway/CLAUDE.md

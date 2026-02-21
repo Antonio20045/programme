@@ -75,8 +75,8 @@ describe('web-search tool', () => {
       expect(webSearchTool.permissions).toContain('net:http')
     })
 
-    it('does not require confirmation', () => {
-      expect(webSearchTool.requiresConfirmation).toBe(false)
+    it('requires confirmation (fetchPage can exfiltrate data)', () => {
+      expect(webSearchTool.requiresConfirmation).toBe(true)
     })
   })
 

@@ -226,11 +226,11 @@ describe('ToolConfirmation', () => {
     expect(onConfirm).toHaveBeenCalledWith('call-123', 'reject')
   })
 
-  it('has amber border styling', () => {
+  it('has accent border styling', () => {
     stateIndex = 0
     const result = ToolConfirmation(createProps())
     const json = JSON.stringify(result)
-    expect(json).toContain('amber')
+    expect(json).toContain('border-accent')
   })
 
   // --- Edit mode ---

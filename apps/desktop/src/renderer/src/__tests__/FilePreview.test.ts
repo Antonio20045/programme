@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import FilePreview, { formatSize, getExtension, isImage } from '../components/FilePreview'
+import FilePreview from '../components/FilePreview'
+import { formatSize, getExtension, isImage } from '../utils/file-validation'
 
 describe('FilePreview', () => {
   it('is a function component', () => {

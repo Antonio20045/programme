@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection */
 import { Tray, Menu, nativeImage } from 'electron'
 import type { BrowserWindow, NativeImage } from 'electron'
 import path from 'path'

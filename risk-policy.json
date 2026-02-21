@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "tiers": {
+    "critical": {
+      "label": "CRITICAL",
+      "description": "System-Zugriff, Encryption, Signing, Auth, Main Process, Gateway, Relay",
+      "requiredChecks": [
+        "risk-policy-gate",
+        "typecheck",
+        "lint",
+        "test",
+        "security-audit",
+        "pentest-review"
+      ],
+      "requireHumanReview": true,
+      "patterns": [
+        "packages/tools/src/shell.ts",
+        "packages/tools/src/filesystem.ts",
+        "packages/tools/src/browser.ts",
+        "packages/tools/src/http-client.ts",
+        "packages/tools/src/code-runner.ts",
+        "packages/tools/src/verify.ts",
+        "packages/tools/src/public-key.ts",
+        "packages/tools/signatures.json",
+        "packages/tools/src/register.ts",
+        "packages/shared/src/encryption.ts",
+        "apps/desktop/src/main/**",
+        "apps/desktop/src/preload/**",
+        "packages/relay/src/**",
+        "packages/gateway/**",
+        "scripts/sign-tools.ts",
+        "docker-compose.yml"
+      ]
+    },
+    "high": {
+      "label": "HIGH",
+      "description": "CI/CD, Claude-Config, Scripts, Risk-Policy Self-Protection, übrige Tools",
+      "requiredChecks": [
+        "risk-policy-gate",
+        "typecheck",
+        "lint",
+        "test",
+        "security-audit"
+      ],
+      "requireHumanReview": false,
+      "patterns": [
+        ".github/workflows/**",
+        ".claude/**",
+        "scripts/**",
+        "risk-policy.json",
+        "CLAUDE.md",
+        "packages/tools/src/*.ts",
+        "apps/mobile/src/services/**",
+        "apps/mobile/src/contexts/**"
+      ]
+    },
+    "low": {
+      "label": "LOW",
+      "description": "UI, Styles, Docs, Tests, Config",
+      "requiredChecks": [
+        "risk-policy-gate",
+        "typecheck",
+        "lint",
+        "test"
+      ],
+      "requireHumanReview": false,
+      "patterns": [
+        "apps/desktop/src/renderer/src/components/**",
+        "apps/desktop/src/renderer/src/pages/**",
+        "apps/desktop/src/renderer/src/hooks/**",
+        "apps/desktop/src/renderer/**/*.css",
+        "apps/mobile/src/screens/**",
+        "apps/mobile/src/components/**",
+        "apps/mobile/src/hooks/**",
+        "**/__tests__/**",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "docs/**",
+        "*.md",
+        ".eslintrc.js",
+        ".prettierrc",
+        "tsconfig.json",
+        "vitest.config.ts",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "apps/desktop/electron.vite.config.ts",
+        "apps/desktop/electron-builder.yml",
+        "apps/desktop/resources/**",
+        "apps/desktop/src/renderer/src/env.d.ts",
+        "apps/desktop/src/renderer/src/main.tsx",
+        "apps/desktop/src/renderer/src/config.ts",
+        "apps/desktop/src/renderer/src/constants.ts",
+        "apps/mobile/src/types.ts",
+        "apps/mobile/src/polyfills.ts",
+        "apps/mobile/src/navigation/**",
+        "apps/mobile/*.{js,json}",
+        "apps/mobile/app.json",
+        "packages/tools/src/yauzl.d.ts",
+        "**/package.json"
+      ]
+    }
+  },
+  "docsDrift": {
+    "watchPaths": [
+      "risk-policy.json",
+      ".github/workflows/**",
+      ".claude/rules/**"
+    ]
+  }
+}

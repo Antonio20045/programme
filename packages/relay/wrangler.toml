@@ -1,0 +1,17 @@
+name = "ki-assistent-relay"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[durable_objects]
+bindings = [
+  { name = "DEVICE_REGISTRY", class_name = "DeviceRegistry" },
+  { name = "OFFLINE_QUEUE", class_name = "OfflineQueue" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["DeviceRegistry", "OfflineQueue"]
+
+# JWT_SECRET is a Cloudflare Secret — set via:
+# wrangler secret put JWT_SECRET

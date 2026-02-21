@@ -21,15 +21,15 @@ describe('Toast', () => {
   it('uses success styling by default', () => {
     const result = Toast({ message: 'OK', show: true })
     const json = JSON.stringify(result)
-    expect(json).toContain('border-gray-700')
-    expect(json).toContain('text-gray-300')
+    expect(json).toContain('border-edge')
+    expect(json).toContain('text-content-secondary')
   })
 
   it('uses error styling when type is error', () => {
     const result = Toast({ message: 'Fehler', type: 'error', show: true })
     const json = JSON.stringify(result)
-    expect(json).toContain('border-red-700')
-    expect(json).toContain('text-red-300')
+    expect(json).toContain('border-error')
+    expect(json).toContain('text-error')
   })
 
   it('has role="status" and aria-live', () => {
@@ -43,7 +43,7 @@ describe('Toast', () => {
     const result = Toast({ message: 'Test', show: true })
     const json = JSON.stringify(result)
     expect(json).toContain('fixed')
-    expect(json).toContain('bottom-8')
+    expect(json).toContain('bottom-6')
     expect(json).toContain('-translate-x-1/2')
   })
 

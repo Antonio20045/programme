@@ -71,14 +71,6 @@ contextBridge.exposeInMainWorld('api', {
     return ipcRenderer.invoke('setup:get-required')
   },
 
-  setupValidateApiKey: (data: { provider: string; apiKey: string }): Promise<{ valid: boolean; error?: string }> => {
-    return ipcRenderer.invoke('setup:validate-api-key', data)
-  },
-
-  setupStoreApiKey: (data: { provider: string; apiKey: string }): Promise<{ success: boolean; error?: string }> => {
-    return ipcRenderer.invoke('setup:store-api-key', data)
-  },
-
   setupWriteConfig: (config: { name: string; tone: string; provider: string; model: string }): Promise<{ success: boolean; error?: string }> => {
     return ipcRenderer.invoke('setup:write-config', config)
   },
@@ -107,10 +99,6 @@ contextBridge.exposeInMainWorld('api', {
     return ipcRenderer.invoke('settings:remove-folder', data)
   },
 
-  settingsReadApiKeyInfo: (): Promise<{ provider: string; last4: string }> => {
-    return ipcRenderer.invoke('settings:read-api-key-info')
-  },
-
   integrationsConnect: (data: { service: string }): Promise<{ success: boolean; error?: string }> => {
     return ipcRenderer.invoke('integrations:connect', data)
   },
@@ -133,5 +121,29 @@ contextBridge.exposeInMainWorld('api', {
 
   activityRead: (data?: { days?: number; offset?: number; limit?: number }): Promise<{ entries: Array<{ id: string; toolName: string; category: string; description: string; params: Record<string, unknown>; result?: unknown; timestamp: string; durationMs?: number }>; hasMore: boolean }> => {
     return ipcRenderer.invoke('activity:read', data)
+  },
+
+  pairingInit: (): Promise<{ success: boolean; qrDataUrl?: string; pairingToken?: string; deviceId?: string; expiresAt?: number; safeStorageAvailable?: boolean; error?: string }> => {
+    return ipcRenderer.invoke('pairing:init')
+  },
+
+  pairingPollStatus: (token: string): Promise<{ success: boolean; paired?: boolean; partnerDeviceId?: string; error?: string }> => {
+    return ipcRenderer.invoke('pairing:poll-status', token)
+  },
+
+  pairingGetStored: (): Promise<{ paired: boolean; partnerDeviceId?: string; pairedAt?: string; safeStorageAvailable?: boolean }> => {
+    return ipcRenderer.invoke('pairing:get-stored')
+  },
+
+  pairingUnpair: (): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('pairing:unpair')
+  },
+
+  setClerkToken: (token: string | null): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('auth:set-clerk-token', token)
+  },
+
+  getClerkPublishableKey: (): Promise<string | null> => {
+    return ipcRenderer.invoke('auth:get-clerk-publishable-key')
   },
 })

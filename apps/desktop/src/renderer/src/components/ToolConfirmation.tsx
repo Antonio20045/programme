@@ -12,14 +12,14 @@ interface ToolConfirmationProps {
   ) => void
 }
 
-const TOOL_ICONS: Record<ToolPreviewType, string> = {
-  email: '\u2709',
-  calendar: '\uD83D\uDCC5',
-  shell: '\u26A0',
-  filesystem: '\uD83D\uDCC1',
-  notes: '\uD83D\uDCDD',
-  generic: '\u2699',
-}
+const TOOL_ICONS = new Map<ToolPreviewType, string>([
+  ['email', '\u2709'],
+  ['calendar', '\uD83D\uDCC5'],
+  ['shell', '\u26A0'],
+  ['filesystem', '\uD83D\uDCC1'],
+  ['notes', '\uD83D\uDCDD'],
+  ['generic', '\u2699'],
+])
 
 function PreviewFields({
   fields,
@@ -29,34 +29,34 @@ function PreviewFields({
 }: {
   readonly fields: Record<string, string>
   readonly editing: boolean
-  readonly editedFields: Record<string, string>
+  readonly editedFields: Map<string, string>
   readonly onFieldChange: (key: string, value: string) => void
 }): JSX.Element {
   return (
     <div className="space-y-2">
       {Object.entries(fields).map(([key, value]) => (
         <div key={key}>
-          <span className="text-xs font-medium text-gray-400">{key}</span>
+          <span className="text-xs font-medium text-content-secondary">{key}</span>
           {editing ? (
             value.includes('\n') || value.length > 60 ? (
               <textarea
-                value={editedFields[key] ?? value}
+                value={editedFields.get(key) ?? value}
                 onChange={(e) => onFieldChange(key, e.target.value)}
                 placeholder={key}
                 rows={3}
-                className="mt-0.5 w-full resize-none rounded border border-gray-600 bg-gray-900 px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                className="mt-0.5 w-full resize-none rounded border border-edge-strong bg-surface px-2 py-1 text-xs text-content placeholder-content-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               />
             ) : (
               <input
                 type="text"
-                value={editedFields[key] ?? value}
+                value={editedFields.get(key) ?? value}
                 onChange={(e) => onFieldChange(key, e.target.value)}
                 placeholder={key}
-                className="mt-0.5 w-full rounded border border-gray-600 bg-gray-900 px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                className="mt-0.5 w-full rounded border border-edge-strong bg-surface px-2 py-1 text-xs text-content placeholder-content-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               />
             )
           ) : (
-            <pre className="mt-0.5 whitespace-pre-wrap rounded bg-gray-900 px-2 py-1 text-xs text-gray-300">
+            <pre className="mt-0.5 whitespace-pre-wrap rounded bg-surface px-2 py-1 text-xs text-content-secondary">
               {value || '\u2014'}
             </pre>
           )}
@@ -74,20 +74,17 @@ export default function ToolConfirmation({
   onConfirm,
 }: ToolConfirmationProps): JSX.Element {
   const [editing, setEditing] = useState(false)
-  const [editedFields, setEditedFields] = useState<Record<string, string>>({})
+  const [editedFields, setEditedFields] = useState<Map<string, string>>(new Map())
 
-  const icon = TOOL_ICONS[preview.type] ?? TOOL_ICONS.generic
+  const icon = TOOL_ICONS.get(preview.type) ?? TOOL_ICONS.get('generic') ?? '\u2699'
 
   const handleFieldChange = useCallback((key: string, value: string) => {
-    setEditedFields((prev) => ({ ...prev, [key]: value }))
+    setEditedFields((prev) => new Map(prev).set(key, value))
   }, [])
 
   const handleExecute = useCallback(() => {
-    if (editing && Object.keys(editedFields).length > 0) {
-      const modified = { ...params }
-      for (const [key, value] of Object.entries(editedFields)) {
-        modified[key] = value
-      }
+    if (editing && editedFields.size > 0) {
+      const modified = { ...params, ...Object.fromEntries(editedFields) }
       onConfirm(toolCallId, 'execute', modified)
     } else {
       onConfirm(toolCallId, 'execute')
@@ -106,15 +103,15 @@ export default function ToolConfirmation({
     <div
       role="region"
       aria-label={`Tool-Bestätigung für ${toolName}`}
-      className="my-1 rounded-lg border border-amber-500/60 bg-gray-800/50"
+      className="my-1 rounded-lg border border-accent/60 bg-surface-raised/50"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-amber-500/30 px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-accent/30 px-3 py-2">
         <span className="text-base">{icon}</span>
-        <span className="text-sm font-medium text-amber-300">
+        <span className="text-sm font-medium text-accent-text">
           {toolName}
         </span>
-        <span className="ml-auto text-xs text-amber-400/70">
+        <span className="ml-auto text-xs text-accent/70">
           Bestätigung erforderlich
         </span>
       </div>
@@ -131,31 +128,31 @@ export default function ToolConfirmation({
 
       {/* Warning */}
       {preview.warning !== undefined && preview.warning !== '' && (
-        <div className="mx-3 mb-2 rounded bg-red-950/50 px-2 py-1.5 text-xs text-red-300">
+        <div className="mx-3 mb-2 rounded bg-error/10 px-2 py-1.5 text-xs text-error">
           {preview.warning}
         </div>
       )}
 
       {/* Action buttons */}
-      <div className="flex flex-wrap items-center gap-2 border-t border-gray-700 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-t border-edge px-3 py-2">
         <button
           type="button"
           onClick={handleExecute}
-          className="rounded bg-green-700 px-3 py-1 text-xs font-medium text-green-100 transition-colors hover:bg-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-800"
+          className="active-press rounded-md bg-success/80 px-3 py-1 text-xs font-medium text-content transition-colors hover:bg-success focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-1 focus-visible:ring-offset-surface-raised"
         >
           {editing ? 'Mit Änderungen ausführen' : 'Ausführen'}
         </button>
         <button
           type="button"
           onClick={handleToggleEdit}
-          className="rounded bg-amber-700 px-3 py-1 text-xs font-medium text-amber-100 transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-800"
+          className="active-press rounded-md bg-accent/80 px-3 py-1 text-xs font-medium text-surface transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-raised"
         >
           {editing ? 'Abbrechen' : 'Bearbeiten'}
         </button>
         <button
           type="button"
           onClick={handleReject}
-          className="rounded bg-red-800 px-3 py-1 text-xs font-medium text-red-100 transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-800"
+          className="active-press rounded-md bg-error/80 px-3 py-1 text-xs font-medium text-content transition-colors hover:bg-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error focus-visible:ring-offset-1 focus-visible:ring-offset-surface-raised"
         >
           Ablehnen
         </button>

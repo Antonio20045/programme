@@ -1,31 +1,5 @@
 import { useMemo } from 'react'
-
-const FILE_ICONS: Record<string, string> = {
-  txt: '\u{1F4C4}',
-  pdf: '\u{1F4D5}',
-  md: '\u{1F4DD}',
-  csv: '\u{1F4CA}',
-  json: '\u{1F4CB}',
-  png: '\u{1F5BC}',
-  jpg: '\u{1F5BC}',
-  docx: '\u{1F4C3}',
-}
-
-function getExtension(name: string): string {
-  const dot = name.lastIndexOf('.')
-  return dot === -1 ? '' : name.slice(dot + 1).toLowerCase()
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes.toString()} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function isImage(name: string): boolean {
-  const ext = getExtension(name)
-  return ext === 'png' || ext === 'jpg'
-}
+import { getExtension, isImage, formatSize, FILE_ICONS } from '../utils/file-validation'
 
 function FileItem({
   file,
@@ -35,14 +9,14 @@ function FileItem({
   readonly onRemove: () => void
 }): JSX.Element {
   const ext = getExtension(file.name)
-  const icon = FILE_ICONS[ext] ?? '\u{1F4CE}'
+  const icon = FILE_ICONS.get(ext) ?? '\u{1F4CE}'
   const thumbnailUrl = useMemo(() => {
     if (!isImage(file.name)) return null
     return URL.createObjectURL(file)
   }, [file])
 
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-gray-800 px-3 py-2">
+    <div className="flex items-center gap-2 rounded-lg bg-surface-raised px-3 py-2">
       {thumbnailUrl !== null ? (
         <img
           src={thumbnailUrl}
@@ -53,13 +27,13 @@ function FileItem({
         <span className="text-lg">{icon}</span>
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-gray-200">{file.name}</p>
-        <p className="text-xs text-gray-500">{formatSize(file.size)}</p>
+        <p className="truncate text-sm text-content">{file.name}</p>
+        <p className="text-xs text-content-muted">{formatSize(file.size)}</p>
       </div>
       <button
         type="button"
         onClick={onRemove}
-        className="ml-1 rounded p-1 text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
+        className="ml-1 rounded p-1 text-content-muted transition-colors hover:bg-surface-hover hover:text-content-secondary"
         aria-label={`${file.name} entfernen`}
       >
         <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
@@ -93,5 +67,3 @@ export default function FilePreview({
     </div>
   )
 }
-
-export { formatSize, getExtension, isImage }

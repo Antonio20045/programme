@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { PROVIDERS, TONES, API_KEY_HELP_URLS } from '../constants'
+import { TONES } from '../constants'
 
-type WizardStep = 'access' | 'apikey' | 'persona' | 'done'
+type WizardStep = 'access' | 'persona' | 'done'
 
 function CheckIcon(): JSX.Element {
   return (
@@ -16,32 +16,6 @@ function CheckIcon(): JSX.Element {
         d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
         clipRule="evenodd"
       />
-    </svg>
-  )
-}
-
-function SpinnerIcon(): JSX.Element {
-  return (
-    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-    </svg>
-  )
-}
-
-function EyeIcon({ open }: { readonly open: boolean }): JSX.Element {
-  if (open) {
-    return (
-      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    )
-  }
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
-      <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   )
 }
@@ -158,150 +132,6 @@ export function AccessScreen({
 }
 
 // ---------------------------------------------------------------------------
-// ApiKeyScreen (Phase 6.2)
-// ---------------------------------------------------------------------------
-
-export function ApiKeyScreen({
-  onNext,
-}: {
-  readonly onNext: (data: { provider: string; apiKey: string; model: string }) => void
-}): JSX.Element {
-  const [provider, setProvider] = useState('anthropic')
-  const [apiKey, setApiKey] = useState('')
-  const [showKey, setShowKey] = useState(false)
-  const [validating, setValidating] = useState(false)
-  const [validationError, setValidationError] = useState('')
-  const [validated, setValidated] = useState(false)
-
-  const selectedProvider = PROVIDERS.find((p) => p.id === provider) ?? PROVIDERS[0]
-
-  const handleProviderChange = useCallback((id: string): void => {
-    setProvider(id)
-    setApiKey('')
-    setValidated(false)
-    setValidationError('')
-  }, [])
-
-  const handleValidate = useCallback(async (): Promise<void> => {
-    setValidating(true)
-    setValidationError('')
-    try {
-      const result = await window.api.setupValidateApiKey({ provider, apiKey })
-      if (result.valid) {
-        setValidated(true)
-        const model = selectedProvider.model
-        onNext({ provider, apiKey, model })
-      } else {
-        setValidationError(result.error ?? 'Validierung fehlgeschlagen')
-      }
-    } catch {
-      setValidationError('Verbindungsfehler')
-    } finally {
-      setValidating(false)
-    }
-  }, [provider, apiKey, selectedProvider, onNext])
-
-  const handleHelpClick = useCallback((): void => {
-    const url = API_KEY_HELP_URLS[provider]
-    if (url) {
-      void window.api.openExternal(url)
-    }
-  }, [provider])
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950 p-4">
-      <div className="w-full max-w-md animate-slide-in">
-        <h1 className="mb-8 text-center text-3xl font-bold text-gray-100">
-          Welchen KI-Anbieter nutzt du?
-        </h1>
-
-        <div className="space-y-3">
-          {PROVIDERS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => handleProviderChange(p.id)}
-              className={
-                'flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-colors ' +
-                (provider === p.id
-                  ? 'border-blue-500 bg-gray-800'
-                  : 'border-gray-700 bg-gray-900 hover:border-gray-600')
-              }
-            >
-              <div className="flex-1">
-                <div className="font-semibold text-gray-100">{p.label}</div>
-                <div className="text-sm text-gray-400">{p.sublabel}</div>
-              </div>
-              {provider === p.id && <CheckIcon />}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-8">
-          <label htmlFor="api-key-input" className="mb-2 block text-sm font-medium text-gray-300">
-            API Key
-          </label>
-          <div className="relative">
-            <input
-              id="api-key-input"
-              type={showKey ? 'text' : 'password'}
-              value={apiKey}
-              onChange={(e) => {
-                setApiKey(e.target.value)
-                setValidated(false)
-                setValidationError('')
-              }}
-              placeholder={selectedProvider.placeholder}
-              className={
-                'w-full rounded-lg border bg-gray-900 px-4 py-3 pr-20 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 ' +
-                (validationError
-                  ? 'border-red-500 focus:ring-red-500'
-                  : validated
-                    ? 'border-emerald-500 focus:ring-emerald-500'
-                    : 'border-gray-700 focus:ring-blue-500')
-              }
-            />
-            <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
-              {validated && <CheckIcon />}
-              <button
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                className="text-gray-400 hover:text-gray-200"
-                aria-label={showKey ? 'Key verbergen' : 'Key anzeigen'}
-              >
-                <EyeIcon open={showKey} />
-              </button>
-            </div>
-          </div>
-
-          {validationError && (
-            <p className="mt-2 text-sm text-red-400">{validationError}</p>
-          )}
-
-          <button
-            type="button"
-            onClick={handleHelpClick}
-            className="mt-3 text-sm text-blue-400 underline hover:text-blue-300"
-          >
-            Wo bekomme ich einen API Key?
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => void handleValidate()}
-          disabled={apiKey.length < 20 || validating}
-          className="mt-8 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-lg font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {validating && <SpinnerIcon />}
-          {validating ? 'Wird geprüft...' : 'Weiter'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // PersonaScreen (Phase 6.3)
 // ---------------------------------------------------------------------------
 
@@ -382,11 +212,9 @@ export function PersonaScreen({
 
 export function DoneScreen({
   config,
-  apiKey,
   onComplete,
 }: {
   readonly config: SetupConfig
-  readonly apiKey: string
   readonly onComplete: () => void
 }): JSX.Element {
   const [taskStatus, setTaskStatus] = useState<'running' | 'done' | 'error'>('running')
@@ -397,9 +225,6 @@ export function DoneScreen({
       const configResult = await window.api.setupWriteConfig(config)
       if (!configResult.success) throw new Error(configResult.error ?? 'Config write failed')
 
-      const keyResult = await window.api.setupStoreApiKey({ provider: config.provider, apiKey })
-      if (!keyResult.success) throw new Error(keyResult.error ?? 'Key store failed')
-
       const gwResult = await window.api.setupStartGateway()
       if (!gwResult.success) throw new Error(gwResult.error ?? 'Gateway start failed')
 
@@ -408,7 +233,7 @@ export function DoneScreen({
       setErrorMsg(err instanceof Error ? err.message : 'Unbekannter Fehler')
       setTaskStatus('error')
     }
-  }, [config, apiKey])
+  }, [config])
 
   useEffect(() => {
     void runSetup()
@@ -505,27 +330,11 @@ export default function Setup({
   readonly onSetupComplete: () => void
 }): JSX.Element {
   const [step, setStep] = useState<WizardStep>('access')
-  const [provider, setProvider] = useState('anthropic')
-  const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('anthropic/claude-sonnet-4-5')
   const [personaName, setPersonaName] = useState('Alex')
   const [tone, setTone] = useState<ToneOption>('friendly')
 
   if (step === 'access') {
-    return <AccessScreen onNext={() => setStep('apikey')} />
-  }
-
-  if (step === 'apikey') {
-    return (
-      <ApiKeyScreen
-        onNext={(data) => {
-          setProvider(data.provider)
-          setApiKey(data.apiKey)
-          setModel(data.model)
-          setStep('persona')
-        }}
-      />
-    )
+    return <AccessScreen onNext={() => setStep('persona')} />
   }
 
   if (step === 'persona') {
@@ -542,8 +351,7 @@ export default function Setup({
 
   return (
     <DoneScreen
-      config={{ name: personaName, tone, provider, model }}
-      apiKey={apiKey}
+      config={{ name: personaName, tone, provider: 'anthropic', model: 'anthropic/claude-sonnet-4-5' }}
       onComplete={onSetupComplete}
     />
   )

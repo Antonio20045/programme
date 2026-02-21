@@ -15,6 +15,9 @@ export interface FilesystemConfig {
   readonly allowedDirectories: readonly string[]
 }
 
+/** Maximum file size for readFile (10 MB) to prevent OOM. */
+const MAX_READ_SIZE = 10 * 1024 * 1024
+
 /** Actions that mutate the filesystem and require user confirmation. */
 export const ACTIONS_REQUIRING_CONFIRMATION: ReadonlySet<string> = new Set([
   'writeFile',
@@ -295,6 +298,10 @@ export function createFilesystemTool(
       switch (parsed.action) {
         case 'readFile': {
           const safe = await validatePath(parsed.path, allowedDirs)
+          const stat = await fs.stat(safe)
+          if (stat.size > MAX_READ_SIZE) {
+            throw new Error(`File too large (${String(stat.size)} bytes). Maximum: ${String(MAX_READ_SIZE)} bytes (10 MB)`)
+          }
           const content = await fs.readFile(safe, 'utf-8')
           return textResult(content)
         }

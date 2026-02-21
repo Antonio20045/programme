@@ -2,7 +2,22 @@
   "name": "@ki-assistent/tools",
   "version": "0.0.0",
   "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "archiver": "^7.0.0",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "puppeteer-core": "^23.0.0",
+    "sharp": "^0.33.5",
+    "tesseract.js": "^5.1.1",
+    "whatsapp-web.js": "^1.26.0",
+    "yauzl": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/archiver": "^6.0.0"
   }
 }

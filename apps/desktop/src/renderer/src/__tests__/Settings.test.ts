@@ -58,7 +58,6 @@ const mockConfig = {
   identity: { name: 'Alex', theme: 'friendly' as const, emoji: '\u{1F916}' },
   model: 'anthropic/claude-sonnet-4-5',
   provider: 'anthropic',
-  apiKeyLast4: 'abcd',
   allowedPaths: ['/Users/test'],
 }
 
@@ -68,16 +67,15 @@ const mockConfig = {
  *  0: loading, 1: config, 2: activeTab,
  *  3: pendingModel, 4: modelSaving,
  *  5: personaName, 6: personaTone, 7: personaDirty, 8: personaSaving,
- *  9: apiKeyExpanded, 10: newApiKey, 11: apiKeyValidating, 12: apiKeyError,
- *  13: folderAdding,
- *  14: connectionMode, 15: serverUrl, 16: serverToken,
- *  17: connectionSaving, 18: connectionTesting, 19: connectionTestResult, 20: tokenLast4,
- *  21: integrationStatus, 22: connectingService, 23: disconnectConfirm,
- *  24: toast,
- *  25: memoryData, 26: memoryLoading, 27: memorySearch,
- *  28: memoryDeleteConfirm, 29: ltmCollapsed, 30: dailyCollapsed,
- *  31: activityData, 32: activityLoading, 33: activityFilter,
- *  34: activityExpandedId
+ *  9: folderAdding,
+ *  10: connectionMode, 11: serverUrl, 12: serverToken,
+ *  13: connectionSaving, 14: connectionTesting, 15: connectionTestResult, 16: tokenLast4,
+ *  17: integrationStatus, 18: connectingService, 19: disconnectConfirm,
+ *  20: toast,
+ *  21: memoryData, 22: memoryLoading, 23: memorySearch,
+ *  24: memoryDeleteConfirm, 25: ltmCollapsed, 26: dailyCollapsed,
+ *  27: activityData, 28: activityLoading, 29: activityFilter,
+ *  30: activityExpandedId
  */
 function makeLoadedSlots(overrides: Partial<Record<number, unknown>> = {}): void {
   const defaults: unknown[] = [
@@ -90,32 +88,28 @@ function makeLoadedSlots(overrides: Partial<Record<number, unknown>> = {}): void
     'friendly',                         // 6: personaTone
     false,                              // 7: personaDirty
     false,                              // 8: personaSaving
-    false,                              // 9: apiKeyExpanded
-    '',                                 // 10: newApiKey
-    false,                              // 11: apiKeyValidating
-    '',                                 // 12: apiKeyError
-    false,                              // 13: folderAdding
-    'local',                            // 14: connectionMode
-    '',                                 // 15: serverUrl
-    '',                                 // 16: serverToken
-    false,                              // 17: connectionSaving
-    false,                              // 18: connectionTesting
-    null,                               // 19: connectionTestResult
-    '',                                 // 20: tokenLast4
-    { gmail: false, calendar: false, drive: false },  // 21: integrationStatus
-    null,                               // 22: connectingService
-    null,                               // 23: disconnectConfirm
-    null,                               // 24: toast
-    null,                               // 25: memoryData
-    false,                              // 26: memoryLoading
-    '',                                 // 27: memorySearch
-    null,                               // 28: memoryDeleteConfirm
-    false,                              // 29: ltmCollapsed
-    false,                              // 30: dailyCollapsed
-    null,                               // 31: activityData
-    false,                              // 32: activityLoading
-    'all',                              // 33: activityFilter
-    null,                               // 34: activityExpandedId
+    false,                              // 9: folderAdding
+    'local',                            // 10: connectionMode
+    '',                                 // 11: serverUrl
+    '',                                 // 12: serverToken
+    false,                              // 13: connectionSaving
+    false,                              // 14: connectionTesting
+    null,                               // 15: connectionTestResult
+    '',                                 // 16: tokenLast4
+    { gmail: false, calendar: false, drive: false },  // 17: integrationStatus
+    null,                               // 18: connectingService
+    null,                               // 19: disconnectConfirm
+    null,                               // 20: toast
+    null,                               // 21: memoryData
+    false,                              // 22: memoryLoading
+    '',                                 // 23: memorySearch
+    null,                               // 24: memoryDeleteConfirm
+    false,                              // 25: ltmCollapsed
+    false,                              // 26: dailyCollapsed
+    null,                               // 27: activityData
+    false,                              // 28: activityLoading
+    'all',                              // 29: activityFilter
+    null,                               // 30: activityExpandedId
   ]
   for (const [idx, val] of Object.entries(overrides)) {
     defaults[Number(idx)] = val
@@ -169,8 +163,16 @@ describe('Settings', () => {
     expect(json).toContain('"provider":"anthropic"')
     expect(json).toContain('"name":"Alex"')
     expect(json).toContain('"tone":"friendly"')
-    expect(json).toContain('"last4":"abcd"')
     expect(json).toContain('"/Users/test"')
+  })
+
+  it('does not render API-Key section', () => {
+    makeLoadedSlots()
+    stateIndex = 0
+    const result = Settings()
+    const json = JSON.stringify(result)
+    expect(json).not.toContain('API-Key')
+    expect(json).not.toContain('"last4"')
   })
 
   it('renders Integrationen tab with integration cards', () => {
@@ -189,7 +191,7 @@ describe('Settings', () => {
   })
 
   it('passes memoryLoading prop to Memory tab', () => {
-    makeLoadedSlots({ 2: 'memory', 26: true })
+    makeLoadedSlots({ 2: 'memory', 22: true })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -210,7 +212,7 @@ describe('Settings', () => {
       longTerm: [{ id: 'Farbe', title: 'Farbe', content: 'Blau' }],
       daily: [],
     }
-    makeLoadedSlots({ 2: 'memory', 25: memData })
+    makeLoadedSlots({ 2: 'memory', 21: memData })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -223,7 +225,7 @@ describe('Settings', () => {
       longTerm: [],
       daily: [{ date: '2026-02-17', entries: [{ id: '2026-02-17:0', content: 'Notiz eins' }] }],
     }
-    makeLoadedSlots({ 2: 'memory', 25: memData })
+    makeLoadedSlots({ 2: 'memory', 21: memData })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -232,7 +234,7 @@ describe('Settings', () => {
   })
 
   it('passes memorySearch prop', () => {
-    makeLoadedSlots({ 2: 'memory', 27: 'test' })
+    makeLoadedSlots({ 2: 'memory', 23: 'test' })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -240,7 +242,7 @@ describe('Settings', () => {
   })
 
   it('passes memoryDeleteConfirm prop', () => {
-    makeLoadedSlots({ 2: 'memory', 28: { type: 'longTerm', id: 'Farbe' } })
+    makeLoadedSlots({ 2: 'memory', 24: { type: 'longTerm', id: 'Farbe' } })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -249,7 +251,7 @@ describe('Settings', () => {
   })
 
   it('passes activityLoading prop to Aktivitaet tab', () => {
-    makeLoadedSlots({ 2: 'aktivitaet', 32: true })
+    makeLoadedSlots({ 2: 'aktivitaet', 28: true })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -268,7 +270,7 @@ describe('Settings', () => {
       }],
       hasMore: false,
     }
-    makeLoadedSlots({ 2: 'aktivitaet', 31: actData })
+    makeLoadedSlots({ 2: 'aktivitaet', 27: actData })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -277,7 +279,7 @@ describe('Settings', () => {
   })
 
   it('passes activityFilter prop', () => {
-    makeLoadedSlots({ 2: 'aktivitaet', 33: 'email' })
+    makeLoadedSlots({ 2: 'aktivitaet', 29: 'email' })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -296,7 +298,7 @@ describe('Settings', () => {
       }],
       hasMore: true,
     }
-    makeLoadedSlots({ 2: 'aktivitaet', 31: actData })
+    makeLoadedSlots({ 2: 'aktivitaet', 27: actData })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -304,7 +306,7 @@ describe('Settings', () => {
   })
 
   it('passes activityExpandedId prop', () => {
-    makeLoadedSlots({ 2: 'aktivitaet', 34: 'tu-1' })
+    makeLoadedSlots({ 2: 'aktivitaet', 30: 'tu-1' })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -338,32 +340,6 @@ describe('Settings', () => {
     expect(json).toContain('"dirty":true')
   })
 
-  it('api key section receives provider and last4', () => {
-    makeLoadedSlots()
-    stateIndex = 0
-    const result = Settings()
-    const json = JSON.stringify(result)
-    expect(json).toContain('"provider":"anthropic"')
-    expect(json).toContain('"last4":"abcd"')
-    expect(json).toContain('"expanded":false')
-  })
-
-  it('api key section shows expanded state', () => {
-    makeLoadedSlots({ 9: true }) // apiKeyExpanded = true
-    stateIndex = 0
-    const result = Settings()
-    const json = JSON.stringify(result)
-    expect(json).toContain('"expanded":true')
-  })
-
-  it('api key section passes error prop', () => {
-    makeLoadedSlots({ 9: true, 12: 'Key ungueltig' })
-    stateIndex = 0
-    const result = Settings()
-    const json = JSON.stringify(result)
-    expect(json).toContain('"error":"Key ungueltig"')
-  })
-
   it('folder section receives paths', () => {
     makeLoadedSlots()
     stateIndex = 0
@@ -374,7 +350,7 @@ describe('Settings', () => {
   })
 
   it('renders toast when toast state is set', () => {
-    makeLoadedSlots({ 24: { message: 'Gespeichert', type: 'success' } })
+    makeLoadedSlots({ 20: { message: 'Gespeichert', type: 'success' } })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -383,7 +359,7 @@ describe('Settings', () => {
   })
 
   it('toast has show=false when toast state is null', () => {
-    makeLoadedSlots({ 24: null })
+    makeLoadedSlots({ 20: null })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -416,7 +392,7 @@ describe('Settings', () => {
 
   // Integration tests — serialized JSX shows props passed to IntegrationCard
   it('passes connected=false for all disconnected services', () => {
-    makeLoadedSlots({ 2: 'integrationen', 21: { gmail: false, calendar: false, drive: false } })
+    makeLoadedSlots({ 2: 'integrationen', 17: { gmail: false, calendar: false, drive: false } })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -426,7 +402,7 @@ describe('Settings', () => {
   })
 
   it('passes connected=true when service is connected', () => {
-    makeLoadedSlots({ 2: 'integrationen', 21: { gmail: true, calendar: false, drive: false } })
+    makeLoadedSlots({ 2: 'integrationen', 17: { gmail: true, calendar: false, drive: false } })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -434,7 +410,7 @@ describe('Settings', () => {
   })
 
   it('passes connecting=true when connectingService is set', () => {
-    makeLoadedSlots({ 2: 'integrationen', 22: 'gmail' })
+    makeLoadedSlots({ 2: 'integrationen', 18: 'gmail' })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)
@@ -442,7 +418,7 @@ describe('Settings', () => {
   })
 
   it('passes confirmDisconnect=true when disconnectConfirm is set', () => {
-    makeLoadedSlots({ 2: 'integrationen', 21: { gmail: true, calendar: false, drive: false }, 23: 'gmail' })
+    makeLoadedSlots({ 2: 'integrationen', 17: { gmail: true, calendar: false, drive: false }, 19: 'gmail' })
     stateIndex = 0
     const result = Settings()
     const json = JSON.stringify(result)

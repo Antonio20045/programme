@@ -1,0 +1,152 @@
+name: Risk Policy Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: read
+
+jobs:
+  risk-gate:
+    name: risk-policy-gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Risk Policy Gate
+        id: gate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set +e
+          OUTPUT=$(pnpm tsx scripts/risk-policy-gate.ts --json)
+          GATE_EXIT=$?
+          set -e
+          echo "result<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$OUTPUT" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "gate_exit=$GATE_EXIT" >> "$GITHUB_OUTPUT"
+
+      - name: Post PR Comment
+        if: always() && steps.gate.outputs.result
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headSha = context.payload.pull_request.head.sha;
+            const marker = `<!-- risk-gate sha:${headSha} -->`;
+
+            const gate = JSON.parse(`${{ steps.gate.outputs.result }}`);
+
+            const tierEmoji = { critical: '\u{1F534}', high: '\u{1F7E1}', low: '\u{1F7E2}' };
+
+            let body = `${marker}\n`;
+            body += `## Risk Policy Gate\n\n`;
+            body += `| Property | Value |\n|----------|-------|\n`;
+            body += `| **Tier** | ${tierEmoji[gate.tier] || ''} ${gate.label} |\n`;
+            body += `| **Human Review Required** | ${gate.requireHumanReview ? 'Yes' : 'No'} |\n`;
+            body += `| **Docs Drift** | ${gate.docsDrift ? 'Yes' : 'No'} |\n`;
+            body += `| **Commit** | \`${headSha.substring(0, 7)}\` |\n\n`;
+
+            body += `### Required Checks\n`;
+            for (const check of gate.requiredChecks) {
+              body += `- [ ] ${check}\n`;
+            }
+            body += `\n`;
+
+            if (gate.checkStatuses && gate.checkStatuses.queried) {
+              body += `### Check Statuses\n`;
+              for (const check of gate.checkStatuses.passed) {
+                body += `- :white_check_mark: ${check}\n`;
+              }
+              for (const check of gate.checkStatuses.failed) {
+                body += `- :x: ${check}\n`;
+              }
+              for (const check of (gate.checkStatuses.pending || [])) {
+                body += `- :hourglass_flowing_sand: ${check} (in progress)\n`;
+              }
+              for (const check of gate.checkStatuses.missing) {
+                body += `- :grey_question: ${check} (not found)\n`;
+              }
+              body += `\n`;
+            }
+
+            const sections = [
+              { name: 'Critical', files: gate.criticalFiles },
+              { name: 'High', files: gate.highFiles },
+              { name: 'Low', files: gate.lowFiles },
+              { name: 'Unknown', files: gate.unknownFiles },
+            ];
+            for (const section of sections) {
+              if (section.files.length > 0) {
+                body += `<details><summary>${section.name} (${section.files.length} file${section.files.length !== 1 ? 's' : ''})</summary>\n\n`;
+                for (const f of section.files) {
+                  body += `- \`${f}\`\n`;
+                }
+                body += `\n</details>\n\n`;
+              }
+            }
+
+            if (gate.docsDrift) {
+              body += `### Docs Drift Detected\n`;
+              body += `The following documentation-sensitive files changed:\n`;
+              for (const f of gate.driftFiles) {
+                body += `- \`${f}\`\n`;
+              }
+              body += `\nPlease verify related documentation is up to date.\n`;
+            }
+
+            // SHA deduplication — check if comment for this SHA already exists
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const existingComment = comments.find(c =>
+              c.body && c.body.includes(marker)
+            );
+
+            if (existingComment) {
+              core.info(`Comment for SHA ${headSha} already exists, skipping.`);
+              return;
+            }
+
+            // Post new comment — stale SHA comments remain as history
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body,
+            });
+
+            core.info(`Posted risk gate comment for SHA ${headSha}`);
+
+      - name: Enforce Gate Result
+        if: always() && steps.gate.outputs.gate_exit != '0'
+        run: |
+          echo "Risk Policy Gate BLOCKED: tier requires human review"
+          exit 1

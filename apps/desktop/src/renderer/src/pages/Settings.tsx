@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { PROVIDERS, TONES, PROVIDER_MODELS } from '../constants'
 import Toast from '../components/Toast'
+import DevicePairing from '../components/DevicePairing'
 
-type TabId = 'allgemein' | 'integrationen' | 'memory' | 'aktivitaet'
+type TabId = 'allgemein' | 'integrationen' | 'geraete' | 'memory' | 'aktivitaet'
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'allgemein', label: 'Allgemein' },
   { id: 'integrationen', label: 'Integrationen' },
+  { id: 'geraete', label: 'Geräte' },
   { id: 'memory', label: 'Memory' },
-  { id: 'aktivitaet', label: 'Aktivit\u00E4t' },
+  { id: 'aktivitaet', label: 'Aktivität' },
 ]
 
 const INTEGRATIONS: Array<{ id: OAuthService; label: string; description: string }> = [
@@ -29,8 +31,8 @@ function SectionCard({
   readonly children: React.ReactNode
 }): JSX.Element {
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-      <h3 className="mb-4 text-lg font-semibold text-gray-100">{title}</h3>
+    <div className="rounded-xl border border-edge bg-surface-alt p-6">
+      <h3 className="mb-4 text-lg font-semibold text-content">{title}</h3>
       {children}
     </div>
   )
@@ -80,18 +82,18 @@ function ConnectionModeSection({
           onClick={() => onModeChange('local')}
           className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left transition-colors ${
             mode === 'local'
-              ? 'border-blue-500 bg-gray-800'
-              : 'border-gray-700 bg-gray-900 hover:border-gray-600'
+              ? 'border-accent bg-surface-raised'
+              : 'border-edge bg-surface-alt hover:border-edge-strong'
           }`}
         >
           <div className={`flex h-4 w-4 items-center justify-center rounded-full border-2 ${
-            mode === 'local' ? 'border-blue-500 bg-blue-500' : 'border-gray-500'
+            mode === 'local' ? 'border-accent bg-accent' : 'border-content-muted'
           }`}>
             {mode === 'local' && <div className="h-2 w-2 rounded-full bg-white" />}
           </div>
           <div className="flex-1">
-            <div className="text-sm font-semibold text-gray-100">Lokal</div>
-            <div className="mt-0.5 text-xs text-gray-400">Gateway l&auml;uft auf diesem Computer</div>
+            <div className="text-sm font-semibold text-content">Lokal</div>
+            <div className="mt-0.5 text-xs text-content-muted">Gateway l&auml;uft auf diesem Computer</div>
           </div>
         </button>
 
@@ -100,43 +102,43 @@ function ConnectionModeSection({
           onClick={() => onModeChange('server')}
           className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left transition-colors ${
             mode === 'server'
-              ? 'border-blue-500 bg-gray-800'
-              : 'border-gray-700 bg-gray-900 hover:border-gray-600'
+              ? 'border-accent bg-surface-raised'
+              : 'border-edge bg-surface-alt hover:border-edge-strong'
           }`}
         >
           <div className={`flex h-4 w-4 items-center justify-center rounded-full border-2 ${
-            mode === 'server' ? 'border-blue-500 bg-blue-500' : 'border-gray-500'
+            mode === 'server' ? 'border-accent bg-accent' : 'border-content-muted'
           }`}>
             {mode === 'server' && <div className="h-2 w-2 rounded-full bg-white" />}
           </div>
           <div className="flex-1">
-            <div className="text-sm font-semibold text-gray-100">Server</div>
-            <div className="mt-0.5 text-xs text-gray-400">Gateway l&auml;uft auf einem entfernten Server</div>
+            <div className="text-sm font-semibold text-content">Server</div>
+            <div className="mt-0.5 text-xs text-content-muted">Gateway l&auml;uft auf einem entfernten Server</div>
           </div>
         </button>
 
         {mode === 'server' && (
-          <div className="mt-4 space-y-3 rounded-lg border border-gray-700 bg-gray-800/50 p-4">
+          <div className="mt-4 space-y-3 rounded-lg border border-edge bg-gray-800/50 p-4">
             <div>
-              <label htmlFor="settings-server-url" className="mb-1 block text-sm text-gray-300">Server-URL</label>
+              <label htmlFor="settings-server-url" className="mb-1 block text-sm text-content-secondary">Server-URL</label>
               <input
                 id="settings-server-url"
                 type="url"
                 value={serverUrl}
                 onChange={(e) => onServerUrlChange(e.target.value)}
                 placeholder="https://gateway.example.com"
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-edge bg-surface-raised px-4 py-2 text-content placeholder-content-disabled focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
             <div>
-              <label htmlFor="settings-server-token" className="mb-1 block text-sm text-gray-300">Agent-Token</label>
+              <label htmlFor="settings-server-token" className="mb-1 block text-sm text-content-secondary">Agent-Token</label>
               <input
                 id="settings-server-token"
                 type="password"
                 value={serverToken}
                 onChange={(e) => onTokenChange(e.target.value)}
                 placeholder={tokenLast4 !== '' ? `\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022${tokenLast4}` : 'Token eingeben'}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-edge bg-surface-raised px-4 py-2 text-content placeholder-content-disabled focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
 
@@ -151,7 +153,7 @@ function ConnectionModeSection({
                 type="button"
                 onClick={onTest}
                 disabled={testing || serverUrl === '' || serverToken === ''}
-                className="flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg border border-edge px-4 py-2 text-sm text-content-secondary transition-colors hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {testing && <SpinnerSmall />}
                 Verbindung testen
@@ -160,7 +162,7 @@ function ConnectionModeSection({
                 type="button"
                 onClick={onSave}
                 disabled={saving || serverUrl === '' || serverToken === ''}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-surface transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving && <SpinnerSmall />}
                 Speichern
@@ -184,7 +186,7 @@ function ModelSection({
   readonly saving: boolean
   readonly onModelChange: (model: string) => void
 }): JSX.Element {
-  const models = PROVIDER_MODELS[provider] ?? []
+  const models = PROVIDER_MODELS.get(provider) ?? []
   const currentDesc = models.find((m) => m.value === currentModel)?.desc ?? ''
 
   return (
@@ -194,18 +196,18 @@ function ModelSection({
           value={currentModel}
           onChange={(e) => onModelChange(e.target.value)}
           disabled={saving}
-          className="w-full appearance-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 pr-10 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full appearance-none rounded-lg border border-edge bg-gray-800 px-4 py-3 pr-10 text-content focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         >
           {PROVIDERS.filter((p) => p.id === provider).map((p) => (
             <optgroup key={p.id} label={p.label}>
-              {(PROVIDER_MODELS[p.id] ?? []).map((m) => (
+              {(PROVIDER_MODELS.get(p.id) ?? []).map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </optgroup>
           ))}
           {PROVIDERS.filter((p) => p.id !== provider).map((p) => (
             <optgroup key={p.id} label={p.label}>
-              {(PROVIDER_MODELS[p.id] ?? []).map((m) => (
+              {(PROVIDER_MODELS.get(p.id) ?? []).map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </optgroup>
@@ -218,7 +220,7 @@ function ModelSection({
         )}
       </div>
       {currentDesc !== '' && (
-        <p className="mt-2 text-sm text-gray-400">{currentDesc}</p>
+        <p className="mt-2 text-sm text-content-muted">{currentDesc}</p>
       )}
     </SectionCard>
   )
@@ -243,7 +245,7 @@ function PersonaSection({
 }): JSX.Element {
   return (
     <SectionCard title="Persona">
-      <label htmlFor="settings-persona-name" className="mb-2 block text-sm font-medium text-gray-300">
+      <label htmlFor="settings-persona-name" className="mb-2 block text-sm font-medium text-content-secondary">
         Name
       </label>
       <input
@@ -252,7 +254,7 @@ function PersonaSection({
         value={name}
         onChange={(e) => onNameChange(e.target.value)}
         maxLength={20}
-        className="mb-4 w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="mb-4 w-full rounded-lg border border-edge bg-surface-raised px-4 py-2 text-content placeholder-content-disabled focus:outline-none focus:ring-2 focus:ring-accent"
       />
 
       <div className="space-y-2">
@@ -264,13 +266,13 @@ function PersonaSection({
             className={
               'flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left transition-colors ' +
               (tone === t.id
-                ? 'border-blue-500 bg-gray-800'
-                : 'border-gray-700 bg-gray-900 hover:border-gray-600')
+                ? 'border-accent bg-surface-raised'
+                : 'border-edge bg-surface-alt hover:border-edge-strong')
             }
           >
             <div className="flex-1">
-              <div className="text-sm font-semibold text-gray-100">{t.label}</div>
-              <div className="mt-0.5 text-xs italic text-gray-400">{t.example}</div>
+              <div className="text-sm font-semibold text-content">{t.label}</div>
+              <div className="mt-0.5 text-xs italic text-content-muted">{t.example}</div>
             </div>
           </button>
         ))}
@@ -280,97 +282,11 @@ function PersonaSection({
         type="button"
         onClick={onSave}
         disabled={!dirty || saving}
-        className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-4 flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-surface transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
         {saving && <SpinnerSmall />}
         Speichern
       </button>
-    </SectionCard>
-  )
-}
-
-function ApiKeySection({
-  provider,
-  last4,
-  expanded,
-  newKey,
-  validating,
-  error,
-  onToggle,
-  onKeyChange,
-  onSave,
-  onCancel,
-}: {
-  readonly provider: string
-  readonly last4: string
-  readonly expanded: boolean
-  readonly newKey: string
-  readonly validating: boolean
-  readonly error: string
-  readonly onToggle: () => void
-  readonly onKeyChange: (key: string) => void
-  readonly onSave: () => void
-  readonly onCancel: () => void
-}): JSX.Element {
-  const providerLabel = PROVIDERS.find((p) => p.id === provider)?.label ?? provider
-
-  return (
-    <SectionCard title="API-Key">
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm text-gray-300">{providerLabel}</span>
-          {last4 !== '' && (
-            <span className="ml-2 font-mono text-sm text-gray-400">
-              {'••••••••' + last4}
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onToggle}
-          className="text-sm text-blue-400 hover:text-blue-300"
-        >
-          {expanded ? 'Abbrechen' : '\u00C4ndern'}
-        </button>
-      </div>
-
-      {expanded && (
-        <div className="mt-4">
-          <input
-            type="password"
-            value={newKey}
-            onChange={(e) => onKeyChange(e.target.value)}
-            placeholder="Neuer API Key"
-            className={
-              'w-full rounded-lg border bg-gray-800 px-4 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 ' +
-              (error !== ''
-                ? 'border-red-500 focus:ring-red-500'
-                : 'border-gray-700 focus:ring-blue-500')
-            }
-          />
-          {error !== '' && (
-            <p className="mt-1 text-sm text-red-400">{error}</p>
-          )}
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={newKey.length < 20 || validating}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {validating && <SpinnerSmall />}
-              {validating ? 'Wird gepr\u00FCft...' : 'Pr\u00FCfen & Speichern'}
-            </button>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
-            >
-              Abbrechen
-            </button>
-          </div>
-        </div>
-      )}
     </SectionCard>
   )
 }
@@ -392,18 +308,18 @@ function FolderSection({
     <SectionCard title="Erlaubte Ordner">
       <ul className="space-y-2">
         {paths.map((p) => (
-          <li key={p} className="flex items-center justify-between rounded-lg border border-gray-700 px-4 py-2">
-            <span className="truncate text-sm text-gray-300">
+          <li key={p} className="flex items-center justify-between rounded-lg border border-edge px-4 py-2">
+            <span className="truncate text-sm text-content-secondary">
               {p}
               {p === homePath && (
-                <span className="ml-2 text-xs text-gray-500">(Standard)</span>
+                <span className="ml-2 text-xs text-content-muted">(Standard)</span>
               )}
             </span>
             {p !== homePath && (
               <button
                 type="button"
                 onClick={() => onRemove(p)}
-                className="ml-2 shrink-0 text-gray-500 hover:text-red-400"
+                className="ml-2 shrink-0 text-content-muted hover:text-red-400"
                 aria-label={`Ordner ${p} entfernen`}
               >
                 <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -418,7 +334,7 @@ function FolderSection({
         type="button"
         onClick={onAdd}
         disabled={adding}
-        className="mt-3 flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
+        className="mt-3 flex items-center gap-2 rounded-lg border border-edge px-4 py-2 text-sm text-content-secondary transition-colors hover:bg-surface-raised disabled:opacity-50"
       >
         {adding && <SpinnerSmall />}
         Ordner hinzuf\u00FCgen
@@ -449,18 +365,18 @@ function IntegrationCard({
   readonly onCancelConfirm: () => void
 }): JSX.Element {
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+    <div className="rounded-xl border border-edge bg-surface-alt p-6">
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-gray-100">{label}</h3>
-          <p className="mt-1 text-sm text-gray-400">{description}</p>
+          <h3 className="text-lg font-semibold text-content">{label}</h3>
+          <p className="mt-1 text-sm text-content-muted">{description}</p>
         </div>
         <span
           className={
             'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ' +
             (connected
               ? 'bg-emerald-900 text-emerald-300'
-              : 'bg-gray-800 text-gray-400')
+              : 'bg-gray-800 text-content-muted')
           }
         >
           {connected ? 'Verbunden' : 'Nicht verbunden'}
@@ -473,7 +389,7 @@ function IntegrationCard({
             type="button"
             onClick={onConnect}
             disabled={connecting}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-surface transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {connecting && <SpinnerSmall />}
             {connecting ? 'Verbinde...' : 'Verbinden'}
@@ -484,7 +400,7 @@ function IntegrationCard({
           <button
             type="button"
             onClick={onDisconnect}
-            className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800"
+            className="rounded-lg border border-edge px-4 py-2 text-sm text-content-secondary transition-colors hover:bg-surface-raised"
           >
             Trennen
           </button>
@@ -502,7 +418,7 @@ function IntegrationCard({
             <button
               type="button"
               onClick={onCancelConfirm}
-              className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+              className="rounded-lg border border-edge px-4 py-2 text-sm text-content-secondary hover:bg-gray-800"
             >
               Abbrechen
             </button>
@@ -547,43 +463,43 @@ function categoryIcon(category: string): JSX.Element {
   switch (category) {
     case 'email':
       return (
-        <svg className="h-4 w-4 text-gray-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <svg className="h-4 w-4 text-content-muted" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M1.5 3A1.5 1.5 0 003 4.5v7A1.5 1.5 0 001.5 13h13A1.5 1.5 0 0016 11.5v-7A1.5 1.5 0 0014.5 3h-13zM3.07 4h9.86L8 7.88 3.07 4zM2 5.12l5.65 4.42a.5.5 0 00.7 0L14 5.12V12H2V5.12z" />
         </svg>
       )
     case 'kalender':
       return (
-        <svg className="h-4 w-4 text-gray-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <svg className="h-4 w-4 text-content-muted" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M4 0a1 1 0 011 1v1h6V1a1 1 0 112 0v1h1.5A1.5 1.5 0 0116 3.5v11a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 010 14.5v-11A1.5 1.5 0 011.5 2H3V1a1 1 0 011-1zM1.5 6v8.5h13V6h-13z" />
         </svg>
       )
     case 'dateien':
       return (
-        <svg className="h-4 w-4 text-gray-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <svg className="h-4 w-4 text-content-muted" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M1 3.5A1.5 1.5 0 012.5 2h4.879a1.5 1.5 0 011.06.44l1.122 1.12A1.5 1.5 0 0110.62 4H13.5A1.5 1.5 0 0115 5.5v7a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z" />
         </svg>
       )
     case 'shell':
       return (
-        <svg className="h-4 w-4 text-gray-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <svg className="h-4 w-4 text-content-muted" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M0 2.75A1.75 1.75 0 011.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm6.22 3.97a.75.75 0 000 1.06l1.47 1.47-1.47 1.47a.75.75 0 101.06 1.06l2-2a.75.75 0 000-1.06l-2-2a.75.75 0 00-1.06 0zM8 11.5a.75.75 0 01.75-.75h2.5a.75.75 0 010 1.5h-2.5A.75.75 0 018 11.5z" />
         </svg>
       )
     case 'web':
       return (
-        <svg className="h-4 w-4 text-gray-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <svg className="h-4 w-4 text-content-muted" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm-.5 1.56v2.69H5.03a11.27 11.27 0 012.47-2.7zM5.6 5.75h1.9v2.5H4.74a9.7 9.7 0 01.86-2.5zm0 4.5H7.5v2.5H5.6a9.7 9.7 0 01-.86-2.5zm2.9 4.19V11.75h2.47a11.27 11.27 0 01-2.47 2.7zm2.9-4.19H8.5v-2.5h2.76a9.7 9.7 0 01.86 2.5z" />
         </svg>
       )
     case 'notizen':
       return (
-        <svg className="h-4 w-4 text-gray-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <svg className="h-4 w-4 text-content-muted" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75zm3.75 4a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5zm0 3a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5z" />
         </svg>
       )
     default:
       return (
-        <svg className="h-4 w-4 text-gray-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <svg className="h-4 w-4 text-content-muted" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M6.457 1.047l-1.9 8.5a.5.5 0 00.977.218l1.9-8.5a.5.5 0 00-.977-.218zM4.354 4.646a.5.5 0 010 .708L1.707 8l2.647 2.646a.5.5 0 01-.708.708l-3-3a.5.5 0 010-.708l3-3a.5.5 0 01.708 0zm7.292 0a.5.5 0 00-.708.708L13.586 8l-2.647 2.646a.5.5 0 00.708.708l3-3a.5.5 0 000-.708l-3-3z" />
         </svg>
       )
@@ -637,8 +553,8 @@ function MemoryTab({
 
   if (!memoryData || (memoryData.longTerm.length === 0 && memoryData.daily.length === 0)) {
     return (
-      <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-gray-800 bg-gray-900">
-        <p className="text-gray-500">Dein Assistent hat noch keine Erinnerungen gespeichert.</p>
+      <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-edge bg-gray-900">
+        <p className="text-content-muted">Dein Assistent hat noch keine Erinnerungen gespeichert.</p>
       </div>
     )
   }
@@ -664,32 +580,32 @@ function MemoryTab({
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder="Erinnerungen durchsuchen..."
         aria-label="Erinnerungen durchsuchen"
-        className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full rounded-lg border border-edge bg-surface-raised px-4 py-2 text-content placeholder-content-disabled focus:outline-none focus:ring-2 focus:ring-accent"
       />
 
       {filteredLtm.length > 0 && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900">
+        <div className="rounded-xl border border-edge bg-gray-900">
           <button
             type="button"
             onClick={onToggleLtm}
             aria-expanded={!ltmCollapsed}
             className="flex w-full items-center gap-2 p-4 text-left"
           >
-            <span className={`text-xs text-gray-400 transition-transform ${ltmCollapsed ? '' : 'rotate-90'}`}>&#9654;</span>
-            <h3 className="text-sm font-semibold text-gray-300">Langzeit-Erinnerungen ({String(filteredLtm.length)})</h3>
+            <span className={`text-xs text-content-muted transition-transform ${ltmCollapsed ? '' : 'rotate-90'}`}>&#9654;</span>
+            <h3 className="text-sm font-semibold text-content-secondary">Langzeit-Erinnerungen ({String(filteredLtm.length)})</h3>
           </button>
           {!ltmCollapsed && (
             <div className="space-y-2 px-4 pb-4">
               {filteredLtm.map((entry) => (
-                <div key={entry.id} className="flex items-start justify-between rounded-lg border border-gray-700 p-3">
+                <div key={entry.id} className="flex items-start justify-between rounded-lg border border-edge p-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-gray-200">{entry.title}</div>
-                    <div className="mt-1 line-clamp-2 text-xs text-gray-400">{entry.content}</div>
+                    <div className="text-sm font-medium text-content">{entry.title}</div>
+                    <div className="mt-1 line-clamp-2 text-xs text-content-muted">{entry.content}</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => onDeleteRequest('longTerm', entry.id)}
-                    className="ml-2 shrink-0 text-gray-500 hover:text-red-400"
+                    className="ml-2 shrink-0 text-content-muted hover:text-red-400"
                     aria-label={`Erinnerung ${entry.title} l\u00F6schen`}
                   >
                     <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -704,31 +620,31 @@ function MemoryTab({
       )}
 
       {filteredDaily.length > 0 && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900">
+        <div className="rounded-xl border border-edge bg-gray-900">
           <button
             type="button"
             onClick={onToggleDaily}
             aria-expanded={!dailyCollapsed}
             className="flex w-full items-center gap-2 p-4 text-left"
           >
-            <span className={`text-xs text-gray-400 transition-transform ${dailyCollapsed ? '' : 'rotate-90'}`}>&#9654;</span>
-            <h3 className="text-sm font-semibold text-gray-300">T\u00E4gliche Notizen</h3>
+            <span className={`text-xs text-content-muted transition-transform ${dailyCollapsed ? '' : 'rotate-90'}`}>&#9654;</span>
+            <h3 className="text-sm font-semibold text-content-secondary">T\u00E4gliche Notizen</h3>
           </button>
           {!dailyCollapsed && (
             <div className="space-y-4 px-4 pb-4">
               {filteredDaily.map((day) => (
                 <div key={day.date}>
-                  <div className="mb-2 text-xs font-medium text-gray-500">{formatDate(day.date)}</div>
+                  <div className="mb-2 text-xs font-medium text-content-muted">{formatDate(day.date)}</div>
                   <div className="space-y-2">
                     {day.entries.map((entry) => (
-                      <div key={entry.id} className="flex items-start justify-between rounded-lg border border-gray-700 p-3">
+                      <div key={entry.id} className="flex items-start justify-between rounded-lg border border-edge p-3">
                         <div className="min-w-0 flex-1">
-                          <div className="line-clamp-2 text-sm text-gray-300">{entry.content}</div>
+                          <div className="line-clamp-2 text-sm text-content-secondary">{entry.content}</div>
                         </div>
                         <button
                           type="button"
                           onClick={() => onDeleteRequest('daily', entry.id)}
-                          className="ml-2 shrink-0 text-gray-500 hover:text-red-400"
+                          className="ml-2 shrink-0 text-content-muted hover:text-red-400"
                           aria-label={`Notiz l\u00F6schen`}
                         >
                           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -753,8 +669,8 @@ function MemoryTab({
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-80 rounded-xl border border-gray-700 bg-gray-900 p-6" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm text-gray-200">Erinnerung wirklich l\u00F6schen?</p>
+          <div className="w-80 rounded-xl border border-edge bg-gray-900 p-6" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm text-content">Erinnerung wirklich l\u00F6schen?</p>
             <div className="mt-4 flex gap-2">
               <button
                 type="button"
@@ -766,7 +682,7 @@ function MemoryTab({
               <button
                 type="button"
                 onClick={onDeleteCancel}
-                className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+                className="rounded-lg border border-edge px-4 py-2 text-sm text-content-secondary hover:bg-gray-800"
               >
                 Abbrechen
               </button>
@@ -820,7 +736,7 @@ function ActivityTab({
         value={activityFilter}
         onChange={(e) => onFilterChange(e.target.value)}
         aria-label="Aktivit\u00E4ten filtern"
-        className="w-full appearance-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full appearance-none rounded-lg border border-edge bg-gray-800 px-4 py-2 text-content focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         {ACTIVITY_FILTERS.map((f) => (
           <option key={f.value} value={f.value}>{f.label}</option>
@@ -828,8 +744,8 @@ function ActivityTab({
       </select>
 
       {filtered.length === 0 && (
-        <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-gray-800 bg-gray-900">
-          <p className="text-gray-500">Noch keine Tool-Aktivit\u00E4ten aufgezeichnet.</p>
+        <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-edge bg-gray-900">
+          <p className="text-content-muted">Noch keine Tool-Aktivit\u00E4ten aufgezeichnet.</p>
         </div>
       )}
 
@@ -841,32 +757,32 @@ function ActivityTab({
             type="button"
             onClick={() => onToggleExpand(entry.id)}
             aria-expanded={isExpanded}
-            className="w-full rounded-lg border border-gray-800 bg-gray-900 p-4 text-left transition-colors hover:border-gray-700"
+            className="w-full rounded-lg border border-edge bg-gray-900 p-4 text-left transition-colors hover:border-edge"
           >
             <div className="flex items-center gap-3">
               {categoryIcon(entry.category)}
               <div className="min-w-0 flex-1">
-                <span className="text-sm font-medium text-gray-200">{entry.toolName}</span>
+                <span className="text-sm font-medium text-content">{entry.toolName}</span>
                 {entry.description !== '' && (
-                  <span className="ml-2 truncate text-sm text-gray-400">{entry.description}</span>
+                  <span className="ml-2 truncate text-sm text-content-muted">{entry.description}</span>
                 )}
               </div>
-              <span className="shrink-0 text-xs text-gray-500">{relativeTime(entry.timestamp)}</span>
+              <span className="shrink-0 text-xs text-content-muted">{relativeTime(entry.timestamp)}</span>
             </div>
             {isExpanded && (
-              <div className="mt-3 space-y-2 border-t border-gray-800 pt-3">
+              <div className="mt-3 space-y-2 border-t border-edge pt-3">
                 {Object.keys(entry.params).length > 0 && (
                   <div>
-                    <div className="mb-1 text-xs font-medium text-gray-500">Parameter</div>
-                    <pre className="max-h-32 overflow-auto rounded bg-gray-800 p-2 text-xs text-gray-300">
+                    <div className="mb-1 text-xs font-medium text-content-muted">Parameter</div>
+                    <pre className="max-h-32 overflow-auto rounded bg-gray-800 p-2 text-xs text-content-secondary">
                       {JSON.stringify(entry.params, null, 2)}
                     </pre>
                   </div>
                 )}
                 {entry.result !== undefined && (
                   <div>
-                    <div className="mb-1 text-xs font-medium text-gray-500">Ergebnis</div>
-                    <pre className="max-h-32 overflow-auto rounded bg-gray-800 p-2 text-xs text-gray-300">
+                    <div className="mb-1 text-xs font-medium text-content-muted">Ergebnis</div>
+                    <pre className="max-h-32 overflow-auto rounded bg-gray-800 p-2 text-xs text-content-secondary">
                       {typeof entry.result === 'string'
                         ? (entry.result.length > 500 ? entry.result.slice(0, 500) + '...' : entry.result)
                         : JSON.stringify(entry.result, null, 2)?.slice(0, 500)}
@@ -874,7 +790,7 @@ function ActivityTab({
                   </div>
                 )}
                 {entry.durationMs !== undefined && (
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-content-muted">
                     Dauer: {entry.durationMs < 1000 ? `${String(entry.durationMs)} ms` : `${(entry.durationMs / 1000).toFixed(1)} s`}
                   </div>
                 )}
@@ -889,7 +805,7 @@ function ActivityTab({
           type="button"
           onClick={onLoadMore}
           disabled={activityLoading}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-edge px-4 py-2 text-sm text-content-secondary transition-colors hover:bg-surface-raised disabled:opacity-50"
         >
           {activityLoading && <SpinnerSmall />}
           \u00C4ltere laden
@@ -917,12 +833,6 @@ export default function Settings(): JSX.Element {
   const [personaTone, setPersonaTone] = useState<ToneOption>('friendly')
   const [personaDirty, setPersonaDirty] = useState(false)
   const [personaSaving, setPersonaSaving] = useState(false)
-
-  // API Key
-  const [apiKeyExpanded, setApiKeyExpanded] = useState(false)
-  const [newApiKey, setNewApiKey] = useState('')
-  const [apiKeyValidating, setApiKeyValidating] = useState(false)
-  const [apiKeyError, setApiKeyError] = useState('')
 
   // Folders
   const [folderAdding, setFolderAdding] = useState(false)
@@ -1063,41 +973,6 @@ export default function Settings(): JSX.Element {
       setPersonaSaving(false)
     }
   }, [personaName, personaTone, showToast])
-
-  // API Key change
-  const handleApiKeySave = useCallback(async () => {
-    if (!config) return
-    setApiKeyValidating(true)
-    setApiKeyError('')
-    try {
-      const valResult = await window.api.setupValidateApiKey({ provider: config.provider, apiKey: newApiKey })
-      if (!valResult.valid) {
-        setApiKeyError(valResult.error ?? 'Validierung fehlgeschlagen')
-        return
-      }
-      const storeResult = await window.api.setupStoreApiKey({ provider: config.provider, apiKey: newApiKey })
-      if (!storeResult.success) {
-        setApiKeyError(storeResult.error ?? 'Speichern fehlgeschlagen')
-        return
-      }
-      await window.api.setupStartGateway()
-      const info = await window.api.settingsReadApiKeyInfo()
-      setConfig((prev) => prev ? { ...prev, apiKeyLast4: info.last4, provider: info.provider } : prev)
-      setApiKeyExpanded(false)
-      setNewApiKey('')
-      showToast('API-Key gespeichert', 'success')
-    } catch {
-      setApiKeyError('Verbindungsfehler')
-    } finally {
-      setApiKeyValidating(false)
-    }
-  }, [config, newApiKey, showToast])
-
-  const handleApiKeyCancel = useCallback(() => {
-    setApiKeyExpanded(false)
-    setNewApiKey('')
-    setApiKeyError('')
-  }, [])
 
   // Folder add
   const handleFolderAdd = useCallback(async () => {
@@ -1266,7 +1141,7 @@ export default function Settings(): JSX.Element {
   if (loading || !config) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold text-gray-100">Einstellungen</h1>
+        <h1 className="text-2xl font-bold text-content">Einstellungen</h1>
         <div className="mt-6 space-y-4">
           <div className="h-32 animate-pulse rounded-xl bg-gray-900" />
           <div className="h-48 animate-pulse rounded-xl bg-gray-900" />
@@ -1278,7 +1153,7 @@ export default function Settings(): JSX.Element {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-100">Einstellungen</h1>
+      <h1 className="text-2xl font-bold text-content">Einstellungen</h1>
 
       {/* Tab bar */}
       <div className="mt-6 flex gap-1 rounded-lg bg-gray-900 p-1" role="tablist">
@@ -1294,8 +1169,8 @@ export default function Settings(): JSX.Element {
             className={
               'rounded-md px-4 py-2 text-sm font-medium transition-colors ' +
               (activeTab === tab.id
-                ? 'bg-gray-800 text-gray-100'
-                : 'text-gray-400 hover:text-gray-200')
+                ? 'bg-gray-800 text-content'
+                : 'text-content-muted hover:text-content')
             }
           >
             {tab.label}
@@ -1336,18 +1211,6 @@ export default function Settings(): JSX.Element {
               onToneChange={handlePersonaToneChange}
               onSave={() => void handlePersonaSave()}
             />
-            <ApiKeySection
-              provider={config.provider}
-              last4={config.apiKeyLast4}
-              expanded={apiKeyExpanded}
-              newKey={newApiKey}
-              validating={apiKeyValidating}
-              error={apiKeyError}
-              onToggle={() => setApiKeyExpanded(!apiKeyExpanded)}
-              onKeyChange={setNewApiKey}
-              onSave={() => void handleApiKeySave()}
-              onCancel={handleApiKeyCancel}
-            />
             <FolderSection
               paths={config.allowedPaths}
               homePath={config.allowedPaths[0] ?? ''}
@@ -1373,10 +1236,13 @@ export default function Settings(): JSX.Element {
                 onCancelConfirm={() => setDisconnectConfirm(null)}
               />
             ))}
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-content-muted">
               Weitere Integrationen (Outlook, Slack, ...) folgen in einer zukünftigen Version.
             </p>
           </>
+        )}
+        {activeTab === 'geraete' && (
+          <DevicePairing showToast={showToast} />
         )}
         {activeTab === 'memory' && (
           <MemoryTab

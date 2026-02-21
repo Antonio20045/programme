@@ -1,0 +1,23 @@
+node_modules/
+dist/
+out/
+.env*
+.DS_Store
+.git/
+*.tsbuildinfo
+.mcp.json
+
+# Apps — not needed in gateway image
+apps/desktop/
+apps/mobile/
+
+# Dev/CI files
+docs/
+.claude/
+.github/
+scripts/
+test-results/
+release/
+vitest.config.ts
+tsconfig.json
+.eslintrc.js

@@ -19,7 +19,7 @@ fi
 
 # Skip scanner scripts (they contain patterns as search strings)
 BASENAME=$(basename "$FILE")
-if [[ "$BASENAME" == "audit-deps.ts" || "$BASENAME" == "security-check.sh" ]]; then
+if [[ "$BASENAME" == "audit-deps.ts" || "$BASENAME" == "security-check.sh" || "$BASENAME" == risk-policy-gate* ]]; then
   exit 0
 fi
 

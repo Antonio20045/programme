@@ -25,12 +25,44 @@
       "Bash(unset:*)",
       "Bash(npx:*)",
       "WebSearch",
-      "Bash(claude mcp remove:*)"
+      "Bash(claude mcp remove:*)",
+      "Bash(python3:*)",
+      "Bash(wc:*)",
+      "Bash(npm view:*)",
+      "Bash(npm info:*)",
+      "Bash(npm pack:*)",
+      "Bash(lsof:*)",
+      "Bash(open:*)",
+      "Bash(kill:*)",
+      "Bash(PGPASSWORD=testpass npx vitest:*)",
+      "WebFetch(domain:developers.figma.com)",
+      "Bash(npm i:*)",
+      "Bash(railway version:*)",
+      "Bash(railway:*)",
+      "WebFetch(domain:docs.railway.com)",
+      "Bash(curl:*)",
+      "Bash(brew list:*)",
+      "Bash(asar list /Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/Resources/app.asar 2>/dev/null | head -50)",
+      "Bash(cd /Users/efstathia/Downloads/videos/programme && head -5 apps/desktop/out/main/index.js | xxd | head -20)",
+      "Bash(du -sh /Users/efstathia/Downloads/videos/programme/packages/gateway/{dist,node_modules,extensions,docs,assets,skills} 2>/dev/null)",
+      "Bash(launchctl list | grep -i openclaw 2>/dev/null || echo \"No openclaw agents found\")",
+      "Bash(bash scripts/prepare-gateway.sh 2>&1)",
+      "Bash(bash /Users/efstathia/Downloads/videos/programme/scripts/prepare-gateway.sh 2>&1)",
+      "Bash(cd /Users/efstathia/Downloads/videos/programme/apps/desktop && ELECTRON_RUN_AS_NODE= pnpm electron-vite build 2>&1)",
+      "Bash(DEBUG='electron-builder' pnpm electron-builder --config electron-builder.yml --mac 2>&1 | grep -i 'node_modules\\\\|ignore\\\\|gitignore\\\\|npmignore\\\\|filter\\\\|gateway' | head -30)",
+      "Bash(log show --last 2m --predicate 'process == \"KI-Assistent\"' 2>&1 | tail -30)",
+      "Bash(log show --last 2m --predicate 'processImagePath CONTAINS \"KI-Assistent\"' 2>&1 | tail -40)",
+      "Bash(/usr/bin/log show --last 2m --predicate 'processImagePath CONTAINS \"KI-Assistent\"' 2>&1 | tail -40)",
+      "Bash(ELECTRON_RUN_AS_NODE=1 \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/MacOS/KI-Assistent\" \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/Resources/gateway/openclaw.mjs\" gateway 2>&1 | head -50)",
+      "Bash(ELECTRON_RUN_AS_NODE=1 \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/MacOS/KI-Assistent\" \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/Resources/gateway/openclaw.mjs\" gateway 2>&1 | head -30)",
+      "Bash(ELECTRON_RUN_AS_NODE=1 \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/MacOS/KI-Assistent\" \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/Resources/gateway/openclaw.mjs\" gateway 2>&1; echo \"EXIT CODE: $?\")",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   },
   "enabledMcpjsonServers": [
     "github",
     "context7",
-    "playwright"
+    "playwright",
+    "figma"
   ]
 }

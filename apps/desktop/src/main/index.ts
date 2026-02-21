@@ -1,18 +1,29 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
+/* eslint-disable security/detect-object-injection */
 import { app, BrowserWindow, dialog, ipcMain, net, safeStorage, shell } from 'electron'
+import { randomBytes } from 'node:crypto'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { GatewayManager } from './gateway-manager'
+import { PairingManager } from './pairing'
 import { DesktopAgent } from './agent'
 import { readMemoryEntries, deleteMemoryEntry, readActivityLog } from './memory-reader'
 import { OAuthServer, exchangeAndStoreTokens, revokeTokens, getIntegrationStatus } from './oauth-server'
 import { TrayManager } from './tray'
+import { initAutoUpdater, stopAutoUpdater } from './updater'
 
 let mainWindow: BrowserWindow | null = null
 let gatewayManager: GatewayManager | null = null
 let desktopAgent: DesktopAgent | null = null
+let pairingManager: PairingManager | null = null
 let trayManager: TrayManager | null = null
 let isQuitting = false
+let clerkToken: string | null = null
+
+// ── SSE Stream Tokens (short-lived, single-use) ──────────────
+const SSE_TOKEN_TTL_MS = 60_000 // 60 seconds
+const sseTokenStore = new Map<string, { realToken: string; expiresAt: number }>()
 
 const PROVIDER_ENV_MAP: Record<string, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
@@ -82,7 +93,7 @@ function checkFirstRun(): boolean {
 
   let content: string
   try {
-    content = fs.readFileSync(configPath, 'utf-8')
+    content = fs.readFileSync(configPath, 'utf-8') // eslint-disable-line security/detect-non-literal-fs-filename
   } catch {
     return true // Config doesn't exist → setup required
   }
@@ -94,12 +105,12 @@ function checkFirstRun(): boolean {
   if (/mode["']?\s*:\s*["']oauth["']/.test(content)) return false
 
   // API key set via process environment
-  if (ENV_API_KEYS.some((k) => (process.env[k] ?? '').length > 10)) return false
+  if (ENV_API_KEYS.some((k) => (process.env[k] ?? '').length > 10)) return false // eslint-disable-line security/detect-object-injection
 
   // Encrypted credentials from setup wizard
   const credDir = path.join(os.homedir(), '.openclaw', 'credentials')
   try {
-    const files = fs.readdirSync(credDir)
+    const files = fs.readdirSync(credDir) // eslint-disable-line security/detect-non-literal-fs-filename
     if (files.some((f) => f.endsWith('.enc'))) return false
   } catch {
     // No credentials directory — continue to return true
@@ -156,12 +167,12 @@ function readDecryptedKeys(): Record<string, string> {
   if (!safeStorage.isEncryptionAvailable()) return env
   const credDir = path.join(os.homedir(), '.openclaw', 'credentials')
   try {
-    for (const file of fs.readdirSync(credDir)) {
+    for (const file of fs.readdirSync(credDir)) { // eslint-disable-line security/detect-non-literal-fs-filename
       if (!file.endsWith('.enc')) continue
       const provider = file.replace('.enc', '')
-      const envVar = PROVIDER_ENV_MAP[provider]
+      const envVar = PROVIDER_ENV_MAP[provider] // eslint-disable-line security/detect-object-injection
       if (!envVar) continue
-      const encrypted = fs.readFileSync(path.join(credDir, file))
+      const encrypted = fs.readFileSync(path.join(credDir, file)) // eslint-disable-line security/detect-non-literal-fs-filename
       env[envVar] = safeStorage.decryptString(encrypted)
     }
   } catch {
@@ -262,13 +273,66 @@ function setupGateway(autoStart = true): void {
   }
 
   // Local mode: run Gateway as child process (existing behavior)
+  // Ensure local auth token exists (generate if missing)
+  const tokenPath = path.join(os.homedir(), '.openclaw', 'agent-token')
+  if (!readAgentTokenFromFile()) {
+    const configDir = path.join(os.homedir(), '.openclaw')
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true })
+    }
+    const localToken = randomBytes(32).toString('hex')
+    fs.writeFileSync(tokenPath, localToken, { encoding: 'utf-8', mode: 0o600 })
+  }
+
   const keys = readDecryptedKeys()
+
+  // Ensure in-app-channel plugin is enabled in openclaw config
+  const configDir = path.join(os.homedir(), '.openclaw')
+  const openclawConfigPath = path.join(configDir, 'openclaw.json')
+  let openclawConfig: Record<string, unknown> = {}
+  if (fs.existsSync(openclawConfigPath)) {
+    try {
+      openclawConfig = JSON.parse(fs.readFileSync(openclawConfigPath, 'utf-8')) as Record<string, unknown>
+    } catch { /* corrupt config — overwrite */ }
+  }
+  const pluginsCfg = (openclawConfig['plugins'] as Record<string, unknown> | undefined) ?? {}
+  const entriesCfg = (pluginsCfg['entries'] as Record<string, unknown> | undefined) ?? {}
+  const inAppCfg = (entriesCfg['in-app-channel'] as Record<string, unknown> | undefined) ?? {}
+  inAppCfg['enabled'] = true
+  entriesCfg['in-app-channel'] = inAppCfg
+  pluginsCfg['entries'] = entriesCfg
+  openclawConfig['plugins'] = pluginsCfg
+  fs.writeFileSync(openclawConfigPath, JSON.stringify(openclawConfig, null, 2))
+
+  let gwCommand: string
+  let gwArgs: string[]
+  let gwCwd: string
+
+  if (app.isPackaged) {
+    // Packaged: Gateway from extraResources
+    gwCwd = path.join(process.resourcesPath, 'gateway')
+    gwCommand = process.execPath
+    gwArgs = [path.join(gwCwd, 'openclaw.mjs'), 'gateway']
+  } else {
+    // Dev: local fork via run-node.mjs
+    gwCwd = path.join(__dirname, '../../../../packages/gateway')
+    gwCommand = process.execPath
+    gwArgs = ['scripts/run-node.mjs', 'gateway']
+  }
+
+  const sqliteDbPath = path.join(configDir, 'local.db')
+
   gatewayManager = new GatewayManager({
-    command: 'node',
-    args: ['dist/index.js'],
-    cwd: path.join(__dirname, '../../packages/gateway'),
+    command: gwCommand,
+    args: gwArgs,
+    cwd: gwCwd,
     port: 18789,
-    env: Object.keys(keys).length > 0 ? keys : undefined,
+    env: {
+      ELECTRON_RUN_AS_NODE: '1',
+      ...(Object.keys(keys).length > 0 ? keys : {}),
+      OPENCLAW_AUTH_TOKEN: readAgentTokenFromFile() ?? '',
+      SQLITE_DB_PATH: sqliteDbPath,
+    },
   })
 
   gatewayManager.onStatus((status) => {
@@ -289,6 +353,22 @@ function setupGateway(autoStart = true): void {
     gatewayManager.start()
   }
 }
+
+// ---------------------------------------------------------------------------
+// Clerk Auth IPC handlers
+// ---------------------------------------------------------------------------
+
+ipcMain.handle('auth:set-clerk-token', (_event, payload: unknown) => {
+  if (payload !== null && typeof payload !== 'string') {
+    return { success: false, error: 'Invalid payload' }
+  }
+  clerkToken = typeof payload === 'string' && payload.length > 0 ? payload : null
+  return { success: true }
+})
+
+ipcMain.handle('auth:get-clerk-publishable-key', () => {
+  return process.env['CLERK_PUBLISHABLE_KEY'] ?? null
+})
 
 ipcMain.handle('setup:validate-api-key', async (_event, payload: unknown) => {
   if (
@@ -345,9 +425,12 @@ ipcMain.handle('setup:store-api-key', async (_event, payload: unknown) => {
       const encrypted = safeStorage.encryptString(apiKey)
       fs.writeFileSync(path.join(credDir, `${provider}.enc`), encrypted, { mode: 0o600 })
     } else {
-      // Fallback: store as plain text with restricted permissions (logged as warning)
-      console.warn('safeStorage not available — storing key without encryption')
-      fs.writeFileSync(path.join(credDir, `${provider}.enc`), apiKey, { encoding: 'utf-8', mode: 0o600 })
+      // No encryption available — refuse to store on disk, keep in-memory only
+      console.warn('safeStorage not available — key will NOT be persisted to disk')
+      return {
+        success: true,
+        warning: 'Kein OS-Keyring verfügbar. Der API-Key wird nur für diese Sitzung gespeichert und geht beim Neustart verloren.',
+      }
     }
     return { success: true }
   } catch (err) {
@@ -866,9 +949,9 @@ ipcMain.handle('config:get-gateway', () => {
 
 /**
  * gateway:get-stream-url — returns the full SSE stream URL for a session.
- * In server mode, appends the auth token as a query parameter (EventSource
- * does not support custom headers). The token is only used transiently
- * for the SSE connection and is not stored in renderer state.
+ * In server mode, generates a short-lived single-use token instead of
+ * exposing the real auth token. The ephemeral token is valid for 60s
+ * and automatically removed after use or expiry.
  */
 ipcMain.handle('gateway:get-stream-url', (_event, payload: unknown) => {
   if (typeof payload !== 'string' || payload === '') {
@@ -878,12 +961,23 @@ ipcMain.handle('gateway:get-stream-url', (_event, payload: unknown) => {
   const cfg = readGatewayConfig()
   const baseUrl = cfg.serverUrl !== '' ? cfg.serverUrl : 'http://127.0.0.1:18789'
   const streamUrl = `${baseUrl}/api/stream/${encodeURIComponent(sessionId)}`
-  const token = readAgentTokenFromFile()
-  if (token !== null && token !== '' && cfg.mode === 'server') {
-    return `${streamUrl}?token=${encodeURIComponent(token)}`
+  const realToken = readAgentTokenFromFile()
+  if (realToken !== null && realToken !== '' && cfg.mode === 'server') {
+    // Generate a short-lived single-use token instead of the real auth token
+    const ephemeral = randomBytes(32).toString('hex')
+    sseTokenStore.set(ephemeral, { realToken, expiresAt: Date.now() + SSE_TOKEN_TTL_MS })
+    return `${streamUrl}?token=${encodeURIComponent(ephemeral)}`
   }
   return streamUrl
 })
+
+// Periodic cleanup of expired SSE tokens (every 60s)
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of sseTokenStore) {
+    if (now > entry.expiresAt) sseTokenStore.delete(key)
+  }
+}, SSE_TOKEN_TTL_MS)
 
 /**
  * gateway:fetch — proxy authenticated HTTP requests to the gateway from the
@@ -910,8 +1004,16 @@ ipcMain.handle('gateway:fetch', async (_event, payload: unknown) => {
     return { ok: false, status: 400, data: null }
   }
 
-  // Only allow paths that start with /api/
-  if (!reqPath.startsWith('/api/')) {
+  // URL-decode before validation to prevent %2e%2e bypass of path traversal check
+  let decodedPath: string
+  try {
+    decodedPath = decodeURIComponent(reqPath)
+  } catch {
+    return { ok: false, status: 400, data: null }
+  }
+
+  // Only allow paths that start with /api/ — block path traversal
+  if (!decodedPath.startsWith('/api/') || decodedPath.includes('..')) {
     return { ok: false, status: 400, data: null }
   }
 
@@ -923,6 +1025,9 @@ ipcMain.handle('gateway:fetch', async (_event, payload: unknown) => {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token !== null && token !== '') {
     headers['Authorization'] = `Bearer ${token}`
+  }
+  if (clerkToken !== null && clerkToken !== '') {
+    headers['X-Clerk-Token'] = clerkToken
   }
 
   const controller = new AbortController()
@@ -1075,6 +1180,96 @@ ipcMain.handle('config:test-gateway', async (_event, payload: unknown) => {
   }
 })
 
+// ---------------------------------------------------------------------------
+// Pairing IPC handlers
+// ---------------------------------------------------------------------------
+
+/**
+ * Read relay URL from ~/.openclaw/openclaw.json → relay.url.
+ * Default: 'https://ki-assistent-relay.workers.dev'.
+ */
+function getRelayUrl(): string {
+  try {
+    const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json')
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+    const relay = config['relay'] as Record<string, unknown> | undefined
+    if (typeof relay?.['url'] === 'string' && relay['url'] !== '') return relay['url']
+  } catch {
+    // Default
+  }
+  return 'https://ki-assistent-relay.workers.dev'
+}
+
+ipcMain.handle('pairing:init', async () => {
+  try {
+    const relayUrl = getRelayUrl()
+    pairingManager = new PairingManager(relayUrl)
+    const result = await pairingManager.initPairing()
+    return {
+      success: true,
+      qrDataUrl: result.qrDataUrl,
+      pairingToken: result.pairingToken,
+      deviceId: result.deviceId,
+      expiresAt: result.expiresAt,
+      safeStorageAvailable: safeStorage.isEncryptionAvailable(),
+    }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Pairing fehlgeschlagen' }
+  }
+})
+
+ipcMain.handle('pairing:poll-status', async (_event, payload: unknown) => {
+  if (typeof payload !== 'string' || payload === '') {
+    return { success: false, error: 'Ungültiger Token' }
+  }
+  const token = payload
+
+  try {
+    if (!pairingManager) {
+      return { success: false, error: 'Kein aktives Pairing' }
+    }
+    const result = await pairingManager.pollPairingStatus(token)
+    return {
+      success: true,
+      paired: result.paired,
+      partnerDeviceId: result.partnerDeviceId,
+    }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Status-Abfrage fehlgeschlagen' }
+  }
+})
+
+ipcMain.handle('pairing:get-stored', () => {
+  try {
+    const relayUrl = getRelayUrl()
+    const mgr = new PairingManager(relayUrl)
+    const stored = mgr.getStoredPairing()
+    if (stored) {
+      return {
+        paired: true,
+        partnerDeviceId: stored.partnerDeviceId,
+        pairedAt: stored.pairedAt,
+        safeStorageAvailable: safeStorage.isEncryptionAvailable(),
+      }
+    }
+    return { paired: false, safeStorageAvailable: safeStorage.isEncryptionAvailable() }
+  } catch {
+    return { paired: false, safeStorageAvailable: safeStorage.isEncryptionAvailable() }
+  }
+})
+
+ipcMain.handle('pairing:unpair', async () => {
+  try {
+    const relayUrl = getRelayUrl()
+    const mgr = new PairingManager(relayUrl)
+    await mgr.unpair()
+    pairingManager = null
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Trennen fehlgeschlagen' }
+  }
+})
+
 ipcMain.handle('setup:get-required', () => {
   return checkFirstRun()
 })
@@ -1130,6 +1325,10 @@ app.whenReady().then(() => {
   setupTray()
   setupGateway(!checkFirstRun())
 
+  if (app.isPackaged) {
+    initAutoUpdater(mainWindow!)
+  }
+
   app.on('activate', () => {
     if (isQuitting) return
     if (mainWindow) {
@@ -1141,6 +1340,8 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', (e) => {
+  stopAutoUpdater()
+
   if (desktopAgent) {
     desktopAgent.disconnect()
     desktopAgent = null

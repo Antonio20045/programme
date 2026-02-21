@@ -29,5 +29,5 @@
     "packages/**/*.ts",
     "scripts/**/*.ts"
   ],
-  "exclude": ["node_modules", "dist", "**/node_modules", "**/dist", "packages/gateway", "apps/desktop"]
+  "exclude": ["node_modules", "dist", "**/node_modules", "**/dist", "packages/gateway", "packages/relay", "apps/desktop", "apps/mobile"]
 }

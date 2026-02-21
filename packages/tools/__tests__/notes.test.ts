@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { vi, beforeEach, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { AgentToolResult } from '../src/types'
-import { createNotesTool, parseArgs, initDb } from '../src/notes'
+import type { AgentToolResult, DbPool } from '../src/types'
+import { createNotesTool, parseArgs } from '../src/notes'
 import { assertNoEval } from './helpers'
 
 // ---------------------------------------------------------------------------
@@ -11,6 +11,15 @@ import { assertNoEval } from './helpers'
 
 const SOURCE_PATH = resolve(__dirname, '../src/notes.ts')
 const SOURCE_CODE = readFileSync(SOURCE_PATH, 'utf-8')
+
+// ---------------------------------------------------------------------------
+// Mock pool
+// ---------------------------------------------------------------------------
+
+const mockQuery = vi.fn()
+const mockPool: DbPool = { query: mockQuery }
+const USER_A = 'user-a-uuid'
+const USER_B = 'user-b-uuid'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,17 +38,14 @@ function jsonFromResult(result: AgentToolResult): Record<string, unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// Setup / teardown — each test gets a fresh in-memory DB
+// Setup — fresh mock + tool per test
 // ---------------------------------------------------------------------------
 
 let tool: ReturnType<typeof createNotesTool>
 
 beforeEach(() => {
-  tool = createNotesTool(':memory:')
-})
-
-afterEach(() => {
-  // DatabaseSync closes automatically when garbage collected
+  mockQuery.mockReset()
+  tool = createNotesTool(USER_A, mockPool)
 })
 
 // ---------------------------------------------------------------------------
@@ -48,6 +54,10 @@ afterEach(() => {
 
 describe('createNote', () => {
   it('creates a note and returns it', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 1, title: 'My Note', content: 'Hello World', created_at: '2026-01-01', updated_at: '2026-01-01' }],
+    })
+
     const result = await tool.execute({
       action: 'createNote',
       title: 'My Note',
@@ -63,34 +73,35 @@ describe('createNote', () => {
     expect(data.note.content).toBe('Hello World')
   })
 
-  it('assigns sequential IDs', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'First',
-      content: 'Content 1',
-    })
-    const result = await tool.execute({
-      action: 'createNote',
-      title: 'Second',
-      content: 'Content 2',
+  it('passes userId as first parameter', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 1, title: 'T', content: 'C', created_at: '2026-01-01', updated_at: '2026-01-01' }],
     })
 
-    const data = jsonFromResult(result) as { note: { id: number } }
-    expect(data.note.id).toBe(2)
+    await tool.execute({ action: 'createNote', title: 'T', content: 'C' })
+
+    expect(mockQuery).toHaveBeenCalledOnce()
+    const params = mockQuery.mock.calls[0]![1] as unknown[]
+    expect(params[0]).toBe(USER_A)
   })
 
-  it('includes timestamps', async () => {
-    const result = await tool.execute({
-      action: 'createNote',
-      title: 'Timed',
-      content: 'With timestamp',
+  it('includes timestamps from DB', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 1, title: 'T', content: 'C', created_at: '2026-01-01T12:00:00Z', updated_at: '2026-01-01T12:00:00Z' }],
     })
 
-    const data = jsonFromResult(result) as {
-      note: { created_at: string; updated_at: string }
-    }
+    const result = await tool.execute({ action: 'createNote', title: 'T', content: 'C' })
+    const data = jsonFromResult(result) as { note: { created_at: string; updated_at: string } }
     expect(data.note.created_at).toBeTruthy()
     expect(data.note.updated_at).toBeTruthy()
+  })
+
+  it('throws when DB returns no rows', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    await expect(
+      tool.execute({ action: 'createNote', title: 'T', content: 'C' }),
+    ).rejects.toThrow('Failed to retrieve created note')
   })
 })
 
@@ -99,31 +110,34 @@ describe('createNote', () => {
 // ---------------------------------------------------------------------------
 
 describe('listNotes', () => {
-  it('lists created notes', async () => {
-    await tool.execute({ action: 'createNote', title: 'A', content: 'aaa' })
-    await tool.execute({ action: 'createNote', title: 'B', content: 'bbb' })
+  it('lists notes from pool', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        { id: 2, title: 'B', content: 'bbb', created_at: '2026-01-02', updated_at: '2026-01-02' },
+        { id: 1, title: 'A', content: 'aaa', created_at: '2026-01-01', updated_at: '2026-01-01' },
+      ],
+    })
 
     const result = await tool.execute({ action: 'listNotes' })
-    const data = jsonFromResult(result) as {
-      notes: Array<{ title: string }>
-      count: number
-    }
+    const data = jsonFromResult(result) as { notes: unknown[]; count: number }
 
     expect(data.count).toBe(2)
     expect(data.notes).toHaveLength(2)
   })
 
-  it('respects limit parameter', async () => {
-    await tool.execute({ action: 'createNote', title: 'A', content: 'a' })
-    await tool.execute({ action: 'createNote', title: 'B', content: 'b' })
-    await tool.execute({ action: 'createNote', title: 'C', content: 'c' })
+  it('passes limit as second parameter', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
 
-    const result = await tool.execute({ action: 'listNotes', limit: 2 })
-    const data = jsonFromResult(result) as { count: number }
-    expect(data.count).toBe(2)
+    await tool.execute({ action: 'listNotes', limit: 5 })
+
+    const params = mockQuery.mock.calls[0]![1] as unknown[]
+    expect(params[0]).toBe(USER_A)
+    expect(params[1]).toBe(5)
   })
 
   it('returns empty array when no notes exist', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
     const result = await tool.execute({ action: 'listNotes' })
     const data = jsonFromResult(result) as { notes: unknown[]; count: number }
     expect(data.notes).toEqual([])
@@ -137,10 +151,8 @@ describe('listNotes', () => {
 
 describe('updateNote', () => {
   it('updates note content', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'Original',
-      content: 'Old content',
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 1, title: 'Original', content: 'New content', created_at: '2026-01-01', updated_at: '2026-01-02' }],
     })
 
     const result = await tool.execute({
@@ -149,14 +161,14 @@ describe('updateNote', () => {
       content: 'New content',
     })
 
-    const data = jsonFromResult(result) as {
-      note: { title: string; content: string }
-    }
+    const data = jsonFromResult(result) as { note: { title: string; content: string } }
     expect(data.note.title).toBe('Original')
     expect(data.note.content).toBe('New content')
   })
 
-  it('throws for non-existent note', async () => {
+  it('throws for non-existent note (no rows returned)', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
     await expect(
       tool.execute({ action: 'updateNote', id: 999, content: 'x' }),
     ).rejects.toThrow('not found')
@@ -169,38 +181,17 @@ describe('updateNote', () => {
 
 describe('deleteNote', () => {
   it('deletes a note', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'ToDelete',
-      content: 'Will be gone',
-    })
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 1 }] })
 
     const result = await tool.execute({ action: 'deleteNote', id: 1 })
     const data = jsonFromResult(result) as { deleted: boolean; id: number }
     expect(data.deleted).toBe(true)
     expect(data.id).toBe(1)
-
-    // Verify gone from list
-    const listResult = await tool.execute({ action: 'listNotes' })
-    const listData = jsonFromResult(listResult) as { count: number }
-    expect(listData.count).toBe(0)
-  })
-
-  it('throws on double delete', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'Once',
-      content: 'Delete me',
-    })
-
-    await tool.execute({ action: 'deleteNote', id: 1 })
-
-    await expect(
-      tool.execute({ action: 'deleteNote', id: 1 }),
-    ).rejects.toThrow('not found')
   })
 
   it('throws for non-existent note', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
     await expect(
       tool.execute({ action: 'deleteNote', id: 42 }),
     ).rejects.toThrow('not found')
@@ -208,117 +199,104 @@ describe('deleteNote', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Full-text search
+// Full-text search (tsvector)
 // ---------------------------------------------------------------------------
 
 describe('searchNotes', () => {
-  it('finds notes by content', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'Recipe',
-      content: 'Pancakes with maple syrup',
-    })
-    await tool.execute({
-      action: 'createNote',
-      title: 'Todo',
-      content: 'Buy groceries for dinner',
+  it('returns matching notes', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 1, title: 'Recipe', content: 'Pancakes', created_at: '2026-01-01', updated_at: '2026-01-01' }],
     })
 
-    const result = await tool.execute({
-      action: 'searchNotes',
-      query: 'pancakes',
-    })
-
-    const data = jsonFromResult(result) as {
-      notes: Array<{ title: string }>
-      count: number
-    }
+    const result = await tool.execute({ action: 'searchNotes', query: 'pancakes' })
+    const data = jsonFromResult(result) as { notes: Array<{ title: string }>; count: number }
 
     expect(data.count).toBe(1)
     expect(data.notes[0]?.title).toBe('Recipe')
   })
 
-  it('finds notes by title', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'Meeting Notes',
-      content: 'Discussed quarterly results',
-    })
+  it('passes userId and query as parameters', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
 
-    const result = await tool.execute({
-      action: 'searchNotes',
-      query: 'meeting',
-    })
+    await tool.execute({ action: 'searchNotes', query: 'test query' })
 
-    const data = jsonFromResult(result) as { count: number }
-    expect(data.count).toBe(1)
+    const params = mockQuery.mock.calls[0]![1] as unknown[]
+    expect(params[0]).toBe(USER_A)
+    expect(params[1]).toBe('test query')
+  })
+
+  it('uses plainto_tsquery in SQL', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    await tool.execute({ action: 'searchNotes', query: 'keyword' })
+
+    const sql = mockQuery.mock.calls[0]![0] as string
+    expect(sql).toContain('plainto_tsquery')
+    expect(sql).toContain('search_vector')
   })
 
   it('returns empty array for no matches', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'Existing',
-      content: 'Some content here',
-    })
+    mockQuery.mockResolvedValueOnce({ rows: [] })
 
-    const result = await tool.execute({
-      action: 'searchNotes',
-      query: 'nonexistentkeyword',
-    })
-
-    const data = jsonFromResult(result) as {
-      notes: unknown[]
-      count: number
-    }
+    const result = await tool.execute({ action: 'searchNotes', query: 'nonexistent' })
+    const data = jsonFromResult(result) as { notes: unknown[]; count: number }
     expect(data.notes).toEqual([])
     expect(data.count).toBe(0)
   })
+})
 
-  it('searches updated content after updateNote', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'Evolving',
-      content: 'alpha version',
+// ---------------------------------------------------------------------------
+// User isolation
+// ---------------------------------------------------------------------------
+
+describe('user isolation', () => {
+  it('every query includes userId as first parameter', async () => {
+    const toolB = createNotesTool(USER_B, mockPool)
+
+    // createNote
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 1, title: 'T', content: 'C', created_at: '2026-01-01', updated_at: '2026-01-01' }],
     })
+    await toolB.execute({ action: 'createNote', title: 'T', content: 'C' })
+    expect((mockQuery.mock.calls[0]![1] as unknown[])[0]).toBe(USER_B)
 
-    await tool.execute({
-      action: 'updateNote',
-      id: 1,
-      content: 'beta version',
-    })
+    // listNotes
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await toolB.execute({ action: 'listNotes' })
+    expect((mockQuery.mock.calls[1]![1] as unknown[])[0]).toBe(USER_B)
 
-    const alphaResult = await tool.execute({
-      action: 'searchNotes',
-      query: 'alpha',
-    })
-    const betaResult = await tool.execute({
-      action: 'searchNotes',
-      query: 'beta',
-    })
+    // searchNotes
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await toolB.execute({ action: 'searchNotes', query: 'q' })
+    expect((mockQuery.mock.calls[2]![1] as unknown[])[0]).toBe(USER_B)
 
-    const alphaData = jsonFromResult(alphaResult) as { count: number }
-    const betaData = jsonFromResult(betaResult) as { count: number }
+    // updateNote
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await toolB.execute({ action: 'updateNote', id: 1, content: 'x' }).catch(() => {})
+    expect((mockQuery.mock.calls[3]![1] as unknown[])[0]).toBe(USER_B)
 
-    expect(alphaData.count).toBe(0)
-    expect(betaData.count).toBe(1)
+    // deleteNote
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await toolB.execute({ action: 'deleteNote', id: 1 }).catch(() => {})
+    expect((mockQuery.mock.calls[4]![1] as unknown[])[0]).toBe(USER_B)
   })
 
-  it('does not find deleted notes', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'Temporary',
-      content: 'unique searchterm xyz',
-    })
+  it('User B cannot update User A note (DB returns empty)', async () => {
+    const toolB = createNotesTool(USER_B, mockPool)
+    mockQuery.mockResolvedValueOnce({ rows: [] })
 
-    await tool.execute({ action: 'deleteNote', id: 1 })
+    await expect(
+      toolB.execute({ action: 'updateNote', id: 1, content: 'hacked' }),
+    ).rejects.toThrow('not found')
+  })
 
-    const result = await tool.execute({
-      action: 'searchNotes',
-      query: 'searchterm',
-    })
+  it('User B cannot delete User A note (DB returns empty)', async () => {
+    const toolB = createNotesTool(USER_B, mockPool)
+    mockQuery.mockResolvedValueOnce({ rows: [] })
 
-    const data = jsonFromResult(result) as { count: number }
-    expect(data.count).toBe(0)
+    await expect(
+      toolB.execute({ action: 'deleteNote', id: 1 }),
+    ).rejects.toThrow('not found')
   })
 })
 
@@ -387,65 +365,38 @@ describe('notesTool metadata', () => {
 })
 
 // ---------------------------------------------------------------------------
-// SQL Injection
+// SQL Injection — verify parameterized queries
 // ---------------------------------------------------------------------------
 
 describe('SQL injection', () => {
-  it('title with SQL injection attempt causes no damage', async () => {
+  it('SQL injection in title is passed as parameter, not interpolated', async () => {
     const maliciousTitle = "'; DROP TABLE notes; --"
-    const result = await tool.execute({
-      action: 'createNote',
-      title: maliciousTitle,
-      content: 'Innocent content',
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 1, title: maliciousTitle, content: 'C', created_at: '2026-01-01', updated_at: '2026-01-01' }],
     })
 
-    const data = jsonFromResult(result) as {
-      note: { title: string }
-    }
+    await tool.execute({ action: 'createNote', title: maliciousTitle, content: 'Innocent' })
 
-    // Title stored literally, not interpreted as SQL
-    expect(data.note.title).toBe(maliciousTitle)
-
-    // Table still exists and works
-    const listResult = await tool.execute({ action: 'listNotes' })
-    const listData = jsonFromResult(listResult) as { count: number }
-    expect(listData.count).toBe(1)
+    const sql = mockQuery.mock.calls[0]![0] as string
+    const params = mockQuery.mock.calls[0]![1] as unknown[]
+    // SQL uses $-placeholders, not string interpolation
+    expect(sql).toContain('$1')
+    expect(sql).toContain('$2')
+    expect(sql).not.toContain(maliciousTitle)
+    // Malicious string is safely in params
+    expect(params).toContain(maliciousTitle)
   })
 
-  it('content with SQL injection attempt causes no damage', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'Safe',
-      content: "Robert'); DROP TABLE notes;--",
-    })
+  it('SQL injection in search query is passed as parameter', async () => {
+    const maliciousQuery = "') OR 1=1; DROP TABLE notes; --"
+    mockQuery.mockResolvedValueOnce({ rows: [] })
 
-    const listResult = await tool.execute({ action: 'listNotes' })
-    const listData = jsonFromResult(listResult) as { count: number }
-    expect(listData.count).toBe(1)
-  })
+    await tool.execute({ action: 'searchNotes', query: maliciousQuery })
 
-  it('search query with SQL injection attempt causes no damage', async () => {
-    await tool.execute({
-      action: 'createNote',
-      title: 'Normal',
-      content: 'Normal content',
-    })
-
-    // FTS5 injection attempt — should not crash, may throw FTS syntax error
-    // but must never execute arbitrary SQL
-    try {
-      await tool.execute({
-        action: 'searchNotes',
-        query: "') OR 1=1; DROP TABLE notes; --",
-      })
-    } catch {
-      // FTS5 syntax error is acceptable — the important thing
-      // is that the table is undamaged
-    }
-
-    const listResult = await tool.execute({ action: 'listNotes' })
-    const listData = jsonFromResult(listResult) as { count: number }
-    expect(listData.count).toBe(1)
+    const sql = mockQuery.mock.calls[0]![0] as string
+    const params = mockQuery.mock.calls[0]![1] as unknown[]
+    expect(sql).not.toContain(maliciousQuery)
+    expect(params).toContain(maliciousQuery)
   })
 })
 
@@ -458,9 +409,8 @@ describe('security', () => {
     assertNoEval(SOURCE_CODE)
   })
 
-  it('contains no string concatenation in SQL queries', () => {
-    // All SQL should use ? placeholders, never string interpolation
-    // Match patterns like: `SELECT ... ${` or `'SELECT ... ' +`
+  it('uses $-placeholders in all SQL queries (no string interpolation)', () => {
+    // All SQL should use $N placeholders, never string interpolation
     const sqlConcat = /(?:SELECT|INSERT|UPDATE|DELETE|CREATE)\s[^'"`]*\$\{/
     expect(SOURCE_CODE).not.toMatch(sqlConcat)
 
@@ -468,42 +418,10 @@ describe('security', () => {
     expect(SOURCE_CODE).not.toMatch(sqlPlus)
   })
 
-  it('uses only prepared statements for data operations', () => {
-    // Every data query should go through db.prepare()
-    // Verify prepare is used for all CRUD operations
-    const prepareCount = (SOURCE_CODE.match(/\.prepare\(/g) ?? []).length
-    // At minimum: insert, select-by-id, update, delete, list, search, select-after-update
-    expect(prepareCount).toBeGreaterThanOrEqual(7)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// initDb
-// ---------------------------------------------------------------------------
-
-describe('initDb', () => {
-  it('creates a usable database', () => {
-    const db = initDb(':memory:')
-    const rows = db.prepare('SELECT name FROM sqlite_master WHERE type = ?').all('table')
-    const tableNames = rows.map((r: Record<string, unknown>) => r['name'])
-    expect(tableNames).toContain('notes')
-    db.close()
-  })
-
-  it('is idempotent (can be called twice on same DB path)', () => {
-    const db = initDb(':memory:')
-    // Running init again should not throw
-    for (const sql of [
-      `CREATE TABLE IF NOT EXISTS notes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      )`,
-    ]) {
-      db.prepare(sql).run()
-    }
-    db.close()
+  it('uses pool.query with parameter arrays for all data operations', () => {
+    // Every data query goes through pool.query(sql, params)
+    const queryCount = (SOURCE_CODE.match(/pool\.query\(/g) ?? []).length
+    // At minimum: insert, search, update, delete, list = 5
+    expect(queryCount).toBeGreaterThanOrEqual(5)
   })
 })

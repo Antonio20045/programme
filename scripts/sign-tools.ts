@@ -11,6 +11,7 @@
 import sodium from 'libsodium-wrappers'
 import { createHash } from 'node:crypto'
 import {
+  chmodSync,
   existsSync,
   readFileSync,
   readdirSync,
@@ -76,7 +77,8 @@ async function main(): Promise<void> {
   if (match?.[1]) {
     console.log('Using existing keypair from .env')
     privateKeyBytes = sodium.from_hex(match[1])
-    publicKeyBytes = sodium.crypto_sign_ed25519_sk_to_pk(privateKeyBytes)
+    // Ed25519 secret key = 32-byte seed + 32-byte public key
+    publicKeyBytes = privateKeyBytes.slice(32)
   } else {
     console.log('Generating new Ed25519 keypair...')
     const keypair = sodium.crypto_sign_keypair()
@@ -90,7 +92,9 @@ async function main(): Promise<void> {
       ENV_PATH,
       envContent + separator + `${ENV_KEY_NAME}=${privHex}\n`,
     )
-    console.log(`Secret key saved to .env as ${ENV_KEY_NAME}`)
+    // Restrict .env to owner-only (0o600) — prevent other users from reading private key
+    chmodSync(ENV_PATH, 0o600)
+    console.log(`Secret key saved to .env as ${ENV_KEY_NAME} (permissions: 0600)`)
   }
 
   // 2. Write public key module

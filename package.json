@@ -10,13 +10,21 @@
     "dev:gateway": "pnpm --filter @ki-assistent/gateway dev",
     "dev:relay": "pnpm --filter @ki-assistent/relay dev",
     "build:desktop": "pnpm --filter @ki-assistent/desktop build",
-    "build:mobile": "pnpm --filter @ki-assistent/mobile build"
+    "build:mobile": "pnpm --filter @ki-assistent/mobile build",
+    "build:installer": "bash scripts/prepare-gateway.sh && pnpm --filter @ki-assistent/desktop build && pnpm --filter @ki-assistent/desktop build:installer",
+    "harness:risk-tier": "tsx scripts/risk-policy-gate.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "better-sqlite3",
       "electron",
-      "esbuild"
-    ]
+      "esbuild",
+      "sharp",
+      "tesseract.js"
+    ],
+    "overrides": {
+      "react-server-dom-webpack": ">=19.0.2"
+    }
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -26,6 +34,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-security": "^3.0.1",
     "libsodium-wrappers": "^0.8.2",
+    "picomatch": "^4.0.0",
     "prettier": "^3.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

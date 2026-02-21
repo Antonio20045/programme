@@ -1,51 +1,14 @@
 /**
- * Reminders tool — manage local reminders stored in SQLite.
- * Uses node:sqlite (built-in, zero external deps).
- * All queries use prepared statements — no string concatenation in SQL.
- *
- * node:sqlite is loaded via createRequire to bypass Vite's module resolution
- * (Vite does not yet recognize sqlite as a known Node.js builtin).
+ * Reminders tool — manage reminders stored in PostgreSQL.
+ * All queries use parameterized $-placeholders — no string concatenation in SQL.
+ * User isolation: every query is scoped by userId.
  *
  * Exports:
- *  - createRemindersInstance(dbPath) — factory (use ':memory:' in tests)
+ *  - createRemindersInstance(userId, pool) — factory
  *  - ReminderRow, RemindersInstance — types
  */
 
-import { createRequire } from 'node:module'
-import type { AgentToolResult, ExtendedAgentTool, JSONSchema } from './types'
-
-// ---------------------------------------------------------------------------
-// SQLite loader (bypasses Vite module resolution)
-// ---------------------------------------------------------------------------
-
-interface StatementResult {
-  readonly changes: number | bigint
-  readonly lastInsertRowid: number | bigint
-}
-
-interface SqliteStatement {
-  run(...params: (string | number | null)[]): StatementResult
-  all(...params: (string | number | null)[]): Record<string, unknown>[]
-  get(...params: (string | number | null)[]): Record<string, unknown> | undefined
-}
-
-interface SqliteDatabase {
-  prepare(sql: string): SqliteStatement
-  close(): void
-}
-
-interface SqliteDatabaseConstructor {
-  new (path: string): SqliteDatabase
-}
-
-const nodeRequire = createRequire(import.meta.url)
-
-function loadDatabaseSync(): SqliteDatabaseConstructor {
-  const mod = nodeRequire('node:sqlite') as {
-    DatabaseSync: SqliteDatabaseConstructor
-  }
-  return mod.DatabaseSync
-}
+import type { AgentToolResult, DbPool, ExtendedAgentTool, JSONSchema } from './types'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,7 +19,7 @@ interface ReminderRow {
   readonly text: string
   readonly datetime: string
   readonly created_at: string
-  readonly notified: number
+  readonly notified: boolean
 }
 
 type ReminderFilter = 'all' | 'pending' | 'past'
@@ -81,22 +44,8 @@ type RemindersArgs = SetReminderArgs | ListRemindersArgs | CancelReminderArgs
 
 interface RemindersInstance {
   readonly tool: ExtendedAgentTool
-  readonly getDueReminders: (now: Date) => readonly ReminderRow[]
-  readonly close: () => void
+  readonly getDueReminders: (now: Date) => Promise<readonly ReminderRow[]>
 }
-
-// ---------------------------------------------------------------------------
-// Schema (static literal — safe for prepare)
-// ---------------------------------------------------------------------------
-
-const CREATE_TABLE_SQL =
-  'CREATE TABLE IF NOT EXISTS reminders (' +
-  'id INTEGER PRIMARY KEY,' +
-  'text TEXT NOT NULL,' +
-  'datetime TEXT NOT NULL,' +
-  'created_at TEXT NOT NULL,' +
-  'notified INTEGER NOT NULL DEFAULT 0' +
-  ') STRICT'
 
 // ---------------------------------------------------------------------------
 // JSON Schema for LLM function calling
@@ -188,7 +137,7 @@ function parseArgs(args: unknown): RemindersArgs {
 }
 
 // ---------------------------------------------------------------------------
-// Row conversion (SQLite → typed ReminderRow)
+// Row conversion (pg → typed ReminderRow)
 // ---------------------------------------------------------------------------
 
 function toReminderRow(row: Record<string, unknown>): ReminderRow {
@@ -197,108 +146,79 @@ function toReminderRow(row: Record<string, unknown>): ReminderRow {
     text: String(row['text'] ?? ''),
     datetime: String(row['datetime'] ?? ''),
     created_at: String(row['created_at'] ?? ''),
-    notified: Number(row['notified'] ?? 0),
+    notified: Boolean(row['notified']),
   }
 }
 
-function toReminderRows(
-  rows: Record<string, unknown>[],
-): readonly ReminderRow[] {
-  return rows.map(toReminderRow)
+// ---------------------------------------------------------------------------
+// Action executors (async, parameterized, user-scoped)
+// ---------------------------------------------------------------------------
+
+async function executeSetReminder(
+  pool: DbPool, userId: string, text: string, datetime: string,
+): Promise<AgentToolResult> {
+  const { rows } = await pool.query(
+    `INSERT INTO reminders (user_id, text, datetime)
+     VALUES ($1, $2, $3)
+     RETURNING id, text, datetime, created_at`,
+    [userId, text, datetime],
+  )
+  const row = rows[0]
+  if (!row) throw new Error('Failed to create reminder')
+  return {
+    content: [{ type: 'text', text: JSON.stringify({
+      id: Number(row['id']),
+      text: String(row['text']),
+      datetime: String(row['datetime']),
+      created_at: String(row['created_at']),
+    }) }],
+  }
+}
+
+async function executeListReminders(
+  pool: DbPool, userId: string, filter: ReminderFilter,
+): Promise<AgentToolResult> {
+  let sql: string
+  let params: unknown[]
+  switch (filter) {
+    case 'pending':
+      sql = 'SELECT id, text, datetime, created_at, notified FROM reminders WHERE user_id = $1 AND notified = FALSE ORDER BY datetime ASC'
+      params = [userId]
+      break
+    case 'past':
+      sql = 'SELECT id, text, datetime, created_at, notified FROM reminders WHERE user_id = $1 AND datetime <= NOW() ORDER BY datetime DESC'
+      params = [userId]
+      break
+    default: // 'all'
+      sql = 'SELECT id, text, datetime, created_at, notified FROM reminders WHERE user_id = $1 ORDER BY datetime ASC'
+      params = [userId]
+      break
+  }
+  const { rows } = await pool.query(sql, params)
+  const reminders = rows.map(toReminderRow)
+  return { content: [{ type: 'text', text: JSON.stringify({ reminders }) }] }
+}
+
+async function executeCancelReminder(
+  pool: DbPool, userId: string, id: number,
+): Promise<AgentToolResult> {
+  const { rows } = await pool.query(
+    'DELETE FROM reminders WHERE id = $2 AND user_id = $1 RETURNING id',
+    [userId, id],
+  )
+  if (rows.length === 0) throw new Error(`Reminder with id ${String(id)} not found`)
+  return { content: [{ type: 'text', text: JSON.stringify({ deleted: Number(rows[0]!['id']) }) }] }
 }
 
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
-function createRemindersInstance(dbPath: string): RemindersInstance {
-  const DatabaseSync = loadDatabaseSync()
-  const db = new DatabaseSync(dbPath)
-
-  // Initialize schema — static SQL, no user input
-  db.prepare(CREATE_TABLE_SQL).run()
-
-  // --- Prepared statements (all parameterized) ---
-
-  const insertStmt = db.prepare(
-    'INSERT INTO reminders (text, datetime, created_at) VALUES (?, ?, ?)',
-  )
-
-  const selectAllStmt = db.prepare(
-    'SELECT id, text, datetime, created_at, notified FROM reminders ORDER BY datetime ASC',
-  )
-
-  const selectPendingStmt = db.prepare(
-    'SELECT id, text, datetime, created_at, notified FROM reminders WHERE notified = 0 ORDER BY datetime ASC',
-  )
-
-  const selectPastStmt = db.prepare(
-    'SELECT id, text, datetime, created_at, notified FROM reminders WHERE datetime <= ? ORDER BY datetime ASC',
-  )
-
-  const selectByIdStmt = db.prepare(
-    'SELECT id FROM reminders WHERE id = ?',
-  )
-
-  const deleteStmt = db.prepare('DELETE FROM reminders WHERE id = ?')
-
-  const selectDueStmt = db.prepare(
-    'SELECT id, text, datetime, created_at, notified FROM reminders WHERE datetime <= ? AND notified = 0 ORDER BY datetime ASC',
-  )
-
-  // --- Action executors ---
-
-  function executeSetReminder(
-    text: string,
-    datetime: string,
-  ): AgentToolResult {
-    const now = new Date().toISOString()
-    const result = insertStmt.run(text, datetime, now)
-    const id = Number(result.lastInsertRowid)
-    const reminder = { id, text, datetime, created_at: now }
-    return {
-      content: [{ type: 'text', text: JSON.stringify(reminder) }],
-    }
-  }
-
-  function executeListReminders(filter: ReminderFilter): AgentToolResult {
-    let rows: Record<string, unknown>[]
-    switch (filter) {
-      case 'all':
-        rows = selectAllStmt.all() as Record<string, unknown>[]
-        break
-      case 'pending':
-        rows = selectPendingStmt.all() as Record<string, unknown>[]
-        break
-      case 'past':
-        rows = selectPastStmt.all(
-          new Date().toISOString(),
-        ) as Record<string, unknown>[]
-        break
-    }
-    const reminders = toReminderRows(rows)
-    return {
-      content: [{ type: 'text', text: JSON.stringify({ reminders }) }],
-    }
-  }
-
-  function executeCancelReminder(id: number): AgentToolResult {
-    const existing = selectByIdStmt.get(id)
-    if (!existing) {
-      throw new Error(`Reminder with id ${String(id)} not found`)
-    }
-    deleteStmt.run(id)
-    return {
-      content: [{ type: 'text', text: JSON.stringify({ deleted: id }) }],
-    }
-  }
-
-  // --- Tool instance ---
-
+function createRemindersInstance(userId: string, pool: DbPool): RemindersInstance {
   const tool: ExtendedAgentTool = {
     name: 'reminders',
     description:
-      'Manage reminders stored in local SQLite. Actions: setReminder(text, datetime) creates a reminder, listReminders(filter?) lists reminders, cancelReminder(id) deletes one.',
+      'Manage reminders. Actions: setReminder(text, datetime) creates a reminder, listReminders(filter?) lists reminders, cancelReminder(id) deletes one.',
     parameters,
     permissions: [],
     requiresConfirmation: false,
@@ -307,34 +227,31 @@ function createRemindersInstance(dbPath: string): RemindersInstance {
       const parsed = parseArgs(args)
       switch (parsed.action) {
         case 'setReminder':
-          return executeSetReminder(parsed.text, parsed.datetime)
+          return executeSetReminder(pool, userId, parsed.text, parsed.datetime)
         case 'listReminders':
-          return executeListReminders(parsed.filter)
+          return executeListReminders(pool, userId, parsed.filter)
         case 'cancelReminder':
-          return executeCancelReminder(parsed.id)
+          return executeCancelReminder(pool, userId, parsed.id)
       }
     },
   }
 
-  // --- getDueReminders (for cron) ---
-
-  function getDueReminders(now: Date): readonly ReminderRow[] {
-    const rows = selectDueStmt.all(
-      now.toISOString(),
-    ) as Record<string, unknown>[]
-    return toReminderRows(rows)
+  async function getDueReminders(now: Date): Promise<readonly ReminderRow[]> {
+    const { rows } = await pool.query(
+      `SELECT id, text, datetime, created_at, notified
+       FROM reminders WHERE user_id = $1 AND datetime <= $2 AND notified = FALSE
+       ORDER BY datetime ASC`,
+      [userId, now.toISOString()],
+    )
+    return rows.map(toReminderRow)
   }
 
-  function close(): void {
-    db.close()
-  }
-
-  return { tool, getDueReminders, close }
+  return { tool, getDueReminders }
 }
 
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
-export { createRemindersInstance }
+export { createRemindersInstance, parseArgs }
 export type { ReminderRow, RemindersInstance }

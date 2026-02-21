@@ -17,6 +17,11 @@ if [[ "$FILE" != */src/* ]]; then
   exit 0
 fi
 
+# Skip mobile (uses jest-expo, not vitest)
+if [[ "$FILE" == */apps/mobile/* ]]; then
+  exit 0
+fi
+
 # Skip if it IS a test file
 if [[ "$FILE" == *.test.ts || "$FILE" == *.test.tsx || "$FILE" == *.spec.ts || "$FILE" == *.spec.tsx ]]; then
   exit 0
@@ -24,7 +29,7 @@ fi
 
 # Skip config and docs
 BASENAME=$(basename "$FILE")
-if [[ "$BASENAME" == *.config.* || "$BASENAME" == *.d.ts || "$BASENAME" == index.ts ]]; then
+if [[ "$BASENAME" == *.config.* || "$BASENAME" == *.d.ts || "$BASENAME" == index.ts || "$BASENAME" == types.ts ]]; then
   exit 0
 fi
 

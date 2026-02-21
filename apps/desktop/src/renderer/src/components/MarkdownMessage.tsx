@@ -20,7 +20,7 @@ function CopyButton({ text }: { readonly text: string }): JSX.Element {
     <button
       type="button"
       onClick={handleCopy}
-      className="rounded px-2 py-0.5 text-xs text-gray-400 transition-colors hover:bg-gray-600 hover:text-gray-200"
+      className="rounded px-2 py-0.5 text-xs text-content-secondary transition-colors hover:bg-surface-hover hover:text-content"
     >
       {copied ? 'Kopiert' : 'Kopieren'}
     </button>
@@ -48,7 +48,7 @@ function MarkdownLink({
     <a
       href={href}
       onClick={handleClick}
-      className="text-blue-400 underline hover:text-blue-300"
+      className="text-accent-text underline hover:text-accent"
     >
       {children}
     </a>
@@ -63,9 +63,9 @@ const markdownComponents: Components = {
     if (match) {
       const language = match[1] ?? 'text'
       return (
-        <div className="group relative my-2 rounded-lg bg-gray-900">
-          <div className="flex items-center justify-between border-b border-gray-700 px-4 py-1">
-            <span className="text-xs text-gray-500">{language}</span>
+        <div className="group relative my-2 rounded-lg bg-surface">
+          <div className="flex items-center justify-between border-b border-edge px-4 py-1">
+            <span className="text-xs text-content-muted">{language}</span>
             <CopyButton text={codeString} />
           </div>
           <SyntaxHighlighter
@@ -86,7 +86,7 @@ const markdownComponents: Components = {
     }
 
     return (
-      <code className="rounded bg-gray-700 px-1.5 py-0.5 text-[0.8125rem] text-gray-200">
+      <code className="rounded bg-surface-hover px-1.5 py-0.5 text-[0.8125rem] text-content">
         {children}
       </code>
     )
@@ -99,7 +99,7 @@ const markdownComponents: Components = {
   table({ children }) {
     return (
       <div className="my-2 overflow-x-auto">
-        <table className="w-full border-collapse border border-gray-700 text-sm">
+        <table className="w-full border-collapse border border-edge text-sm">
           {children}
         </table>
       </div>
@@ -107,12 +107,12 @@ const markdownComponents: Components = {
   },
 
   thead({ children }) {
-    return <thead className="bg-gray-800">{children}</thead>
+    return <thead className="bg-surface-raised">{children}</thead>
   },
 
   th({ children }) {
     return (
-      <th className="border border-gray-700 px-3 py-1.5 text-left font-medium text-gray-200">
+      <th className="border border-edge px-3 py-1.5 text-left font-medium text-content">
         {children}
       </th>
     )
@@ -120,22 +120,22 @@ const markdownComponents: Components = {
 
   td({ children }) {
     return (
-      <td className="border border-gray-700 px-3 py-1.5 text-gray-300">
+      <td className="border border-edge px-3 py-1.5 text-content-secondary">
         {children}
       </td>
     )
   },
 
   tr({ children }) {
-    return <tr className="even:bg-gray-800/50">{children}</tr>
+    return <tr className="even:bg-surface-raised/50">{children}</tr>
   },
 
   ul({ children }) {
-    return <ul className="my-1 ml-4 list-disc text-gray-300">{children}</ul>
+    return <ul className="my-1 ml-4 list-disc text-content-secondary">{children}</ul>
   },
 
   ol({ children }) {
-    return <ol className="my-1 ml-4 list-decimal text-gray-300">{children}</ol>
+    return <ol className="my-1 ml-4 list-decimal text-content-secondary">{children}</ol>
   },
 
   li({ children }) {
@@ -148,7 +148,7 @@ const markdownComponents: Components = {
 
   blockquote({ children }) {
     return (
-      <blockquote className="my-2 border-l-2 border-gray-600 pl-3 text-gray-400">
+      <blockquote className="my-2 border-l-2 border-edge-strong pl-3 text-content-secondary">
         {children}
       </blockquote>
     )
@@ -171,7 +171,7 @@ export default function MarkdownMessage({
   readonly content: string
 }): JSX.Element {
   return (
-    <div className="prose-invert max-w-none text-sm leading-relaxed text-gray-200">
+    <div className="prose-invert max-w-none text-sm leading-relaxed text-content">
       <Markdown components={markdownComponents}>{content}</Markdown>
     </div>
   )

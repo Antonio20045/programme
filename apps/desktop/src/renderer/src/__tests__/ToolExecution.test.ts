@@ -33,10 +33,12 @@ vi.mock('react', () => ({
 }))
 
 import ToolExecution, {
-  formatDuration,
   truncateResult,
   formatParams,
+  summarizeParams,
+  TOOL_ICONS,
 } from '../components/ToolExecution'
+import { formatDuration } from '../utils/format-date'
 import type { ToolExecutionProps } from '../components/ToolExecution'
 
 // ---------------------------------------------------------------------------
@@ -247,5 +249,55 @@ describe('ToolExecution', () => {
     // The arrow should not have rotate-90 class
     // It should just have the base classes without rotation
     expect(json).not.toContain('rotate-90')
+  })
+
+  it('shows tool icon for known tools', () => {
+    stateIndex = 0
+    const result = ToolExecution(createProps({ toolName: 'filesystem' }))
+    const json = JSON.stringify(result)
+    expect(json).toContain('\u{1F4C1}')
+  })
+
+  it('shows compact param summary', () => {
+    stateIndex = 0
+    const result = ToolExecution(createProps({ params: { query: 'wetter' } }))
+    const json = JSON.stringify(result)
+    expect(json).toContain('query: wetter')
+  })
+})
+
+describe('summarizeParams', () => {
+  it('returns empty string for empty params', () => {
+    expect(summarizeParams({})).toBe('')
+  })
+
+  it('formats single param', () => {
+    expect(summarizeParams({ query: 'test' })).toBe('query: test')
+  })
+
+  it('formats two params', () => {
+    const result = summarizeParams({ query: 'test', limit: 10 })
+    expect(result).toContain('query: test')
+    expect(result).toContain('limit: 10')
+  })
+
+  it('truncates long values', () => {
+    const result = summarizeParams({ data: 'x'.repeat(60) })
+    expect(result.length).toBeLessThan(60)
+    expect(result).toContain('\u2026')
+  })
+
+  it('adds ellipsis for more than 2 params', () => {
+    const result = summarizeParams({ a: 1, b: 2, c: 3 })
+    expect(result).toContain('\u2026')
+  })
+})
+
+describe('TOOL_ICONS', () => {
+  it('has icons for common tools', () => {
+    expect(TOOL_ICONS.get('web-search')).toBeDefined()
+    expect(TOOL_ICONS.get('filesystem')).toBeDefined()
+    expect(TOOL_ICONS.get('gmail')).toBeDefined()
+    expect(TOOL_ICONS.get('calendar')).toBeDefined()
   })
 })

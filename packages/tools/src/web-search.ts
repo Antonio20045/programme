@@ -45,14 +45,49 @@ type WebSearchArgs = SearchArgs | FetchPageArgs
 const TIMEOUT_MS = 10_000
 const MAX_RESULTS = 10
 const MAX_CONTENT_LENGTH = 50_000
+const MAX_REDIRECTS = 5
 
 // ---------------------------------------------------------------------------
 // URL validation
 // ---------------------------------------------------------------------------
 
 /**
+ * Checks whether a hostname resolves to a private/internal IP range.
+ * Blocks: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
+ * 169.254.0.0/16 (link-local), 0.0.0.0, ::1, fd00::/8, fe80::/10.
+ */
+function isPrivateHostname(hostname: string): boolean {
+  // IPv6 literal (brackets stripped by URL parser)
+  if (hostname === '::1' || hostname === '[::1]') return true
+
+  const parts = hostname.split('.')
+  if (parts.length === 4 && parts.every((p) => /^\d{1,3}$/.test(p))) {
+    const octets = parts.map(Number)
+    const [a, b] = octets as [number, number, number, number]
+    if (a === 127) return true                           // 127.0.0.0/8
+    if (a === 10) return true                            // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) return true     // 172.16.0.0/12
+    if (a === 192 && b === 168) return true              // 192.168.0.0/16
+    if (a === 169 && b === 254) return true              // 169.254.0.0/16
+    if (a === 0) return true                             // 0.0.0.0/8
+  }
+
+  // Common private hostnames
+  if (hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.internal')) {
+    return true
+  }
+
+  // IPv6 private ranges (fd00::/8, fe80::/10)
+  const lower = hostname.toLowerCase()
+  if (lower.startsWith('fd') || lower.startsWith('fe80')) return true
+
+  return false
+}
+
+/**
  * Validates that a URL uses the https: protocol.
  * Rejects file://, javascript:, data:, http://, and all other schemes.
+ * Rejects private/internal IP ranges (SSRF protection).
  * Uses the WHATWG URL parser for normalization.
  */
 function validateUrl(raw: string): URL {
@@ -75,6 +110,10 @@ function validateUrl(raw: string): URL {
 
   if (parsed.username !== '' || parsed.password !== '') {
     throw new Error('URLs with embedded credentials are not allowed')
+  }
+
+  if (isPrivateHostname(parsed.hostname)) {
+    throw new Error(`Blocked private/internal hostname: ${parsed.hostname}`)
   }
 
   return parsed
@@ -309,13 +348,38 @@ async function executeSearch(query: string): Promise<AgentToolResult> {
   }
 }
 
+async function fetchWithSsrfCheck(
+  initialUrl: URL,
+  headers: Record<string, string>,
+): Promise<Response> {
+  let currentUrl = initialUrl
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const response = await fetch(currentUrl.href, {
+      headers: hop === 0 ? headers : undefined,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      redirect: 'manual',
+    })
+
+    if (response.status < 300 || response.status >= 400) {
+      return response
+    }
+
+    const location = response.headers.get('location')
+    if (!location) return response
+
+    // Validate each redirect hop against SSRF
+    currentUrl = validateUrl(new URL(location, currentUrl.href).href)
+  }
+
+  throw new Error(`Too many redirects (max ${String(MAX_REDIRECTS)})`)
+}
+
 async function executeFetchPage(rawUrl: string): Promise<AgentToolResult> {
   const parsed = validateUrl(rawUrl)
 
-  const response = await fetch(parsed.href, {
-    headers: { Accept: 'text/html,application/xhtml+xml,text/plain' },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    redirect: 'follow',
+  const response = await fetchWithSsrfCheck(parsed, {
+    Accept: 'text/html,application/xhtml+xml,text/plain',
   })
 
   if (!response.ok) {
@@ -375,7 +439,7 @@ export const webSearchTool: ExtendedAgentTool = {
     'Search the web and fetch page content. Actions: search(query) returns titles, URLs, and snippets; fetchPage(url) returns page text. Only HTTPS URLs allowed.',
   parameters,
   permissions: ['net:http'],
-  requiresConfirmation: false,
+  requiresConfirmation: true,
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

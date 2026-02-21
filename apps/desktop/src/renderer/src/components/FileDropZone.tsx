@@ -1,28 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-
-const ALLOWED_EXTENSIONS = new Set([
-  'txt', 'pdf', 'md', 'csv', 'json', 'png', 'jpg', 'docx',
-])
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
-
-function getExtension(name: string): string {
-  const dot = name.lastIndexOf('.')
-  return dot === -1 ? '' : name.slice(dot + 1).toLowerCase()
-}
-
-function validateFiles(fileList: FileList): { valid: File[]; error: string | null } {
-  const valid: File[] = []
-  for (const file of Array.from(fileList)) {
-    if (!ALLOWED_EXTENSIONS.has(getExtension(file.name))) {
-      return { valid: [], error: `Dateityp nicht erlaubt: ${file.name}` }
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      return { valid: [], error: `Datei zu groß (max 10 MB): ${file.name}` }
-    }
-    valid.push(file)
-  }
-  return { valid, error: null }
-}
+import { ALLOWED_EXTENSIONS, validateFiles } from '../utils/file-validation'
 
 export default function FileDropZone({
   onFilesSelected,
@@ -91,23 +68,21 @@ export default function FileDropZone({
       {children}
 
       {isDragOver && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-gray-900/70 backdrop-blur-sm">
-          <div className="rounded-lg border-2 border-dashed border-gray-400 px-8 py-6 text-center">
-            <p className="text-lg font-medium text-gray-200">Datei hier ablegen</p>
-            <p className="mt-1 text-sm text-gray-400">
-              .txt, .pdf, .md, .csv, .json, .png, .jpg, .docx
+        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-surface-alt/70 backdrop-blur-sm">
+          <div className="rounded-lg border-2 border-dashed border-content-secondary px-8 py-6 text-center">
+            <p className="text-lg font-medium text-content">Datei hier ablegen</p>
+            <p className="mt-1 text-sm text-content-secondary">
+              {Array.from(ALLOWED_EXTENSIONS).map((e) => `.${e}`).join(', ')}
             </p>
           </div>
         </div>
       )}
 
       {error !== null && (
-        <div className="absolute bottom-0 left-0 right-0 z-50 border-t border-red-800 bg-red-950 px-4 py-2 text-sm text-red-300">
+        <div className="absolute bottom-0 left-0 right-0 z-50 border-t border-error/50 bg-error/10 px-4 py-2 text-sm text-error">
           {error}
         </div>
       )}
     </div>
   )
 }
-
-export { ALLOWED_EXTENSIONS, MAX_FILE_SIZE, validateFiles }

@@ -1,11 +1,11 @@
 /**
  * Google Calendar tool — list, create, update, and delete calendar events.
- * OAuth2 token from OS Keychain via keytar.
+ * Factory pattern: createCalendarTool(oauth) returns a per-user tool instance.
  *
- * URL policy: Only requests to https://www.googleapis.com are permitted.
+ * URL policy: Only requests to https://www.googleapis.com and https://oauth2.googleapis.com.
  */
 
-import type { AgentToolResult, ExtendedAgentTool, JSONSchema } from './types'
+import type { AgentToolResult, ExtendedAgentTool, GoogleOAuthContext, JSONSchema } from './types'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -105,136 +105,6 @@ function assertGoogleApisUrl(url: string): void {
       `Blocked request to "${parsed.hostname}" — only googleapis.com is allowed`,
     )
   }
-}
-
-// ---------------------------------------------------------------------------
-// Token management
-// ---------------------------------------------------------------------------
-
-interface TokenStore {
-  accessToken: string
-  refreshToken: string
-  clientId: string
-  clientSecret: string
-  expiresAt: number
-}
-
-function getTokenStore(): TokenStore {
-  const accessToken = process.env['GOOGLE_ACCESS_TOKEN']
-  if (!accessToken) {
-    throw new Error('GOOGLE_ACCESS_TOKEN environment variable is required')
-  }
-
-  const refreshToken = process.env['GOOGLE_REFRESH_TOKEN']
-  if (!refreshToken) {
-    throw new Error('GOOGLE_REFRESH_TOKEN environment variable is required')
-  }
-
-  const clientId = process.env['GOOGLE_CLIENT_ID']
-  if (!clientId) {
-    throw new Error('GOOGLE_CLIENT_ID environment variable is required')
-  }
-
-  const clientSecret = process.env['GOOGLE_CLIENT_SECRET']
-  if (!clientSecret) {
-    throw new Error('GOOGLE_CLIENT_SECRET environment variable is required')
-  }
-
-  const expiresAtRaw = process.env['GOOGLE_TOKEN_EXPIRES_AT']
-  const expiresAt = expiresAtRaw ? Number(expiresAtRaw) : 0
-
-  return { accessToken, refreshToken, clientId, clientSecret, expiresAt }
-}
-
-async function refreshAccessToken(store: TokenStore): Promise<string> {
-  const url = TOKEN_URL
-  assertGoogleApisUrl(url)
-
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: store.refreshToken,
-    client_id: store.clientId,
-    client_secret: store.clientSecret,
-  })
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  })
-
-  if (!response.ok) {
-    throw new Error(
-      `Token refresh failed: ${String(response.status)} ${response.statusText}`,
-    )
-  }
-
-  const data = (await response.json()) as GoogleTokenResponse
-  if (!data.access_token) {
-    throw new Error('Token refresh response missing access_token')
-  }
-
-  return data.access_token
-}
-
-async function getValidAccessToken(): Promise<string> {
-  const store = getTokenStore()
-
-  if (store.expiresAt > 0 && Date.now() < store.expiresAt) {
-    return store.accessToken
-  }
-
-  return refreshAccessToken(store)
-}
-
-// ---------------------------------------------------------------------------
-// API helpers
-// ---------------------------------------------------------------------------
-
-async function calendarFetch(
-  url: string,
-  options: RequestInit,
-): Promise<Response> {
-  assertGoogleApisUrl(url)
-
-  const token = await getValidAccessToken()
-  const headers = new Headers(options.headers)
-  headers.set('Authorization', `Bearer ${token}`)
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  })
-
-  if (response.status === 401) {
-    const store = getTokenStore()
-    const newToken = await refreshAccessToken(store)
-    headers.set('Authorization', `Bearer ${newToken}`)
-
-    const retryResponse = await fetch(url, {
-      ...options,
-      headers,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    })
-
-    if (!retryResponse.ok) {
-      throw new Error(
-        `Calendar API error: ${String(retryResponse.status)} ${retryResponse.statusText}`,
-      )
-    }
-
-    return retryResponse
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `Calendar API error: ${String(response.status)} ${response.statusText}`,
-    )
-  }
-
-  return response
 }
 
 // ---------------------------------------------------------------------------
@@ -350,10 +220,12 @@ function formatEvent(raw: GoogleEvent): CalendarEvent {
 }
 
 // ---------------------------------------------------------------------------
-// Action executors
+// FetchFn type + Action executors
 // ---------------------------------------------------------------------------
 
-async function executeListEvents(args: ListEventsArgs): Promise<AgentToolResult> {
+type CalendarFetchFn = (url: string, options: RequestInit) => Promise<Response>
+
+async function executeListEvents(fetchFn: CalendarFetchFn, args: ListEventsArgs): Promise<AgentToolResult> {
   const calendarId = encodeURIComponent(args.calendarId ?? DEFAULT_CALENDAR_ID)
   const params = new URLSearchParams({
     timeMin: args.timeMin,
@@ -363,7 +235,7 @@ async function executeListEvents(args: ListEventsArgs): Promise<AgentToolResult>
   })
 
   const url = `${API_BASE}/calendars/${calendarId}/events?${params.toString()}`
-  const response = await calendarFetch(url, { method: 'GET' })
+  const response = await fetchFn(url, { method: 'GET' })
   const data = (await response.json()) as GoogleEventsResponse
   const events = (data.items ?? []).map(formatEvent)
 
@@ -372,7 +244,7 @@ async function executeListEvents(args: ListEventsArgs): Promise<AgentToolResult>
   }
 }
 
-async function executeCreateEvent(args: CreateEventArgs): Promise<AgentToolResult> {
+async function executeCreateEvent(fetchFn: CalendarFetchFn, args: CreateEventArgs): Promise<AgentToolResult> {
   const calendarId = encodeURIComponent(DEFAULT_CALENDAR_ID)
   const url = `${API_BASE}/calendars/${calendarId}/events`
 
@@ -390,7 +262,7 @@ async function executeCreateEvent(args: CreateEventArgs): Promise<AgentToolResul
     body['attendees'] = args.attendees.map((email) => ({ email }))
   }
 
-  const response = await calendarFetch(url, {
+  const response = await fetchFn(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -404,7 +276,7 @@ async function executeCreateEvent(args: CreateEventArgs): Promise<AgentToolResul
   }
 }
 
-async function executeUpdateEvent(args: UpdateEventArgs): Promise<AgentToolResult> {
+async function executeUpdateEvent(fetchFn: CalendarFetchFn, args: UpdateEventArgs): Promise<AgentToolResult> {
   const calendarId = encodeURIComponent(DEFAULT_CALENDAR_ID)
   const eventId = encodeURIComponent(args.eventId)
   const url = `${API_BASE}/calendars/${calendarId}/events/${eventId}`
@@ -427,7 +299,7 @@ async function executeUpdateEvent(args: UpdateEventArgs): Promise<AgentToolResul
     body['attendees'] = args.updates.attendees.map((email) => ({ email }))
   }
 
-  const response = await calendarFetch(url, {
+  const response = await fetchFn(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -441,12 +313,12 @@ async function executeUpdateEvent(args: UpdateEventArgs): Promise<AgentToolResul
   }
 }
 
-async function executeDeleteEvent(args: DeleteEventArgs): Promise<AgentToolResult> {
+async function executeDeleteEvent(fetchFn: CalendarFetchFn, args: DeleteEventArgs): Promise<AgentToolResult> {
   const calendarId = encodeURIComponent(DEFAULT_CALENDAR_ID)
   const eventId = encodeURIComponent(args.eventId)
   const url = `${API_BASE}/calendars/${calendarId}/events/${eventId}`
 
-  await calendarFetch(url, { method: 'DELETE' })
+  await fetchFn(url, { method: 'DELETE' })
 
   return {
     content: [{ type: 'text', text: JSON.stringify({ deleted: true, eventId: args.eventId }) }],
@@ -522,28 +394,120 @@ const parameters: JSONSchema = {
   required: ['action'],
 }
 
-export const calendarTool: ExtendedAgentTool = {
-  name: 'calendar',
-  description:
-    'Manage Google Calendar events. Actions: listEvents(timeMin, timeMax, calendarId?), createEvent(title, start, end, description?, attendees?), updateEvent(eventId, updates), deleteEvent(eventId).',
-  parameters,
-  permissions: ['oauth:google', 'net:http'],
-  requiresConfirmation: true,
-  runsOn: 'server',
-  execute: async (args: unknown): Promise<AgentToolResult> => {
-    const parsed = parseArgs(args)
+const CALENDAR_DESCRIPTION =
+  'Manage Google Calendar events. Actions: listEvents(timeMin, timeMax, calendarId?), createEvent(title, start, end, description?, attendees?), updateEvent(eventId, updates), deleteEvent(eventId).'
 
-    switch (parsed.action) {
-      case 'listEvents':
-        return executeListEvents(parsed)
-      case 'createEvent':
-        return executeCreateEvent(parsed)
-      case 'updateEvent':
-        return executeUpdateEvent(parsed)
-      case 'deleteEvent':
-        return executeDeleteEvent(parsed)
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+export function createCalendarTool(oauth: GoogleOAuthContext): ExtendedAgentTool {
+  let cachedToken = oauth.accessToken
+
+  async function refreshToken(): Promise<string> {
+    assertGoogleApisUrl(TOKEN_URL)
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: oauth.refreshToken,
+      client_id: oauth.clientId,
+      client_secret: oauth.clientSecret,
+    })
+
+    const response = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        `Token refresh failed: ${String(response.status)} ${response.statusText}`,
+      )
     }
-  },
+
+    const data = (await response.json()) as GoogleTokenResponse
+    if (!data.access_token) {
+      throw new Error('Token refresh response missing access_token')
+    }
+
+    cachedToken = data.access_token
+
+    if (oauth.onTokenRefreshed && data.expires_in) {
+      const expiresAt = Date.now() + data.expires_in * 1000
+      await oauth.onTokenRefreshed(data.access_token, expiresAt)
+    }
+
+    return data.access_token
+  }
+
+  const calendarFetch: CalendarFetchFn = async (url, options) => {
+    assertGoogleApisUrl(url)
+
+    // Pre-check expiry
+    const token = (oauth.expiresAt > 0 && Date.now() >= oauth.expiresAt)
+      ? await refreshToken()
+      : cachedToken
+
+    const headers = new Headers(options.headers)
+    headers.set('Authorization', `Bearer ${token}`)
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+
+    if (response.status === 401) {
+      const newToken = await refreshToken()
+      headers.set('Authorization', `Bearer ${newToken}`)
+
+      const retryResponse = await fetch(url, {
+        ...options,
+        headers,
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      })
+
+      if (!retryResponse.ok) {
+        throw new Error(
+          `Calendar API error: ${String(retryResponse.status)} ${retryResponse.statusText}`,
+        )
+      }
+
+      return retryResponse
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Calendar API error: ${String(response.status)} ${response.statusText}`,
+      )
+    }
+
+    return response
+  }
+
+  return {
+    name: 'calendar',
+    description: CALENDAR_DESCRIPTION,
+    parameters,
+    permissions: ['oauth:google', 'net:http'],
+    requiresConfirmation: true,
+    runsOn: 'server',
+    execute: async (args: unknown): Promise<AgentToolResult> => {
+      const parsed = parseArgs(args)
+
+      switch (parsed.action) {
+        case 'listEvents':
+          return executeListEvents(calendarFetch, parsed)
+        case 'createEvent':
+          return executeCreateEvent(calendarFetch, parsed)
+        case 'updateEvent':
+          return executeUpdateEvent(calendarFetch, parsed)
+        case 'deleteEvent':
+          return executeDeleteEvent(calendarFetch, parsed)
+      }
+    },
+  }
 }
 
-export { assertGoogleApisUrl, parseArgs, formatEvent, refreshAccessToken }
+export { assertGoogleApisUrl, parseArgs, formatEvent }

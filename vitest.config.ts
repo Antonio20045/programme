@@ -10,6 +10,6 @@ export default defineConfig({
   },
   test: {
     passWithNoTests: true,
-    exclude: ['packages/gateway/**', 'node_modules/**'],
+    exclude: ['packages/gateway/**', 'apps/mobile/**', '**/node_modules/**'],
   },
 })

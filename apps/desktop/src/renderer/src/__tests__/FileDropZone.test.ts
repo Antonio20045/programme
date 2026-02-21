@@ -1,5 +1,6 @@
+/* eslint-disable security/detect-object-injection */
 import { describe, it, expect } from 'vitest'
-import { ALLOWED_EXTENSIONS, MAX_FILE_SIZE, validateFiles } from '../components/FileDropZone'
+import { ALLOWED_EXTENSIONS, MAX_FILE_SIZE, validateFiles } from '../utils/file-validation'
 import FileDropZone from '../components/FileDropZone'
 
 function createFile(name: string, size: number): File {

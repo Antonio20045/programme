@@ -32,13 +32,16 @@ let useEffectCallbacks: Array<() => (() => void) | void> = []
 let stateIndex = 0
 let effectIndex = 0
 
+/* eslint-disable security/detect-object-injection */
 vi.mock('react', () => ({
   useState: (initial: unknown) => {
     const idx = stateIndex++
     if (!useStateCalls[idx]) {
-      useStateCalls[idx] = [initial, vi.fn((v: unknown) => {
-        useStateCalls[idx]![0] = typeof v === 'function' ? (v as (prev: unknown) => unknown)(useStateCalls[idx]![0]) : v
-      })]
+      const entry: [unknown, (v: unknown) => void] = [initial, vi.fn()]
+      entry[1] = vi.fn((v: unknown) => {
+        entry[0] = typeof v === 'function' ? (v as (prev: unknown) => unknown)(entry[0]) : v
+      })
+      useStateCalls[idx] = entry
     }
     return useStateCalls[idx]
   },
@@ -46,6 +49,7 @@ vi.mock('react', () => ({
     useEffectCallbacks[effectIndex++] = cb
   },
 }))
+/* eslint-enable security/detect-object-injection */
 
 // ---------------------------------------------------------------------------
 // Import after mocks

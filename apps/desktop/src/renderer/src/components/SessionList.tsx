@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
+import { formatRelativeDate, getTimeGroup } from '../utils/format-date'
 import type { Session } from '../hooks/useSessions'
 
 interface SessionListProps {
@@ -9,18 +10,29 @@ interface SessionListProps {
   readonly onDelete: (id: string) => void
 }
 
-function formatDate(iso: string): string {
-  const date = new Date(iso)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+interface SessionGroup {
+  readonly label: string
+  readonly sessions: readonly Session[]
+}
 
-  if (diffDays === 0) {
-    return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+/** Group sessions by time period (Heute, Gestern, Diese Woche, etc.) */
+function groupSessions(sessions: readonly Session[]): readonly SessionGroup[] {
+  const groups = new Map<string, Session[]>()
+  const order: string[] = []
+
+  for (const session of sessions) {
+    const label = getTimeGroup(session.lastMessageAt)
+    if (!groups.has(label)) {
+      groups.set(label, [])
+      order.push(label)
+    }
+    groups.get(label)!.push(session)
   }
-  if (diffDays === 1) return 'Gestern'
-  if (diffDays < 7) return `vor ${diffDays.toString()} Tagen`
-  return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
+
+  return order.map((label) => ({
+    label,
+    sessions: groups.get(label)!,
+  }))
 }
 
 export default function SessionList({
@@ -32,6 +44,8 @@ export default function SessionList({
 }: SessionListProps): JSX.Element {
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  const groups = useMemo(() => groupSessions(sessions), [sessions])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
     e.preventDefault()
@@ -49,6 +63,10 @@ export default function SessionList({
     }
   }, [contextMenu])
 
+  const handleHoverDelete = useCallback((id: string) => {
+    setConfirmDeleteId(id)
+  }, [])
+
   const handleConfirmDelete = useCallback(() => {
     if (confirmDeleteId) {
       onDelete(confirmDeleteId)
@@ -65,42 +83,71 @@ export default function SessionList({
       <button
         type="button"
         onClick={onCreate}
-        className="mb-2 rounded bg-gray-700 px-3 py-2 text-left text-sm text-gray-200 transition-colors hover:bg-gray-600"
+        className="active-press mb-2 flex items-center gap-2 rounded-md bg-surface-hover px-3 py-2 text-left text-sm text-content transition-colors hover:bg-surface-active"
       >
-        + Neuer Chat
+        <svg className="h-4 w-4 text-content-muted" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M8 3v10M3 8h10" strokeLinecap="round" />
+        </svg>
+        Neuer Chat
       </button>
 
-      {sessions.map((session) => (
-        <button
-          key={session.id}
-          type="button"
-          onClick={() => { onSelect(session.id) }}
-          onContextMenu={(e) => { handleContextMenu(e, session.id) }}
-          className={`rounded px-3 py-2 text-left transition-colors ${
-            activeSessionId === session.id
-              ? 'bg-gray-700 text-white'
-              : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-          }`}
-        >
-          <div className="truncate text-sm">{session.title}</div>
-          <div className="text-xs text-gray-500">{formatDate(session.lastMessageAt)}</div>
-        </button>
+      {groups.map((group) => (
+        <div key={group.label}>
+          {/* Group header */}
+          <div className="px-3 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-content-muted">
+            {group.label}
+          </div>
+
+          {group.sessions.map((session) => (
+            <button
+              key={session.id}
+              type="button"
+              onClick={() => { onSelect(session.id) }}
+              onContextMenu={(e) => { handleContextMenu(e, session.id) }}
+              className={`group active-press flex w-full items-center rounded-md px-3 py-2 text-left transition-colors ${
+                activeSessionId === session.id
+                  ? 'bg-surface-active text-content'
+                  : 'text-content-secondary hover:bg-surface-hover hover:text-content'
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm">{session.title}</div>
+                <div className="text-xs text-content-muted">{formatRelativeDate(session.lastMessageAt)}</div>
+              </div>
+
+              {/* Hover delete button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleHoverDelete(session.id)
+                }}
+                className="ml-2 shrink-0 rounded p-1 text-content-muted opacity-0 transition-opacity hover:bg-error/20 hover:text-error group-hover:opacity-100"
+                aria-label="Chat löschen"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M3 3l8 8M11 3l-8 8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </button>
+          ))}
+        </div>
       ))}
 
       {sessions.length === 0 && (
-        <p className="px-3 py-2 text-xs text-gray-500">Keine Chats vorhanden</p>
+        <p className="px-3 py-2 text-xs text-content-muted">Keine Chats vorhanden</p>
       )}
 
       {/* Context menu */}
       {contextMenu !== null && (
         <div
-          className="fixed z-50 rounded border border-gray-700 bg-gray-800 py-1 shadow-lg"
+          className="fixed z-50 rounded-md border border-edge bg-surface-raised py-1 shadow-lg"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <button
             type="button"
             onClick={handleDeleteClick}
-            className="w-full px-4 py-1.5 text-left text-sm text-red-400 hover:bg-gray-700"
+            className="w-full px-4 py-1.5 text-left text-sm text-error hover:bg-surface-hover"
           >
             Löschen
           </button>
@@ -110,20 +157,20 @@ export default function SessionList({
       {/* Confirm delete dialog */}
       {confirmDeleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="rounded-lg bg-gray-800 p-6 shadow-xl">
-            <p className="mb-4 text-sm text-gray-200">Chat wirklich löschen?</p>
+          <div className="rounded-lg bg-surface-raised p-6 shadow-lg">
+            <p className="mb-4 text-sm text-content">Chat wirklich löschen?</p>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={handleCancelDelete}
-                className="rounded bg-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-600"
+                className="active-press rounded-md bg-surface-hover px-3 py-1.5 text-sm text-content-secondary hover:bg-surface-active"
               >
                 Abbrechen
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDelete}
-                className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-500"
+                className="active-press rounded-md bg-error px-3 py-1.5 text-sm text-content hover:bg-error/80"
               >
                 Löschen
               </button>
@@ -135,4 +182,5 @@ export default function SessionList({
   )
 }
 
-export type { SessionListProps }
+export { groupSessions }
+export type { SessionListProps, SessionGroup }

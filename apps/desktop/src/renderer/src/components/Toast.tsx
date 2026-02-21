@@ -13,12 +13,11 @@ export default function Toast({
     <div
       role="status"
       aria-live="polite"
-      className={
-        'fixed bottom-8 left-1/2 -translate-x-1/2 animate-fade-in rounded-lg border px-6 py-3 text-sm shadow-lg ' +
-        (type === 'error'
-          ? 'border-red-700 bg-gray-800 text-red-300'
-          : 'border-gray-700 bg-gray-800 text-gray-300')
-      }
+      className={`animate-fade-in fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border px-4 py-2 text-sm shadow-md ${
+        type === 'error'
+          ? 'border-error/50 bg-surface-raised text-error'
+          : 'border-edge bg-surface-raised text-content-secondary'
+      }`}
     >
       {message}
     </div>

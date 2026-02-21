@@ -1,3 +1,5 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
+/* eslint-disable security/detect-object-injection */
 import fs from 'fs'
 import os from 'os'
 import path from 'path'

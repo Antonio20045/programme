@@ -172,10 +172,9 @@ function buildToolPreview(
         },
       }
     default: {
-      const fields: Record<string, string> = {}
-      for (const [key, value] of Object.entries(params)) {
-        fields[key] = str(value)
-      }
+      const fields: Record<string, string> = Object.fromEntries(
+        Object.entries(params).map(([key, value]) => [key, str(value)]),
+      )
       return { type: 'generic', fields }
     }
   }
@@ -257,7 +256,12 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
       eventSourceRef.current?.close()
       eventSourceRef.current = null
 
-      const sessionId = currentSessionIdRef.current
+      // Generate a session UUID client-side for new chats (gateway requires a valid UUID)
+      const isNewSession = currentSessionIdRef.current === null
+      const sessionId = currentSessionIdRef.current ?? crypto.randomUUID()
+      if (isNewSession) {
+        currentSessionIdRef.current = sessionId
+      }
 
       // Build request — multipart/form-data when files attached, JSON otherwise
       let postPromise: Promise<unknown>
@@ -304,9 +308,8 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
           }
 
           // Track new session
-          if (currentSessionIdRef.current === null) {
-            currentSessionIdRef.current = data.sessionId
-            onSessionCreated?.(data.sessionId)
+          if (isNewSession) {
+            onSessionCreated?.(sessionId)
           }
 
           // Prepare assistant message buffer
@@ -411,7 +414,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
               )
               if (idx === -1) return prev
               const actualIdx = prev.length - 1 - idx
-              const target = prev[actualIdx]
+              const target = prev.at(actualIdx)
               if (!target) return prev
               return prev.map((m, i) =>
                 i === actualIdx

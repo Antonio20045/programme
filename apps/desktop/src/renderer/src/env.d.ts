@@ -51,27 +51,16 @@ interface SetupResult {
   error?: string
 }
 
-interface ValidationResult {
-  valid: boolean
-  error?: string
-}
-
 interface SettingsConfig {
   identity: { name: string; theme: ToneOption; emoji: string }
   model: string
   provider: string
-  apiKeyLast4: string
   allowedPaths: string[]
 }
 
 interface SettingsUpdateResult {
   success: boolean
   error?: string
-}
-
-interface ApiKeyInfo {
-  provider: string
-  last4: string
 }
 
 type ToolPreviewType = 'email' | 'calendar' | 'shell' | 'filesystem' | 'notes' | 'generic'
@@ -122,6 +111,30 @@ interface ActivityData {
   hasMore: boolean
 }
 
+interface PairingInitResult {
+  success: boolean
+  qrDataUrl?: string
+  pairingToken?: string
+  deviceId?: string
+  expiresAt?: number
+  safeStorageAvailable?: boolean
+  error?: string
+}
+
+interface PairingPollResult {
+  success: boolean
+  paired?: boolean
+  partnerDeviceId?: string
+  error?: string
+}
+
+interface StoredPairingInfo {
+  paired: boolean
+  partnerDeviceId?: string
+  pairedAt?: string
+  safeStorageAvailable?: boolean
+}
+
 interface ElectronApi {
   getGatewayStatus: () => Promise<GatewayStatus>
   onGatewayStatus: (callback: (status: GatewayStatus) => void) => () => void
@@ -136,8 +149,6 @@ interface ElectronApi {
   openExternal: (url: string) => Promise<void>
   openFileDialog: () => Promise<SelectedFile[] | null>
   getSetupRequired: () => Promise<boolean>
-  setupValidateApiKey: (data: { provider: string; apiKey: string }) => Promise<ValidationResult>
-  setupStoreApiKey: (data: { provider: string; apiKey: string }) => Promise<SetupResult>
   setupWriteConfig: (config: SetupConfig) => Promise<SetupResult>
   setupStartGateway: () => Promise<SetupResult>
   settingsReadConfig: () => Promise<SettingsConfig>
@@ -145,13 +156,18 @@ interface ElectronApi {
   settingsUpdatePersona: (data: { name: string; tone: string }) => Promise<SettingsUpdateResult>
   settingsAddFolder: () => Promise<SettingsUpdateResult & { path?: string }>
   settingsRemoveFolder: (data: { path: string }) => Promise<SettingsUpdateResult>
-  settingsReadApiKeyInfo: () => Promise<ApiKeyInfo>
   integrationsConnect: (data: { service: OAuthService }) => Promise<SetupResult>
   integrationsDisconnect: (data: { service: OAuthService }) => Promise<SetupResult>
   integrationsStatus: () => Promise<IntegrationStatus>
   memoryRead: () => Promise<MemoryData>
   memoryDelete: (data: { type: 'longTerm' | 'daily'; id: string; date?: string }) => Promise<SetupResult>
   activityRead: (data?: { days?: number; offset?: number; limit?: number }) => Promise<ActivityData>
+  pairingInit: () => Promise<PairingInitResult>
+  pairingPollStatus: (token: string) => Promise<PairingPollResult>
+  pairingGetStored: () => Promise<StoredPairingInfo>
+  pairingUnpair: () => Promise<SetupResult>
+  setClerkToken: (token: string | null) => Promise<{ success: boolean; error?: string }>
+  getClerkPublishableKey: () => Promise<string | null>
 }
 
 interface Window {

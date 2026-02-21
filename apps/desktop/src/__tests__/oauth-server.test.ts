@@ -401,21 +401,21 @@ describe('getIntegrationStatus', () => {
     })
 
     const status = getIntegrationStatus()
-    expect(status).toEqual({ gmail: true, calendar: false, drive: false })
+    expect(status).toEqual({ gmail: true, calendar: false, drive: false, docs: false, sheets: false, contacts: false, tasks: false, youtube: false })
   })
 
   it('returns all false when no files exist', () => {
     mockFs.accessSync.mockImplementation(() => { throw new Error('ENOENT') })
 
     const status = getIntegrationStatus()
-    expect(status).toEqual({ gmail: false, calendar: false, drive: false })
+    expect(status).toEqual({ gmail: false, calendar: false, drive: false, docs: false, sheets: false, contacts: false, tasks: false, youtube: false })
   })
 
   it('returns all true when all files exist', () => {
     mockFs.accessSync.mockReturnValue(undefined)
 
     const status = getIntegrationStatus()
-    expect(status).toEqual({ gmail: true, calendar: true, drive: true })
+    expect(status).toEqual({ gmail: true, calendar: true, drive: true, docs: true, sheets: true, contacts: true, tasks: true, youtube: true })
   })
 })
 

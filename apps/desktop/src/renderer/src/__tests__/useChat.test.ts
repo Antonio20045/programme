@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ---------------------------------------------------------------------------
@@ -63,6 +64,13 @@ class MockEventSource {
 }
 
 vi.stubGlobal('EventSource', MockEventSource)
+
+// Predictable UUID for new sessions
+const MOCK_UUID = '00000000-0000-4000-8000-000000000000'
+vi.stubGlobal('crypto', {
+  ...globalThis.crypto,
+  randomUUID: () => MOCK_UUID,
+})
 
 // ---------------------------------------------------------------------------
 // Mock React hooks to test without DOM
@@ -207,7 +215,7 @@ describe('useChat', () => {
     expect(mockGatewayFetch).toHaveBeenCalledWith({
       method: 'POST',
       path: '/api/message',
-      body: { text: 'Hallo', sessionId: null },
+      body: { text: 'Hallo', sessionId: MOCK_UUID },
     })
   })
 
@@ -239,7 +247,7 @@ describe('useChat', () => {
 
     expect(mockGatewayFetch).toHaveBeenCalledTimes(2)
     const secondCall = mockGatewayFetch.mock.calls[1]?.[0] as { body: unknown }
-    expect(secondCall.body).toEqual({ text: 'Zweite Nachricht', sessionId: 'sess-1' })
+    expect(secondCall.body).toEqual({ text: 'Zweite Nachricht', sessionId: MOCK_UUID })
   })
 
   it('opens EventSource after successful POST', async () => {
@@ -435,7 +443,7 @@ describe('useChat', () => {
   it('calls onSessionCreated when new session is created', async () => {
     const onSessionCreated = vi.fn()
     mockGatewayFetch.mockResolvedValue(
-      createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-new' }),
+      createGatewayResult({ messageId: 'msg-1', sessionId: MOCK_UUID }),
     )
 
     const { sendMessage } = callHook({ onSessionCreated })
@@ -445,7 +453,7 @@ describe('useChat', () => {
       expect(MockEventSource.instances).toHaveLength(1)
     })
 
-    expect(onSessionCreated).toHaveBeenCalledWith('sess-new')
+    expect(onSessionCreated).toHaveBeenCalledWith(MOCK_UUID)
   })
 
   it('does not call onSessionCreated on existing session', async () => {
@@ -494,7 +502,7 @@ describe('useChat', () => {
     expect(mockGatewayFetch).toHaveBeenCalledWith({
       method: 'POST',
       path: '/api/message',
-      body: { text: 'Ohne Datei', sessionId: null },
+      body: { text: 'Ohne Datei', sessionId: MOCK_UUID },
     })
     // Direct fetch should NOT have been called
     expect(mockFetch).not.toHaveBeenCalled()
@@ -582,7 +590,7 @@ describe('useChat', () => {
 
     expect(mockGatewayFetch).toHaveBeenCalledWith({
       method: 'POST',
-      path: '/api/confirm/sess-1',
+      path: `/api/confirm/${MOCK_UUID}`,
       body: { toolCallId: 'tc-1', decision: 'execute' },
     })
   })

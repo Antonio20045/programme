@@ -115,7 +115,7 @@ describe('MarkdownMessage', () => {
     const inlineResult = codeFn({ children: 'const x = 1' })
     // Should render a <code> element (no SyntaxHighlighter)
     expect(inlineResult.type).toBe('code')
-    expect(inlineResult.props.className).toContain('bg-gray-700')
+    expect(inlineResult.props.className).toContain('bg-surface-hover')
   })
 
   it('code component renders code block with language', () => {

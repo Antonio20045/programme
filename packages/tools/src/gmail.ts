@@ -1,12 +1,12 @@
 /**
  * Gmail tool — read, search, send, and reply to emails via Gmail REST API.
- * OAuth2 token from environment variables (production: OS Keychain via keytar).
+ * Factory pattern: createGmailTool(oauth) returns a per-user tool instance.
  *
  * URL policy: Only requests to gmail.googleapis.com and oauth2.googleapis.com.
  * Confirmable actions: sendEmail, replyToEmail.
  */
 
-import type { AgentToolResult, ExtendedAgentTool, JSONSchema } from './types'
+import type { AgentToolResult, ExtendedAgentTool, GoogleOAuthContext, JSONSchema } from './types'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -113,116 +113,6 @@ function validateGmailUrl(raw: string): URL {
   }
 
   return parsed
-}
-
-// ---------------------------------------------------------------------------
-// Token management
-// ---------------------------------------------------------------------------
-
-let cachedAccessToken: string | undefined
-
-function getEnvRequired(name: string): string {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`${name} environment variable is required`)
-  }
-  return value
-}
-
-async function refreshAccessToken(): Promise<string> {
-  const refreshToken = getEnvRequired('GMAIL_REFRESH_TOKEN')
-  const clientId = getEnvRequired('GOOGLE_CLIENT_ID')
-  const clientSecret = getEnvRequired('GOOGLE_CLIENT_SECRET')
-
-  const url = validateGmailUrl(TOKEN_ENDPOINT)
-
-  const params = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
-    grant_type: 'refresh_token',
-  })
-
-  const response = await fetch(url.href, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  })
-
-  if (!response.ok) {
-    throw new Error(
-      `Token refresh failed: ${String(response.status)} ${response.statusText}`,
-    )
-  }
-
-  const data = (await response.json()) as TokenResponse
-  cachedAccessToken = data.access_token
-  return data.access_token
-}
-
-async function getAccessToken(): Promise<string> {
-  if (cachedAccessToken) {
-    return cachedAccessToken
-  }
-
-  const envToken = process.env['GMAIL_ACCESS_TOKEN']
-  if (envToken) {
-    cachedAccessToken = envToken
-    return envToken
-  }
-
-  return refreshAccessToken()
-}
-
-// ---------------------------------------------------------------------------
-// Gmail API helpers
-// ---------------------------------------------------------------------------
-
-async function gmailFetch(
-  path: string,
-  init?: { method?: string; headers?: Record<string, string>; body?: string },
-): Promise<Response> {
-  const url = validateGmailUrl(`${GMAIL_API_BASE}${path}`)
-  const token = await getAccessToken()
-
-  const makeHeaders = (t: string): Record<string, string> => ({
-    ...(init?.headers ?? {}),
-    Authorization: `Bearer ${t}`,
-  })
-
-  const response = await fetch(url.href, {
-    method: init?.method,
-    headers: makeHeaders(token),
-    body: init?.body,
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  })
-
-  // Token expired → refresh and retry once
-  if (response.status === 401) {
-    const newToken = await refreshAccessToken()
-    const retryResponse = await fetch(url.href, {
-      method: init?.method,
-      headers: makeHeaders(newToken),
-      body: init?.body,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    })
-
-    if (!retryResponse.ok) {
-      throw new Error(
-        `Gmail API error: ${String(retryResponse.status)} ${retryResponse.statusText}`,
-      )
-    }
-    return retryResponse
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `Gmail API error: ${String(response.status)} ${response.statusText}`,
-    )
-  }
-
-  return response
 }
 
 // ---------------------------------------------------------------------------
@@ -409,11 +299,16 @@ function buildRawEmail(
 }
 
 // ---------------------------------------------------------------------------
-// Action executors
+// FetchFn type + Action executors
 // ---------------------------------------------------------------------------
 
-async function executeReadInbox(limit: number): Promise<AgentToolResult> {
-  const response = await gmailFetch(
+type GmailFetchFn = (
+  path: string,
+  init?: { method?: string; headers?: Record<string, string>; body?: string },
+) => Promise<Response>
+
+async function executeReadInbox(fetchFn: GmailFetchFn, limit: number): Promise<AgentToolResult> {
+  const response = await fetchFn(
     `/messages?maxResults=${String(limit)}&labelIds=INBOX`,
   )
   const data = (await response.json()) as GmailListResponse
@@ -422,7 +317,7 @@ async function executeReadInbox(limit: number): Promise<AgentToolResult> {
   const emails: ParsedEmail[] = []
 
   for (const ref of messageRefs) {
-    const msgResponse = await gmailFetch(`/messages/${ref.id}?format=full`)
+    const msgResponse = await fetchFn(`/messages/${ref.id}?format=full`)
     const msg = (await msgResponse.json()) as GmailMessage
     emails.push(parseMessage(msg))
   }
@@ -434,16 +329,16 @@ async function executeReadInbox(limit: number): Promise<AgentToolResult> {
   }
 }
 
-async function executeSearchEmails(query: string): Promise<AgentToolResult> {
+async function executeSearchEmails(fetchFn: GmailFetchFn, query: string): Promise<AgentToolResult> {
   const params = new URLSearchParams({ q: query })
-  const response = await gmailFetch(`/messages?${params.toString()}`)
+  const response = await fetchFn(`/messages?${params.toString()}`)
   const data = (await response.json()) as GmailListResponse
 
   const messageRefs = data.messages ?? []
   const emails: ParsedEmail[] = []
 
   for (const ref of messageRefs) {
-    const msgResponse = await gmailFetch(`/messages/${ref.id}?format=full`)
+    const msgResponse = await fetchFn(`/messages/${ref.id}?format=full`)
     const msg = (await msgResponse.json()) as GmailMessage
     emails.push(parseMessage(msg))
   }
@@ -456,13 +351,14 @@ async function executeSearchEmails(query: string): Promise<AgentToolResult> {
 }
 
 async function executeSendEmail(
+  fetchFn: GmailFetchFn,
   to: string,
   subject: string,
   body: string,
 ): Promise<AgentToolResult> {
   const raw = buildRawEmail(to, subject, body)
 
-  const response = await gmailFetch('/messages/send', {
+  const response = await fetchFn('/messages/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ raw }),
@@ -488,11 +384,12 @@ async function executeSendEmail(
 }
 
 async function executeReplyToEmail(
+  fetchFn: GmailFetchFn,
   messageId: string,
   body: string,
 ): Promise<AgentToolResult> {
   // Fetch original message for threading info
-  const msgResponse = await gmailFetch(`/messages/${messageId}?format=full`)
+  const msgResponse = await fetchFn(`/messages/${messageId}?format=full`)
   const original = (await msgResponse.json()) as GmailMessage
 
   const headers = original.payload?.headers
@@ -519,7 +416,7 @@ async function executeReplyToEmail(
 
   const raw = buildRawEmail(originalFrom, replySubject, body, extraHeaders)
 
-  const response = await gmailFetch('/messages/send', {
+  const response = await fetchFn('/messages/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ raw, threadId: original.threadId }),
@@ -587,28 +484,111 @@ const gmailParameters: JSONSchema = {
   required: ['action'],
 }
 
-export const gmailTool: ExtendedAgentTool = {
-  name: 'gmail',
-  description:
-    'Read, search, send, and reply to emails via Gmail. Actions: readInbox(limit) lists recent emails; searchEmails(query) searches with Gmail query syntax; sendEmail(to, subject, body) sends a new email; replyToEmail(messageId, body) replies to an existing email. Confirmation required for sendEmail and replyToEmail.',
-  parameters: gmailParameters,
-  permissions: ['oauth:google', 'net:http'],
-  requiresConfirmation: true,
-  runsOn: 'server',
-  execute: async (args: unknown): Promise<AgentToolResult> => {
-    const parsed = parseArgs(args)
+const GMAIL_DESCRIPTION =
+  'Read, search, send, and reply to emails via Gmail. Actions: readInbox(limit) lists recent emails; searchEmails(query) searches with Gmail query syntax; sendEmail(to, subject, body) sends a new email; replyToEmail(messageId, body) replies to an existing email. Confirmation required for sendEmail and replyToEmail.'
 
-    switch (parsed.action) {
-      case 'readInbox':
-        return executeReadInbox(parsed.limit)
-      case 'searchEmails':
-        return executeSearchEmails(parsed.query)
-      case 'sendEmail':
-        return executeSendEmail(parsed.to, parsed.subject, parsed.body)
-      case 'replyToEmail':
-        return executeReplyToEmail(parsed.messageId, parsed.body)
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+export function createGmailTool(oauth: GoogleOAuthContext): ExtendedAgentTool {
+  let cachedToken = oauth.accessToken
+
+  async function refreshToken(): Promise<string> {
+    const url = validateGmailUrl(TOKEN_ENDPOINT)
+    const params = new URLSearchParams({
+      client_id: oauth.clientId,
+      client_secret: oauth.clientSecret,
+      refresh_token: oauth.refreshToken,
+      grant_type: 'refresh_token',
+    })
+
+    const response = await fetch(url.href, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        `Token refresh failed: ${String(response.status)} ${response.statusText}`,
+      )
     }
-  },
+
+    const data = (await response.json()) as TokenResponse
+    cachedToken = data.access_token
+
+    if (oauth.onTokenRefreshed) {
+      const expiresAt = Date.now() + data.expires_in * 1000
+      await oauth.onTokenRefreshed(data.access_token, expiresAt)
+    }
+
+    return data.access_token
+  }
+
+  const gmailFetch: GmailFetchFn = async (path, init?) => {
+    const url = validateGmailUrl(`${GMAIL_API_BASE}${path}`)
+    const makeHeaders = (t: string): Record<string, string> => ({
+      ...(init?.headers ?? {}),
+      Authorization: `Bearer ${t}`,
+    })
+
+    const response = await fetch(url.href, {
+      method: init?.method,
+      headers: makeHeaders(cachedToken),
+      body: init?.body,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+
+    if (response.status === 401) {
+      const newToken = await refreshToken()
+      const retryResponse = await fetch(url.href, {
+        method: init?.method,
+        headers: makeHeaders(newToken),
+        body: init?.body,
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      })
+
+      if (!retryResponse.ok) {
+        throw new Error(
+          `Gmail API error: ${String(retryResponse.status)} ${retryResponse.statusText}`,
+        )
+      }
+      return retryResponse
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Gmail API error: ${String(response.status)} ${response.statusText}`,
+      )
+    }
+
+    return response
+  }
+
+  return {
+    name: 'gmail',
+    description: GMAIL_DESCRIPTION,
+    parameters: gmailParameters,
+    permissions: ['oauth:google', 'net:http'],
+    requiresConfirmation: true,
+    runsOn: 'server',
+    execute: async (args: unknown): Promise<AgentToolResult> => {
+      const parsed = parseArgs(args)
+
+      switch (parsed.action) {
+        case 'readInbox':
+          return executeReadInbox(gmailFetch, parsed.limit)
+        case 'searchEmails':
+          return executeSearchEmails(gmailFetch, parsed.query)
+        case 'sendEmail':
+          return executeSendEmail(gmailFetch, parsed.to, parsed.subject, parsed.body)
+        case 'replyToEmail':
+          return executeReplyToEmail(gmailFetch, parsed.messageId, parsed.body)
+      }
+    },
+  }
 }
 
 export {
@@ -620,9 +600,4 @@ export {
   extractHeader,
   extractBody,
   parseMessage,
-}
-
-/** Test-only: clears the cached access token. */
-export function _resetTokenCache(): void {
-  cachedAccessToken = undefined
 }

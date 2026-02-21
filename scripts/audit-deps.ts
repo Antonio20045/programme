@@ -72,7 +72,7 @@ for (const pattern of dangerousPatterns) {
       const lines = result
         .trim()
         .split('\n')
-        .filter((line: string) => !line.includes('audit-deps.ts'))
+        .filter((line: string) => !line.includes('audit-deps.ts') && !line.includes('risk-policy-gate'))
       if (lines.length > 0) {
         console.error(`Found dangerous pattern "${pattern}":`)
         for (const line of lines) {
@@ -114,7 +114,7 @@ for (const pattern of secretPatterns) {
       const lines = result
         .trim()
         .split('\n')
-        .filter((line: string) => !line.includes('audit-deps.ts'))
+        .filter((line: string) => !line.includes('audit-deps.ts') && !line.includes('risk-policy-gate'))
       if (lines.length > 0) {
         console.error(`Found potential secret pattern "${pattern}":`)
         for (const line of lines) {

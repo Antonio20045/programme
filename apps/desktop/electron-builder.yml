@@ -1,0 +1,66 @@
+appId: com.ki-assistent.desktop
+productName: KI-Assistent
+copyright: Copyright © 2025 KI-Assistent
+
+directories:
+  buildResources: resources
+  output: release
+
+files:
+  - out/**/*
+  - assets/**/*
+  - package.json
+
+asar: true
+asarUnpack:
+  - assets/tray/**/*
+
+npmRebuild: false
+afterPack: scripts/after-pack.js
+
+extraResources:
+  - from: gateway-bundle
+    to: gateway
+    filter:
+      - "**/*"
+      - "!src/**"
+      - "!test/**"
+      - "!**/*.test.ts"
+      - "!docs/**"
+      - "!*.md"
+      - "!tsconfig*.json"
+      - "!tsdown.config.ts"
+      - "!vitest*.config.ts"
+
+mac:
+  target:
+    - target: zip
+      arch: x64
+  hardenedRuntime: true
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
+  identity: null
+  notarize: false
+
+win:
+  target:
+    - target: nsis
+      arch: x64
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  target:
+    - target: deb
+      arch: x64
+    - target: AppImage
+      arch: x64
+
+publish:
+  provider: github
+  private: true
+  owner: Antonio20045
+  repo: ki-assistent

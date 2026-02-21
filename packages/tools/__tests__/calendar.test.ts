@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import {
+  createCalendarTool,
+  parseArgs,
+  formatEvent,
+  assertGoogleApisUrl,
+} from '../src/calendar'
+import type { GoogleOAuthContext } from '../src/types'
 import { assertNoEval, assertNoUnauthorizedFetch } from './helpers'
 
 // ---------------------------------------------------------------------------
@@ -15,18 +22,6 @@ const sourceCode = readFileSync(SOURCE_PATH, 'utf-8')
 // ---------------------------------------------------------------------------
 
 const mockFetch = vi.fn()
-vi.stubGlobal('fetch', mockFetch)
-
-// ---------------------------------------------------------------------------
-// Import after mocking
-// ---------------------------------------------------------------------------
-
-const {
-  calendarTool,
-  parseArgs,
-  formatEvent,
-  assertGoogleApisUrl,
-} = await import('../src/calendar')
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,20 +55,15 @@ function mockJsonResponse(data: unknown, status = 200, statusText = 'OK'): Respo
   } as Response
 }
 
-function setEnvTokens(): void {
-  process.env['GOOGLE_ACCESS_TOKEN'] = 'test-access-token'
-  process.env['GOOGLE_REFRESH_TOKEN'] = 'test-refresh-token'
-  process.env['GOOGLE_CLIENT_ID'] = 'test-client-id'
-  process.env['GOOGLE_CLIENT_SECRET'] = 'test-client-secret'
-  process.env['GOOGLE_TOKEN_EXPIRES_AT'] = String(Date.now() + 3_600_000)
-}
-
-function clearEnvTokens(): void {
-  delete process.env['GOOGLE_ACCESS_TOKEN']
-  delete process.env['GOOGLE_REFRESH_TOKEN']
-  delete process.env['GOOGLE_CLIENT_ID']
-  delete process.env['GOOGLE_CLIENT_SECRET']
-  delete process.env['GOOGLE_TOKEN_EXPIRES_AT']
+function makeOAuthContext(overrides?: Partial<GoogleOAuthContext>): GoogleOAuthContext {
+  return {
+    accessToken: 'test-access-token',
+    refreshToken: 'test-refresh-token',
+    clientId: 'test-client-id',
+    clientSecret: 'test-client-secret',
+    expiresAt: Date.now() + 3_600_000,
+    ...overrides,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -82,12 +72,12 @@ function clearEnvTokens(): void {
 
 describe('calendar tool', () => {
   beforeEach(() => {
+    vi.stubGlobal('fetch', mockFetch)
     mockFetch.mockReset()
-    setEnvTokens()
   })
 
   afterEach(() => {
-    clearEnvTokens()
+    vi.unstubAllGlobals()
   })
 
   // -------------------------------------------------------------------------
@@ -322,7 +312,8 @@ describe('calendar tool', () => {
 
       mockFetch.mockResolvedValueOnce(mockJsonResponse(apiResponse))
 
-      const result = await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      const result = await tool.execute({
         action: 'listEvents',
         timeMin: '2024-01-15T00:00:00Z',
         timeMax: '2024-01-15T23:59:59Z',
@@ -348,7 +339,8 @@ describe('calendar tool', () => {
     it('sends request to correct URL with query parameters', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ items: [] }))
 
-      await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      await tool.execute({
         action: 'listEvents',
         timeMin: '2024-01-01T00:00:00Z',
         timeMax: '2024-01-31T23:59:59Z',
@@ -366,7 +358,8 @@ describe('calendar tool', () => {
     it('handles empty event list', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ items: [] }))
 
-      const result = await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      const result = await tool.execute({
         action: 'listEvents',
         timeMin: '2024-01-01T00:00:00Z',
         timeMax: '2024-01-31T23:59:59Z',
@@ -393,7 +386,8 @@ describe('calendar tool', () => {
       }
       mockFetch.mockResolvedValueOnce(mockJsonResponse(created))
 
-      await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      await tool.execute({
         action: 'createEvent',
         title: 'Team Meeting',
         start: '2024-01-15T10:00:00Z',
@@ -429,7 +423,8 @@ describe('calendar tool', () => {
         }),
       )
 
-      const result = await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      const result = await tool.execute({
         action: 'createEvent',
         title: 'Quick Chat',
         start: '2024-02-01T14:00:00Z',
@@ -460,7 +455,8 @@ describe('calendar tool', () => {
         }),
       )
 
-      const result = await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      const result = await tool.execute({
         action: 'createEvent',
         title: 'Lunch',
         start: '2024-01-15T12:00:00Z',
@@ -489,7 +485,8 @@ describe('calendar tool', () => {
         }),
       )
 
-      await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      await tool.execute({
         action: 'updateEvent',
         eventId: 'evt-123',
         updates: { title: 'Updated Title' },
@@ -516,7 +513,8 @@ describe('calendar tool', () => {
         }),
       )
 
-      await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      await tool.execute({
         action: 'updateEvent',
         eventId: 'evt-123',
         updates: { description: 'New description' },
@@ -538,7 +536,8 @@ describe('calendar tool', () => {
     it('sends DELETE to correct URL', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({}, 204, 'No Content'))
 
-      const result = await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      const result = await tool.execute({
         action: 'deleteEvent',
         eventId: 'evt-to-delete',
       })
@@ -560,7 +559,8 @@ describe('calendar tool', () => {
     it('URL-encodes eventId with special characters', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({}, 204, 'No Content'))
 
-      await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      await tool.execute({
         action: 'deleteEvent',
         eventId: 'evt/special+chars',
       })
@@ -585,7 +585,8 @@ describe('calendar tool', () => {
       // Retry with new token
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ items: [] }))
 
-      const result = await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext())
+      const result = await tool.execute({
         action: 'listEvents',
         timeMin: '2024-01-01T00:00:00Z',
         timeMax: '2024-01-31T23:59:59Z',
@@ -607,9 +608,6 @@ describe('calendar tool', () => {
     })
 
     it('refreshes when token is expired', async () => {
-      // Set expired token
-      process.env['GOOGLE_TOKEN_EXPIRES_AT'] = String(Date.now() - 1000)
-
       // Token refresh call
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ access_token: 'refreshed-token', expires_in: 3600 }),
@@ -617,7 +615,8 @@ describe('calendar tool', () => {
       // Actual API call
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ items: [] }))
 
-      await calendarTool.execute({
+      const tool = createCalendarTool(makeOAuthContext({ expiresAt: Date.now() - 1000 }))
+      await tool.execute({
         action: 'listEvents',
         timeMin: '2024-01-01T00:00:00Z',
         timeMax: '2024-01-31T23:59:59Z',
@@ -634,13 +633,36 @@ describe('calendar tool', () => {
       // Token refresh: fails
       mockFetch.mockResolvedValueOnce(mockJsonResponse({}, 400, 'Bad Request'))
 
+      const tool = createCalendarTool(makeOAuthContext())
       await expect(
-        calendarTool.execute({
+        tool.execute({
           action: 'listEvents',
           timeMin: '2024-01-01T00:00:00Z',
           timeMax: '2024-01-31T23:59:59Z',
         }),
       ).rejects.toThrow('Token refresh failed')
+    })
+
+    it('calls onTokenRefreshed on 401 refresh', async () => {
+      const onRefresh = vi.fn()
+
+      // First call: 401
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({}, 401, 'Unauthorized'))
+      // Token refresh call
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ access_token: 'new-token', expires_in: 3600 }),
+      )
+      // Retry
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ items: [] }))
+
+      const tool = createCalendarTool(makeOAuthContext({ onTokenRefreshed: onRefresh }))
+      await tool.execute({
+        action: 'listEvents',
+        timeMin: '2024-01-01T00:00:00Z',
+        timeMax: '2024-01-31T23:59:59Z',
+      })
+
+      expect(onRefresh).toHaveBeenCalledWith('new-token', expect.any(Number))
     })
   })
 
@@ -650,19 +672,23 @@ describe('calendar tool', () => {
 
   describe('tool metadata', () => {
     it('has correct name', () => {
-      expect(calendarTool.name).toBe('calendar')
+      const tool = createCalendarTool(makeOAuthContext())
+      expect(tool.name).toBe('calendar')
     })
 
     it('has permissions', () => {
-      expect(calendarTool.permissions).toEqual(['oauth:google', 'net:http'])
+      const tool = createCalendarTool(makeOAuthContext())
+      expect(tool.permissions).toEqual(['oauth:google', 'net:http'])
     })
 
     it('requires confirmation', () => {
-      expect(calendarTool.requiresConfirmation).toBe(true)
+      const tool = createCalendarTool(makeOAuthContext())
+      expect(tool.requiresConfirmation).toBe(true)
     })
 
     it('runs on server', () => {
-      expect(calendarTool.runsOn).toBe('server')
+      const tool = createCalendarTool(makeOAuthContext())
+      expect(tool.runsOn).toBe('server')
     })
   })
 
@@ -674,25 +700,14 @@ describe('calendar tool', () => {
     it('throws on API error', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({}, 500, 'Internal Server Error'))
 
+      const tool = createCalendarTool(makeOAuthContext())
       await expect(
-        calendarTool.execute({
+        tool.execute({
           action: 'listEvents',
           timeMin: '2024-01-01T00:00:00Z',
           timeMax: '2024-01-31T23:59:59Z',
         }),
       ).rejects.toThrow('Calendar API error: 500 Internal Server Error')
-    })
-
-    it('throws when GOOGLE_ACCESS_TOKEN is missing', async () => {
-      clearEnvTokens()
-
-      await expect(
-        calendarTool.execute({
-          action: 'listEvents',
-          timeMin: '2024-01-01T00:00:00Z',
-          timeMax: '2024-01-31T23:59:59Z',
-        }),
-      ).rejects.toThrow('GOOGLE_ACCESS_TOKEN')
     })
   })
 })

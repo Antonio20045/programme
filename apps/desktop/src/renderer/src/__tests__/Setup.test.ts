@@ -37,7 +37,7 @@ vi.mock('react', () => ({
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
 }))
 
-import Setup, { AccessScreen, ApiKeyScreen, PersonaScreen, DoneScreen } from '../pages/Setup'
+import Setup, { AccessScreen, PersonaScreen, DoneScreen } from '../pages/Setup'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -87,27 +87,10 @@ describe('Setup', () => {
     expect(result).toHaveProperty('type', AccessScreen)
   })
 
-  it('renders ApiKeyScreen when step is apikey', () => {
-    // Setup slots: step, provider, apiKey, model, personaName, tone
-    stateSlots = [
-      makeSlot('apikey'),      // step
-      makeSlot('anthropic'),   // provider
-      makeSlot(''),            // apiKey
-      makeSlot('anthropic/claude-sonnet-4-5'), // model
-      makeSlot('Alex'),        // personaName
-      makeSlot('friendly'),    // tone
-    ]
-    stateIndex = 0
-    const result = Setup({ onSetupComplete: mockOnSetupComplete })
-    expect(result).toHaveProperty('type', ApiKeyScreen)
-  })
-
   it('renders PersonaScreen when step is persona', () => {
+    // Setup slots: step, personaName, tone
     stateSlots = [
       makeSlot('persona'),
-      makeSlot('anthropic'),
-      makeSlot(''),
-      makeSlot('anthropic/claude-sonnet-4-5'),
       makeSlot('Alex'),
       makeSlot('friendly'),
     ]
@@ -117,17 +100,25 @@ describe('Setup', () => {
   })
 
   it('renders DoneScreen when step is done', () => {
+    // Setup slots: step, personaName, tone
     stateSlots = [
       makeSlot('done'),
-      makeSlot('anthropic'),
-      makeSlot('test-key-value'),
-      makeSlot('anthropic/claude-sonnet-4-5'),
       makeSlot('Alex'),
       makeSlot('friendly'),
     ]
     stateIndex = 0
     const result = Setup({ onSetupComplete: mockOnSetupComplete })
     expect(result).toHaveProperty('type', DoneScreen)
+  })
+
+  it('skips directly from access to persona (no apikey step)', () => {
+    // Default step is 'access', which renders AccessScreen
+    stateIndex = 0
+    const result = Setup({ onSetupComplete: mockOnSetupComplete })
+    expect(result).toHaveProperty('type', AccessScreen)
+    // The onNext prop should set step to 'persona' (not 'apikey')
+    const onNext = (result as { props: { onNext: () => void } }).props.onNext
+    expect(typeof onNext).toBe('function')
   })
 })
 
@@ -271,177 +262,6 @@ describe('AccessScreen', () => {
 })
 
 // ---------------------------------------------------------------------------
-// ApiKeyScreen component tests
-// ---------------------------------------------------------------------------
-
-describe('ApiKeyScreen', () => {
-  const mockOnNext = vi.fn()
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    resetState()
-  })
-
-  // ApiKeyScreen slots: provider, apiKey, showKey, validating, validationError, validated
-
-  it('is a function component', () => {
-    expect(typeof ApiKeyScreen).toBe('function')
-  })
-
-  it('renders without crashing', () => {
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    expect(result).toBeDefined()
-  })
-
-  it('shows heading "Welchen KI-Anbieter nutzt du?"', () => {
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('Welchen KI-Anbieter nutzt du?')
-  })
-
-  it('shows three provider cards', () => {
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('Anthropic')
-    expect(json).toContain('OpenAI')
-    expect(json).toContain('Google')
-  })
-
-  it('shows provider sublabels', () => {
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('Claude')
-    expect(json).toContain('GPT')
-    expect(json).toContain('Gemini')
-  })
-
-  it('has Anthropic as default selection with border-blue-500', () => {
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    // Anthropic card should be selected (border-blue-500)
-    expect(json).toContain('border-blue-500')
-  })
-
-  it('shows API key input as password type by default', () => {
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('"type":"password"')
-  })
-
-  it('shows API key input as text type when showKey is true', () => {
-    // provider, apiKey, showKey=true, validating, validationError, validated
-    stateSlots = [
-      makeSlot('anthropic'),
-      makeSlot(''),
-      makeSlot(true),    // showKey
-      makeSlot(false),
-      makeSlot(''),
-      makeSlot(false),
-    ]
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('"type":"text"')
-  })
-
-  it('shows Weiter button', () => {
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('Weiter')
-  })
-
-  it('disables Weiter button when apiKey is too short', () => {
-    // apiKey empty → button disabled
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('"disabled":true')
-  })
-
-  it('shows "Wird geprüft..." when validating', () => {
-    stateSlots = [
-      makeSlot('anthropic'),
-      makeSlot('a'.repeat(25)),
-      makeSlot(false),
-      makeSlot(true),   // validating
-      makeSlot(''),
-      makeSlot(false),
-    ]
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('Wird geprüft...')
-  })
-
-  it('shows validation error when set', () => {
-    stateSlots = [
-      makeSlot('anthropic'),
-      makeSlot('a'.repeat(25)),
-      makeSlot(false),
-      makeSlot(false),
-      makeSlot('Ungültiger API Key'),  // validationError
-      makeSlot(false),
-    ]
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('Ungültiger API Key')
-    expect(json).toContain('text-red-400')
-  })
-
-  it('shows red border on input when validation error exists', () => {
-    stateSlots = [
-      makeSlot('anthropic'),
-      makeSlot('a'.repeat(25)),
-      makeSlot(false),
-      makeSlot(false),
-      makeSlot('Fehler'),
-      makeSlot(false),
-    ]
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('border-red-500')
-  })
-
-  it('shows green border when validated', () => {
-    stateSlots = [
-      makeSlot('anthropic'),
-      makeSlot('a'.repeat(25)),
-      makeSlot(false),
-      makeSlot(false),
-      makeSlot(''),
-      makeSlot(true),   // validated
-    ]
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('border-emerald-500')
-  })
-
-  it('shows help link', () => {
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('Wo bekomme ich einen API Key?')
-  })
-
-  it('uses animate-slide-in class', () => {
-    stateIndex = 0
-    const result = ApiKeyScreen({ onNext: mockOnNext })
-    const json = JSON.stringify(result)
-    expect(json).toContain('animate-slide-in')
-  })
-})
-
-// ---------------------------------------------------------------------------
 // PersonaScreen component tests
 // ---------------------------------------------------------------------------
 
@@ -566,13 +386,13 @@ describe('DoneScreen', () => {
 
   it('renders without crashing', () => {
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     expect(result).toBeDefined()
   })
 
   it('shows "Wird eingerichtet..." while running', () => {
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('Wird eingerichtet...')
   })
@@ -583,7 +403,7 @@ describe('DoneScreen', () => {
       makeSlot(''),      // errorMsg
     ]
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('TestBot')
     expect(json).toContain('ist bereit!')
@@ -591,7 +411,7 @@ describe('DoneScreen', () => {
 
   it('shows spinner while running', () => {
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('animate-spin')
   })
@@ -602,7 +422,7 @@ describe('DoneScreen', () => {
       makeSlot(''),      // errorMsg
     ]
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('svg')
     expect(json).toContain('circle')
@@ -611,7 +431,7 @@ describe('DoneScreen', () => {
 
   it('shows "Los geht\'s" button', () => {
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain("Los geht'")
   })
@@ -619,7 +439,7 @@ describe('DoneScreen', () => {
   it('disables button while taskStatus is running', () => {
     // Default taskStatus = 'running'
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('"disabled":true')
   })
@@ -630,7 +450,7 @@ describe('DoneScreen', () => {
       makeSlot(''),      // errorMsg
     ]
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('"disabled":false')
   })
@@ -641,7 +461,7 @@ describe('DoneScreen', () => {
       makeSlot('Config write failed'),      // errorMsg
     ]
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('Config write failed')
   })
@@ -652,7 +472,7 @@ describe('DoneScreen', () => {
       makeSlot('Some error'),
     ]
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('Erneut versuchen')
   })
@@ -663,7 +483,7 @@ describe('DoneScreen', () => {
       makeSlot('Some error'),
     ]
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('"disabled":true')
   })
@@ -674,21 +494,21 @@ describe('DoneScreen', () => {
       makeSlot('Some error'),
     ]
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('Einrichtung fehlgeschlagen')
   })
 
   it('does not show error section when taskStatus is running', () => {
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).not.toContain('Erneut versuchen')
   })
 
   it('uses animate-slide-in class', () => {
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('animate-slide-in')
   })
@@ -699,7 +519,7 @@ describe('DoneScreen', () => {
       makeSlot(''),      // errorMsg
     ]
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     const json = JSON.stringify(result)
     expect(json).toContain('animate-check-circle')
     expect(json).toContain('animate-check-mark')
@@ -711,7 +531,7 @@ describe('DoneScreen', () => {
       makeSlot(''),
     ]
     stateIndex = 0
-    const result = DoneScreen({ config: defaultConfig, apiKey: 'test', onComplete: mockOnComplete })
+    const result = DoneScreen({ config: defaultConfig, onComplete: mockOnComplete })
     // The button's onClick should be the onComplete function
     const json = JSON.stringify(result)
     expect(json).toContain("Los geht'")

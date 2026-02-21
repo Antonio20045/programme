@@ -1,14 +1,5 @@
 import { useCallback } from 'react'
-
-const ALLOWED_EXTENSIONS = new Set([
-  'txt', 'pdf', 'md', 'csv', 'json', 'png', 'jpg', 'docx',
-])
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
-
-function getExtension(name: string): string {
-  const dot = name.lastIndexOf('.')
-  return dot === -1 ? '' : name.slice(dot + 1).toLowerCase()
-}
+import { ALLOWED_EXTENSIONS, MAX_FILE_SIZE, getExtension } from '../utils/file-validation'
 
 export default function AttachmentButton({
   onFilesSelected,
@@ -32,10 +23,7 @@ export default function AttachmentButton({
         return
       }
       const binary = atob(entry.buffer)
-      const bytes = new Uint8Array(binary.length)
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i)
-      }
+      const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0))
       files.push(new File([bytes], entry.name, { lastModified: Date.now() }))
     }
     onFilesSelected(files)
@@ -47,7 +35,7 @@ export default function AttachmentButton({
       onClick={() => {
         void handleClick()
       }}
-      className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
+      className="active-press rounded-lg p-2 text-content-secondary transition-colors hover:bg-surface-hover hover:text-content"
       aria-label="Datei anhängen"
       title="Datei anhängen"
     >

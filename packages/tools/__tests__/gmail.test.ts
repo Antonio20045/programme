@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  gmailTool,
+  createGmailTool,
   validateGmailUrl,
   parseArgs,
   buildRawEmail,
@@ -11,8 +11,8 @@ import {
   extractHeader,
   extractBody,
   parseMessage,
-  _resetTokenCache,
 } from '../src/gmail'
+import type { GoogleOAuthContext } from '../src/types'
 import { assertNoEval, assertNoUnauthorizedFetch } from './helpers'
 
 // ---------------------------------------------------------------------------
@@ -37,27 +37,31 @@ function jsonResponse(data: unknown, status = 200): Response {
 }
 
 // ---------------------------------------------------------------------------
+// OAuth context helper
+// ---------------------------------------------------------------------------
+
+function makeOAuthContext(overrides?: Partial<GoogleOAuthContext>): GoogleOAuthContext {
+  return {
+    accessToken: 'test-access-token',
+    refreshToken: 'test-refresh-token',
+    clientId: 'test-client-id',
+    clientSecret: 'test-client-secret',
+    expiresAt: Date.now() + 3_600_000,
+    ...overrides,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
   vi.stubGlobal('fetch', mockFetch)
   mockFetch.mockReset()
-  _resetTokenCache()
-
-  // Default env vars for auth
-  process.env['GMAIL_ACCESS_TOKEN'] = 'test-access-token'
-  process.env['GMAIL_REFRESH_TOKEN'] = 'test-refresh-token'
-  process.env['GOOGLE_CLIENT_ID'] = 'test-client-id'
-  process.env['GOOGLE_CLIENT_SECRET'] = 'test-client-secret'
 })
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  delete process.env['GMAIL_ACCESS_TOKEN']
-  delete process.env['GMAIL_REFRESH_TOKEN']
-  delete process.env['GOOGLE_CLIENT_ID']
-  delete process.env['GOOGLE_CLIENT_SECRET']
 })
 
 // ---------------------------------------------------------------------------
@@ -311,24 +315,29 @@ describe('buildRawEmail', () => {
 
 describe('gmailTool metadata', () => {
   it('has correct name', () => {
-    expect(gmailTool.name).toBe('gmail')
+    const tool = createGmailTool(makeOAuthContext())
+    expect(tool.name).toBe('gmail')
   })
 
   it('has correct permissions', () => {
-    expect(gmailTool.permissions).toEqual(['oauth:google', 'net:http'])
+    const tool = createGmailTool(makeOAuthContext())
+    expect(tool.permissions).toEqual(['oauth:google', 'net:http'])
   })
 
   it('requires confirmation', () => {
-    expect(gmailTool.requiresConfirmation).toBe(true)
+    const tool = createGmailTool(makeOAuthContext())
+    expect(tool.requiresConfirmation).toBe(true)
   })
 
   it('runs on server', () => {
-    expect(gmailTool.runsOn).toBe('server')
+    const tool = createGmailTool(makeOAuthContext())
+    expect(tool.runsOn).toBe('server')
   })
 
   it('has valid parameter schema', () => {
-    expect(gmailTool.parameters.type).toBe('object')
-    expect(gmailTool.parameters.required).toEqual(['action'])
+    const tool = createGmailTool(makeOAuthContext())
+    expect(tool.parameters.type).toBe('object')
+    expect(tool.parameters.required).toEqual(['action'])
   })
 })
 
@@ -385,7 +394,8 @@ describe('readInbox', () => {
       }),
     )
 
-    const result = await gmailTool.execute({ action: 'readInbox', limit: 2 })
+    const tool = createGmailTool(makeOAuthContext())
+    const result = await tool.execute({ action: 'readInbox', limit: 2 })
     const content = result.content[0]
     expect(content).toBeDefined()
     expect(content?.type).toBe('text')
@@ -420,7 +430,8 @@ describe('sendEmail', () => {
       jsonResponse({ id: 'sent-1', threadId: 'thread-new' }),
     )
 
-    const result = await gmailTool.execute({
+    const tool = createGmailTool(makeOAuthContext())
+    const result = await tool.execute({
       action: 'sendEmail',
       to: 'bob@example.com',
       subject: 'Test Subject',
@@ -489,7 +500,8 @@ describe('replyToEmail', () => {
       jsonResponse({ id: 'reply-1', threadId: 'thread-1' }),
     )
 
-    const result = await gmailTool.execute({
+    const tool = createGmailTool(makeOAuthContext())
+    const result = await tool.execute({
       action: 'replyToEmail',
       messageId: 'msg-original',
       body: 'Thanks for your email!',
@@ -547,7 +559,8 @@ describe('replyToEmail', () => {
       jsonResponse({ id: 'reply-3', threadId: 'thread-1' }),
     )
 
-    await gmailTool.execute({
+    const tool = createGmailTool(makeOAuthContext())
+    await tool.execute({
       action: 'replyToEmail',
       messageId: 'msg-3',
       body: 'Reply to third',
@@ -605,7 +618,8 @@ describe('token refresh flow', () => {
       }),
     )
 
-    const result = await gmailTool.execute({ action: 'readInbox', limit: 1 })
+    const tool = createGmailTool(makeOAuthContext())
+    const result = await tool.execute({ action: 'readInbox', limit: 1 })
     const content = result.content[0]
     const parsed = JSON.parse((content as { text: string }).text) as {
       count: number
@@ -625,31 +639,30 @@ describe('token refresh flow', () => {
     expect(retryHeaders?.['Authorization']).toBe('Bearer new-access-token')
   })
 
-  it('uses refresh token when no access token in env', async () => {
-    delete process.env['GMAIL_ACCESS_TOKEN']
-    _resetTokenCache()
+  it('calls onTokenRefreshed on 401 refresh', async () => {
+    const onRefresh = vi.fn()
+
+    // First call returns 401
+    mockFetch.mockResolvedValueOnce(
+      new Response('Unauthorized', { status: 401, statusText: 'Unauthorized' }),
+    )
 
     // Refresh token call
     mockFetch.mockResolvedValueOnce(
       jsonResponse({
-        access_token: 'refreshed-token',
+        access_token: 'new-access-token',
         expires_in: 3600,
         token_type: 'Bearer',
       }),
     )
 
-    // List messages
+    // Retry with new token — empty inbox
     mockFetch.mockResolvedValueOnce(jsonResponse({ messages: [] }))
 
-    await gmailTool.execute({ action: 'readInbox' })
+    const tool = createGmailTool(makeOAuthContext({ onTokenRefreshed: onRefresh }))
+    await tool.execute({ action: 'readInbox' })
 
-    const refreshCallUrl = String(mockFetch.mock.calls[0]?.[0] ?? '')
-    expect(refreshCallUrl).toContain('oauth2.googleapis.com/token')
-
-    const listCallArgs = mockFetch.mock.calls[1]
-    const headers = (listCallArgs?.[1] as RequestInit | undefined)
-      ?.headers as Record<string, string> | undefined
-    expect(headers?.['Authorization']).toBe('Bearer refreshed-token')
+    expect(onRefresh).toHaveBeenCalledWith('new-access-token', expect.any(Number))
   })
 })
 

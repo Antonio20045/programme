@@ -30,13 +30,14 @@ vi.mock('react', () => ({
     return [slot.value, slot.setter]
   },
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
+  useMemo: <T,>(fn: () => T) => fn(),
 }))
 
 import type { Session } from '../hooks/useSessions'
 import type { SessionListProps } from '../components/SessionList'
 
 // We import the module to verify it exports correctly
-import SessionList from '../components/SessionList'
+import SessionList, { groupSessions } from '../components/SessionList'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -146,5 +147,60 @@ describe('SessionList', () => {
     expect(sorted[0]!.id).toBe('s2')
     expect(sorted[1]!.id).toBe('s3')
     expect(sorted[2]!.id).toBe('s1')
+  })
+
+  it('renders time group headers', () => {
+    const props = createProps({
+      sessions: [
+        createSession('s1', 'Today Chat', 0),
+        createSession('s2', 'Yesterday Chat', 1),
+      ],
+    })
+    stateIndex = 0
+    const result = SessionList(props)
+    const json = JSON.stringify(result)
+    expect(json).toContain('Heute')
+    expect(json).toContain('Gestern')
+  })
+
+  it('shows hover delete button with aria-label', () => {
+    const props = createProps({
+      sessions: [createSession('s1', 'Chat 1')],
+    })
+    stateIndex = 0
+    const result = SessionList(props)
+    const json = JSON.stringify(result)
+    expect(json).toContain('Chat löschen')
+  })
+})
+
+describe('groupSessions', () => {
+  it('returns empty array for no sessions', () => {
+    expect(groupSessions([])).toEqual([])
+  })
+
+  it('groups sessions by time period', () => {
+    const sessions = [
+      createSession('s1', 'Today', 0),
+      createSession('s2', 'Also Today', 0),
+      createSession('s3', 'Yesterday', 1),
+    ]
+    const groups = groupSessions(sessions)
+    expect(groups).toHaveLength(2)
+    expect(groups[0]!.label).toBe('Heute')
+    expect(groups[0]!.sessions).toHaveLength(2)
+    expect(groups[1]!.label).toBe('Gestern')
+    expect(groups[1]!.sessions).toHaveLength(1)
+  })
+
+  it('preserves insertion order of groups', () => {
+    const sessions = [
+      createSession('s1', 'Old', 10),
+      createSession('s2', 'Today', 0),
+    ]
+    const groups = groupSessions(sessions)
+    // First group seen is "Diesen Monat" (10 days ago), then "Heute"
+    expect(groups[0]!.label).not.toBe('Heute')
+    expect(groups[1]!.label).toBe('Heute')
   })
 })

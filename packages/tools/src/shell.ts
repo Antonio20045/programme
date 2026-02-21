@@ -30,12 +30,32 @@ const BLOCKED_BINARIES: ReadonlySet<string> = new Set([
   'bash', 'sh', 'zsh', 'csh', 'tcsh', 'fish', 'dash', 'ksh',
   // Scripting runtimes — interpreter escape
   'python', 'python3', 'node', 'perl', 'ruby', 'php', 'lua',
+  // Additional interpreters (macOS AppleScript, Tcl, Expect)
+  'osascript', 'tclsh', 'wish', 'expect',
   // Privilege escalation
   'sudo', 'doas', 'pkexec', 'su', 'run0',
   // Process wrappers that bypass validation
   'env', 'xargs', 'nohup', 'strace', 'ltrace',
   // Network tools — data exfiltration / download
-  'curl', 'wget', 'nc', 'ncat', 'socat',
+  'curl', 'wget', 'nc', 'ncat', 'socat', 'ssh', 'scp', 'sftp',
+  // Package managers — can download and execute arbitrary code
+  'npm', 'npx', 'yarn', 'pnpm', 'bun',
+  // Build tools — execute arbitrary build scripts
+  'make', 'cmake',
+  // File manipulation — exfiltration without path validation
+  'cp', 'mv', 'cat', 'head', 'tail', 'less', 'more',
+  // Text processing — can read arbitrary files or transform output
+  'awk', 'sed', 'tee', 'tr',
+  // File search — can enumerate filesystem structure
+  'find',
+  // Symlink creation — can bypass filesystem tool path validation
+  'ln',
+  // macOS-specific — open URLs/apps, modify system prefs
+  'open', 'defaults', 'dscl',
+  // Scheduled execution — persistence
+  'crontab', 'at',
+  // Version control — can download code and execute hooks
+  'git',
   // System-level destructive commands
   'mount', 'umount', 'reboot', 'shutdown', 'halt', 'poweroff',
   'kill', 'killall', 'launchctl', 'systemctl',

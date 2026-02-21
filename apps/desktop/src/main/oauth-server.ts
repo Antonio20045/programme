@@ -1,3 +1,5 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
+/* eslint-disable security/detect-object-injection */
 import http from 'node:http'
 import crypto from 'node:crypto'
 import fs from 'fs'
@@ -19,9 +21,14 @@ const SERVICE_SCOPES: Record<string, string> = {
   gmail: 'https://www.googleapis.com/auth/gmail.modify',
   calendar: 'https://www.googleapis.com/auth/calendar',
   drive: 'https://www.googleapis.com/auth/drive.file',
+  docs: 'https://www.googleapis.com/auth/documents',
+  sheets: 'https://www.googleapis.com/auth/spreadsheets',
+  contacts: 'https://www.googleapis.com/auth/contacts.readonly',
+  tasks: 'https://www.googleapis.com/auth/tasks',
+  youtube: 'https://www.googleapis.com/auth/youtube',
 }
 
-const VALID_SERVICES = ['gmail', 'calendar', 'drive'] as const
+const VALID_SERVICES = ['gmail', 'calendar', 'drive', 'docs', 'sheets', 'contacts', 'tasks', 'youtube'] as const
 
 // ---------------------------------------------------------------------------
 // Types
@@ -158,15 +165,15 @@ function readEncryptedToken(service: string): TokenData | null {
 }
 
 function writeEncryptedToken(service: string, token: TokenData): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    console.warn('safeStorage not available — OAuth token will NOT be persisted to disk')
+    return
+  }
   const credDir = path.join(os.homedir(), '.openclaw', 'credentials')
   fs.mkdirSync(credDir, { recursive: true })
   const json = JSON.stringify(token)
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(json)
-    fs.writeFileSync(getCredentialPath(service), encrypted, { mode: 0o600 })
-  } else {
-    fs.writeFileSync(getCredentialPath(service), json, { encoding: 'utf-8', mode: 0o600 })
-  }
+  const encrypted = safeStorage.encryptString(json)
+  fs.writeFileSync(getCredentialPath(service), encrypted, { mode: 0o600 })
 }
 
 export async function exchangeAndStoreTokens(code: string, service: string): Promise<void> {

@@ -6,7 +6,7 @@ Persönlicher KI-Assistent für Nicht-Entwickler. Electron Desktop + React Nativ
 
 ## WICHTIG — Absolute Regeln
 
-- **KEINE bestehenden OpenClaw-Dateien ändern.** NUR 3 additive Änderungen: `config.ts` (Headless-Flag), `channels/in-app.ts` (neuer Channel), `tools.allowExternal = false` (Lockdown). Upstream Merge muss IMMER möglich bleiben.
+- **KEINE bestehenden OpenClaw-Dateien ändern.** NUR 4 additive Änderungen: `config.ts` (Headless-Flag), `channels/in-app.ts` (In-App Channel + Cost Optimizer), `tools.allowExternal = false` (Lockdown), `run.ts` (Cost Optimizer Hooks, ~15 Zeilen). Upstream Merge muss IMMER möglich bleiben.
 - **KEIN eval(), Function(), exec() mit User-Input.** Keine Ausnahme. spawn/execFile statt exec.
 - **Secrets NUR in Env Vars oder OS Keychain.** NIE im Code, NIE in Config-Dateien.
 - **NUR tun was im Prompt steht.** Komponente erstellen ≠ anderswo einsetzen. Tool erstellen ≠ in anderen Dateien aufrufen. Im Zweifel: fragen.
@@ -204,8 +204,15 @@ In `.claude/agents/`: code-reviewer, security-auditor (OWASP+Electron+LLM-aware)
 | Fork-Regeln (Detail) | `.claude/rules/fork-rules.md` | Bei Arbeit am Gateway/OpenClaw |
 | Workflow (Detail) | `.claude/rules/workflow.md` | Bei Fragen zum Entwicklungsprozess |
 
+## Datenbank-Integration
+
+- Tools: Factory Pattern — `createXxxTool(userId, pool/oauth)` statt globale Instanzen.
+- Notes/Reminders: Per-User via `createNotesTool(userId, pool)` / `createRemindersInstance(userId, pool)`.
+- Gmail/Calendar: Per-User OAuth via `GoogleOAuthContext` (Tokens aus `user_oauth_tokens`, AES-256-GCM verschlüsselt).
+- Tool-Factory: `createUserTools(userId, pool)` erstellt alle User-Tools, Gmail/Calendar nur wenn OAuth-Tokens vorhanden.
+
 ## Aktueller Stand
 
-Phase: 7 — abgeschlossen
-Nächster Schritt: Phase 8 — Mobile App + Relay
-Letzter Commit: Phase 7: Server-Modus UI + gateway:fetch Proxy + Security-Hardening
+Phase: 7.x — Cost Optimizer Session 3 (Middleware + Runtime Integration)
+Naechster Schritt: Cost Optimizer Session 4 (Volle Model-Override Integration + Desktop Settings UI)
+Letzter Commit: DB-6: Gmail/Calendar Factory + Tool-Factory Integration

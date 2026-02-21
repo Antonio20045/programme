@@ -1,23 +1,37 @@
-# =============================================================================
+# ===========================================================================
 # KI-Assistent — Environment Variables
-# =============================================================================
-# Rename to .env in the project root and fill in your values:
-#   cp docker/env-example .env
-# =============================================================================
+# Copy to .env and fill in your values:  cp docker/env-example .env
+# ===========================================================================
 
-# LLM Provider (required)
-# ANTHROPIC_API_KEY=
+# --- LLM Provider (mindestens einer) ---
+# ANTHROPIC_API_KEY=sk-ant-...
+# OPENROUTER_API_KEY=sk-or-...
 
-# Fallback LLM Provider (optional)
-# OPENROUTER_API_KEY=
+# --- PostgreSQL ---
+POSTGRES_PASSWORD=change-me-to-a-secure-password
+# DATABASE_URL is auto-constructed in docker-compose.yml.
+# For standalone/Railway use: postgresql://user:pass@host:5432/dbname
+# DATABASE_URL=
 
-# Auth token for Gateway API access (recommended for production)
-# OPENCLAW_GATEWAY_TOKEN=
+# --- Gateway Auth ---
+# OPENCLAW_GATEWAY_TOKEN=change-me-to-a-random-string
 
-# Host port mapping for Gateway container (default: 18789)
+# --- Encryption (AES-256-GCM for OAuth tokens in DB) ---
+# 64 hex chars = 32 bytes. Generate: openssl rand -hex 32
+# TOKEN_ENCRYPTION_KEY=
+
+# --- Clerk (optional — without Clerk the gateway runs in local mode) ---
+# CLERK_SECRET_KEY=sk_...
+# CLERK_WEBHOOK_SECRET=whsec_...
+
+# --- Stripe (optional — only for billing) ---
+# STRIPE_SECRET_KEY=sk_test_...
+# STRIPE_WEBHOOK_SECRET=whsec_...
+
+# --- Google OAuth (optional — only for Gmail/Calendar tools) ---
+# GOOGLE_CLIENT_ID=...
+# GOOGLE_CLIENT_SECRET=...
+
+# --- Docker Compose Overrides ---
+# GATEWAY_BIND=lan
 # GATEWAY_PORT=18789
-
-# Bind mode inside container:
-#   loopback  — localhost only (default, healthcheck still works)
-#   lan       — all interfaces (required for host access via port mapping)
-# GATEWAY_BIND=loopback
