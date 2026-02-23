@@ -69,7 +69,8 @@
       "Bash(pgrep -f \"electron\" | head -20 ; pgrep -f \"dev:desktop\" | head -20)",
       "Bash(kill 30241 30720 30709 30708 30675 30205 30187 29744 29737 25146 2>/dev/null; sleep 1; pgrep -f \"electron\" | head -5)",
       "Bash(kill -9 30675 2>/dev/null; sleep 1; pgrep -f \"electron\" | head -5)",
-      "Bash(pkill -9 -f \"Electron\" 2>/dev/null; sleep 1; pgrep -f \"electron\\\\|Electron\" | head -5)"
+      "Bash(pkill -9 -f \"Electron\" 2>/dev/null; sleep 1; pgrep -f \"electron\\\\|Electron\" | head -5)",
+      "Bash(open -a Safari http://localhost:5173 2>/dev/null\nsleep 5\nscreencapture -x /tmp/safari-screenshot.png 2>&1)"
     ]
   },
   "enabledMcpjsonServers": [

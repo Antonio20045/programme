@@ -14,6 +14,10 @@ import { OAuthServer, exchangeAndStoreTokens, revokeTokens, getIntegrationStatus
 import { TrayManager } from './tray'
 import { initAutoUpdater, stopAutoUpdater } from './updater'
 
+// Fix: Run Chromium network service in-process to prevent out-of-process crash
+// (Electron 35 + macOS 13 — network_service_instance_impl.cc crash)
+app.commandLine.appendSwitch('enable-features', 'NetworkServiceInProcess2')
+
 let mainWindow: BrowserWindow | null = null
 let gatewayManager: GatewayManager | null = null
 let desktopAgent: DesktopAgent | null = null
@@ -162,7 +166,9 @@ function createWindow(): void {
   const clerkCsp = (process.env.CLERK_PUBLISHABLE_KEY ?? '').length > 0
     ? ' https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com'
     : ''
-  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+  mainWindow.webContents.session.webRequest.onHeadersReceived(
+    { urls: ['http://localhost:*/*', 'https://*/*', 'file://*'] },
+    (details, callback) => {
     const csp = app.isPackaged
       ? `default-src 'self'; script-src 'self'${clerkCsp}; style-src 'self' 'unsafe-inline'; connect-src 'self'${clerkCsp} https://clerk-telemetry.com https://challenges.cloudflare.com; img-src 'self' https://img.clerk.com; worker-src 'self' blob:; frame-src 'self'${clerkCsp} https://challenges.cloudflare.com https://accounts.google.com`
       : `default-src 'self' ws://localhost:5173; script-src 'self' 'unsafe-inline'${clerkCsp}; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:5173 http://localhost:5173 http://127.0.0.1:18789${clerkCsp} https://clerk-telemetry.com https://challenges.cloudflare.com; img-src 'self' https://img.clerk.com; worker-src 'self' blob:; frame-src 'self'${clerkCsp} https://challenges.cloudflare.com https://accounts.google.com`
@@ -187,10 +193,12 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+  if (!app.isPackaged && rendererUrl) {
+    mainWindow.loadURL(rendererUrl).catch((e: Error) => { console.error(`loadURL error: ${e.message}`) })
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+    const filePath = path.join(__dirname, '../renderer/index.html')
+    mainWindow.loadFile(filePath).catch((e: Error) => { console.error(`loadFile error: ${e.message}`) })
   }
 }
 
