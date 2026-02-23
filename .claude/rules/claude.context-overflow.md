@@ -6,7 +6,7 @@ erstelle SOFORT ein Handoff-Dokument. Frag NICHT nach — mach es einfach.
 ## Wann
 
 - Du hast mehrere Ansätze probiert und der gleiche oder ähnliche Fehler kommt immer wieder
-- Der Context wird knapp (prüfe mit /context — bei über 80% sofort handeln)
+- Der Context wird knapp (bei über 60% sofort /clear und Handoff schreiben. NICHT /compact verwenden)
 - Das Problem zieht immer mehr Dateien/Abhängigkeiten rein und wird größer statt kleiner
 
 ## Was tun

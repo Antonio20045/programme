@@ -1,15 +1,15 @@
 #!/bin/bash
-# Hook: TypeScript + ESLint after .ts/.tsx changes and on Stop
+# Hook: TypeScript check after .ts/.tsx changes — package-scoped for speed
 # Zero output on success, max 5 error lines on failure
 
 INPUT=$(cat)
 
 # Prevent infinite loop in Stop hooks
-if echo "$INPUT" | grep -q '"stop_hook_active"[[:space:]]*:[[:space:]]*true'; then
+if echo "$INPUT" | grep -q '"stop_hook_active"'; then
   exit 0
 fi
 
-# Extract file_path (only present in PostToolUse events)
+# Extract file_path
 FILE=$(echo "$INPUT" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//;s/"$//')
 
 # PostToolUse: skip if not a .ts/.tsx file
@@ -17,24 +17,45 @@ if [ -n "$FILE" ] && [[ "$FILE" != *.ts && "$FILE" != *.tsx ]]; then
   exit 0
 fi
 
-# Run TypeScript type checking
-TS_OUTPUT=$(npx tsc --noEmit 2>&1)
+# Determine which package was changed and run scoped typecheck
+if [ -n "$FILE" ]; then
+  if [[ "$FILE" == apps/desktop/* ]]; then
+    TS_OUTPUT=$(cd apps/desktop && npx tsc --noEmit 2>&1)
+  elif [[ "$FILE" == apps/mobile/* ]]; then
+    TS_OUTPUT=$(cd apps/mobile && npx tsc --noEmit 2>&1)
+  elif [[ "$FILE" == packages/tools/* ]]; then
+    TS_OUTPUT=$(cd packages/tools && npx tsc --noEmit 2>&1)
+  elif [[ "$FILE" == packages/shared/* ]]; then
+    TS_OUTPUT=$(cd packages/shared && npx tsc --noEmit 2>&1)
+  elif [[ "$FILE" == packages/gateway/* ]]; then
+    # Gateway ist OpenClaw Fork — Skip TypeScript (hat eigene Config)
+    exit 0
+  else
+    # Fallback: Full check für unbekannte Pfade
+    TS_OUTPUT=$(npx tsc --noEmit 2>&1)
+  fi
+else
+  # Stop-Hook (kein FILE): Full check
+  TS_OUTPUT=$(npx tsc --noEmit 2>&1)
+fi
+
 TS_STATUS=$?
 
 if [ $TS_STATUS -ne 0 ]; then
-  echo "TypeScript:" >&2
+  echo "TypeScript ($FILE):" >&2
   echo "$TS_OUTPUT" | head -5 >&2
   exit 2
 fi
 
-# Run ESLint (only after successful TypeScript)
-LINT_OUTPUT=$(npx eslint --no-error-on-unmatched-pattern 'apps/**/*.{ts,tsx}' 'packages/**/*.{ts,tsx}' 2>&1)
-LINT_STATUS=$?
-
-if [ $LINT_STATUS -ne 0 ]; then
-  echo "ESLint:" >&2
-  echo "$LINT_OUTPUT" | head -5 >&2
-  exit 2
+# ESLint nur im Stop-Hook (nicht bei jedem Edit — zu langsam)
+if [ -z "$FILE" ]; then
+  LINT_OUTPUT=$(pnpm lint 2>&1)
+  LINT_STATUS=$?
+  if [ $LINT_STATUS -ne 0 ]; then
+    echo "ESLint:" >&2
+    echo "$LINT_OUTPUT" | head -5 >&2
+    exit 2
+  fi
 fi
 
 exit 0

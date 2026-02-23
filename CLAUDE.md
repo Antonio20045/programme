@@ -174,13 +174,13 @@ PreToolUse-Hook:
 
 ## Workflow
 
-1. **Plan Mode zuerst** — Shift+Tab bis "Plan". 1 Minute Planung spart 10 Minuten Bauen.
-2. **UI-Arbeit: Verify-Loop** — Screenshot → vergleichen → iterieren bis es stimmt.
-3. **Feature Branch pro Phase** — `git checkout -b phase-X-name`, nach Abschluss mergen.
-4. **Commit nach jedem Teilschritt.**
-5. **Extended Thinking nutzen** — Reasoning-Tokens belasten den Context nicht.
-6. **/compact bei >60%** — mit Fokus-Anweisung. /clear bei neuem Feature.
-7. **Sub-Agents mit Sonnet für Research/QA** — billiger, größerer Context, verschmutzt Parent nicht.
+1. **Plan Mode zuerst** — Shift+Tab. Implementiere NICHTS ohne bestätigten Plan.
+2. **Commit nach jedem Teilschritt.** Git ist dein Undo-Button.
+3. **/clear nach jedem Feature oder Themenwechsel.** NIEMALS /compact. Bei Bedarf: /catchup für Kontext-Wiederherstellung.
+4. **Debugging: Runtime-First.** /debug [problem] oder debugger-Agent nutzen. NIEMALS Code statisch analysieren und "Root Cause" raten.
+5. **Zwei-Strikes-Regel:** Nach 2 fehlgeschlagenen Fix-Versuchen → Handoff-Dokument schreiben → /clear → /catchup → neu anfangen.
+6. **Starte Claude im Unterverzeichnis** wenn du nur an einem Package arbeitest (z.B. `cd apps/desktop && claude`).
+7. **1 Aufgabe pro Session.** Keine thematischen Sprünge.
 
 ## Verfügbare Agents
 

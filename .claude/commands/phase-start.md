@@ -6,7 +6,7 @@ argument_hint: "[phase-nr] | [phase-name]"
 Phase starten: $ARGUMENTS
 
 1. Lies CLAUDE.md komplett — verstehe den aktuellen Stand, die Architektur und alle Regeln.
-2. /context prüfen — über 60%? /compact mit Fokus auf die neue Phase.
+2. /context prüfen — über 60%? /clear und dann /catchup für die neue Phase.
 3. Feature Branch erstellen: `git checkout -b phase-$ARGUMENTS` (Nummer + Name aus Argument)
 4. Prüfe ob die vorherige Phase sauber abgeschlossen ist:
    - `pnpm typecheck` — fehlerfrei?

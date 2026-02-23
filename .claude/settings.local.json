@@ -56,7 +56,20 @@
       "Bash(ELECTRON_RUN_AS_NODE=1 \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/MacOS/KI-Assistent\" \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/Resources/gateway/openclaw.mjs\" gateway 2>&1 | head -50)",
       "Bash(ELECTRON_RUN_AS_NODE=1 \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/MacOS/KI-Assistent\" \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/Resources/gateway/openclaw.mjs\" gateway 2>&1 | head -30)",
       "Bash(ELECTRON_RUN_AS_NODE=1 \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/MacOS/KI-Assistent\" \"/Users/efstathia/Downloads/videos/programme/apps/desktop/release/mac/KI-Assistent.app/Contents/Resources/gateway/openclaw.mjs\" gateway 2>&1; echo \"EXIT CODE: $?\")",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(osascript -e 'quit app \"KI-Assistent\"' 2>/dev/null; sleep 2; pnpm --filter @ki-assistent/desktop build:installer:mac 2>&1)",
+      "Bash(ls -la /proc/18397/fd 2>/dev/null || lsof -c node 2>/dev/null | grep 18789 | head -5; echo \"---\"; ps -p 18397 -o pid,ppid,command 2>/dev/null)",
+      "Bash(pgrep -P 18397 2>/dev/null; echo \"---\"; ps aux | grep -E \"18397|18789|openclaw\" | grep -v grep)",
+      "Bash(pgrep -P 19397 2>/dev/null; echo \"---\"; lsof -i :18789 2>/dev/null | head -5)",
+      "Bash(ps -p 19498 -o pid,command 2>/dev/null; echo \"---\"; lsof -a -p 19498 -i 2>/dev/null | head -5)",
+      "Bash(ulimit -u 2>&1)",
+      "mcp__ide__getDiagnostics",
+      "Bash(cd /tmp && npm install playwright 2>&1 | tail -5)",
+      "Bash(cd /tmp && npm install playwright 2>&1 | tail -10)",
+      "Bash(pgrep -f \"electron\" | head -20 ; pgrep -f \"dev:desktop\" | head -20)",
+      "Bash(kill 30241 30720 30709 30708 30675 30205 30187 29744 29737 25146 2>/dev/null; sleep 1; pgrep -f \"electron\" | head -5)",
+      "Bash(kill -9 30675 2>/dev/null; sleep 1; pgrep -f \"electron\" | head -5)",
+      "Bash(pkill -9 -f \"Electron\" 2>/dev/null; sleep 1; pgrep -f \"electron\\\\|Electron\" | head -5)"
     ]
   },
   "enabledMcpjsonServers": [
