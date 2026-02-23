@@ -2,6 +2,7 @@
 /* eslint-disable security/detect-object-injection */
 import { app, BrowserWindow, dialog, ipcMain, net, safeStorage, shell } from 'electron'
 import { randomBytes } from 'node:crypto'
+import http from 'node:http'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -89,6 +90,9 @@ const ENV_API_KEYS = [
  * via text pattern matching (avoids json5 dependency).
  */
 function checkFirstRun(): boolean {
+  // Service mode: Clerk handles auth, API keys are on the server
+  if ((process.env.CLERK_PUBLISHABLE_KEY ?? '').length > 0) return false
+
   const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json')
 
   let content: string
@@ -152,8 +156,31 @@ function createWindow(): void {
     }
   })
 
-  // Block navigation to external URLs and opening new windows
-  mainWindow.webContents.on('will-navigate', (event) => {
+  // CSP — strict in production, relaxed in dev (Vite injects inline scripts)
+  // Clerk auth requires access to *.clerk.accounts.dev (test) and *.clerk.com (prod)
+  // Clerk + Cloudflare Turnstile (CAPTCHA) domains
+  const clerkCsp = (process.env.CLERK_PUBLISHABLE_KEY ?? '').length > 0
+    ? ' https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com'
+    : ''
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const csp = app.isPackaged
+      ? `default-src 'self'; script-src 'self'${clerkCsp}; style-src 'self' 'unsafe-inline'; connect-src 'self'${clerkCsp} https://clerk-telemetry.com https://challenges.cloudflare.com; img-src 'self' https://img.clerk.com; worker-src 'self' blob:; frame-src 'self'${clerkCsp} https://challenges.cloudflare.com https://accounts.google.com`
+      : `default-src 'self' ws://localhost:5173; script-src 'self' 'unsafe-inline'${clerkCsp}; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:5173 http://localhost:5173 http://127.0.0.1:18789${clerkCsp} https://clerk-telemetry.com https://challenges.cloudflare.com; img-src 'self' https://img.clerk.com; worker-src 'self' blob:; frame-src 'self'${clerkCsp} https://challenges.cloudflare.com https://accounts.google.com`
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    })
+  })
+
+  // Block navigation — allow Clerk OAuth flow + localhost callback
+  const CLERK_NAV_ALLOW = ['.clerk.accounts.dev', '.clerk.com', 'accounts.google.com', 'accounts.youtube.com', 'localhost']
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      const host = new URL(url).hostname
+      if (CLERK_NAV_ALLOW.some((d) => host === d || host.endsWith(d))) return
+    } catch { /* invalid URL — block */ }
     event.preventDefault()
   })
   mainWindow.webContents.setWindowOpenHandler(() => {
@@ -200,6 +227,9 @@ function readDecryptedKeys(): Record<string, string> {
  * 'server': Gateway runs on a remote server; Desktop connects as agent.
  */
 function getGatewayMode(): 'local' | 'server' {
+  // Service mode: DEFAULT_GATEWAY_URL env var overrides config
+  if ((process.env.DEFAULT_GATEWAY_URL ?? '').length > 0) return 'server'
+
   try {
     const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json')
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
@@ -216,6 +246,10 @@ function getGatewayMode(): 'local' | 'server' {
  * Falls back to ws://127.0.0.1:18790.
  */
 function getServerUrl(): string {
+  // Service mode: derive WS URL from DEFAULT_GATEWAY_URL env var
+  const defaultUrl = process.env.DEFAULT_GATEWAY_URL
+  if (defaultUrl) return defaultUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:')
+
   try {
     const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json')
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
@@ -255,16 +289,76 @@ function readGatewayConfig(): { mode: 'local' | 'server'; serverUrl: string; tok
   return { mode, serverUrl: httpUrl, token }
 }
 
+/**
+ * Ensure controlUi is disabled in ~/.openclaw/openclaw.json.
+ * OpenClaw's Control UI catch-all handler returns 405 for POST/DELETE/PATCH
+ * requests, blocking our /api/message endpoint. This migration runs before
+ * every gateway start and is idempotent.
+ */
+function ensureGatewayConfig(): void {
+  const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json')
+  let config: Record<string, unknown> = {}
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> // eslint-disable-line security/detect-non-literal-fs-filename
+  } catch { return }
+
+  let changed = false
+  const gateway = (config['gateway'] ?? {}) as Record<string, unknown>
+
+  // 1. controlUi deaktivieren
+  const controlUi = (gateway['controlUi'] ?? {}) as Record<string, unknown>
+  if (controlUi['enabled'] !== false) {
+    controlUi['enabled'] = false
+    gateway['controlUi'] = controlUi
+    changed = true
+  }
+
+  // 2. Auth-Token synchronisieren
+  const agentToken = readAgentTokenFromFile()
+  if (agentToken) {
+    const auth = (gateway['auth'] ?? {}) as Record<string, unknown>
+    if (auth['token'] !== agentToken) {
+      auth['mode'] = 'token'
+      auth['token'] = agentToken
+      gateway['auth'] = auth
+      changed = true
+    }
+  }
+
+  // 3. In-App-Channel Extension-Pfad registrieren
+  const plugins = (config['plugins'] ?? {}) as Record<string, unknown>
+  const load = (plugins['load'] ?? {}) as Record<string, unknown>
+  const paths = Array.isArray(load['paths']) ? (load['paths'] as string[]) : []
+  const extensionDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'gateway', 'extensions', 'in-app-channel')
+    : path.join(__dirname, '../../../../packages/gateway/extensions/in-app-channel')
+  const resolvedDir = path.resolve(extensionDir)
+  if (!paths.includes(resolvedDir)) {
+    paths.push(resolvedDir)
+    load['paths'] = paths
+    plugins['load'] = load
+    config['plugins'] = plugins
+    changed = true
+  }
+
+  if (changed) {
+    config['gateway'] = gateway
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8') // eslint-disable-line security/detect-non-literal-fs-filename
+  }
+}
+
 function setupGateway(autoStart = true): void {
+  ensureGatewayConfig()
   const mode = getGatewayMode()
   trayManager?.updateMode(mode)
 
   if (mode === 'server') {
     // Server mode: connect as Desktop Agent to remote Gateway
     const serverUrl = getServerUrl()
-    const token = readAgentTokenFromFile()
-    if (!token) {
-      console.warn('[agent] No agent-token found at ~/.openclaw/agent-token')
+    const token = readAgentTokenFromFile() ?? ''
+    // In service mode, Clerk JWT handles auth — agent-token is optional
+    if (!token && !(process.env.CLERK_PUBLISHABLE_KEY ?? '').length) {
+      console.warn('[agent] No agent-token and no Clerk — cannot connect to server')
       return
     }
 
@@ -272,12 +366,14 @@ function setupGateway(autoStart = true): void {
     desktopAgent.onConnect = () => {
       const win = mainWindow
       if (win && !win.isDestroyed()) {
+        win.webContents.send('gateway:status', 'online')
         win.webContents.send('agent:status-changed', 'connected')
       }
     }
     desktopAgent.onDisconnect = () => {
       const win = mainWindow
       if (win && !win.isDestroyed()) {
+        win.webContents.send('gateway:status', 'offline')
         win.webContents.send('agent:status-changed', 'disconnected')
       }
     }
@@ -311,13 +407,21 @@ function setupGateway(autoStart = true): void {
     gwCommand = process.execPath
     gwArgs = [path.join(gwCwd, 'openclaw.mjs'), 'gateway']
   } else {
-    // Dev: local fork via run-node.mjs
+    // Dev: use system Node to avoid native module ABI mismatch
+    // (better-sqlite3 compiled for system Node, not Electron's bundled Node)
     gwCwd = path.join(__dirname, '../../../../packages/gateway')
-    gwCommand = process.execPath
+    gwCommand = 'node'
     gwArgs = ['scripts/run-node.mjs', 'gateway']
   }
 
   const sqliteDbPath = path.join(configDir, 'local.db')
+
+  // Forward LLM API keys from environment (fallback when no .enc credentials)
+  const envKeys: Record<string, string> = {}
+  for (const k of ENV_API_KEYS) {
+    const v = process.env[k] // eslint-disable-line security/detect-object-injection
+    if (v && v.length > 0) envKeys[k] = v // eslint-disable-line security/detect-object-injection
+  }
 
   gatewayManager = new GatewayManager({
     command: gwCommand,
@@ -325,8 +429,9 @@ function setupGateway(autoStart = true): void {
     cwd: gwCwd,
     port: 18789,
     env: {
-      ELECTRON_RUN_AS_NODE: '1',
+      ...(app.isPackaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       ...(Object.keys(keys).length > 0 ? keys : {}),
+      ...envKeys,
       OPENCLAW_AUTH_TOKEN: readAgentTokenFromFile() ?? '',
       SQLITE_DB_PATH: sqliteDbPath,
     },
@@ -364,7 +469,244 @@ ipcMain.handle('auth:set-clerk-token', (_event, payload: unknown) => {
 })
 
 ipcMain.handle('auth:get-clerk-publishable-key', () => {
-  return process.env['CLERK_PUBLISHABLE_KEY'] ?? null
+  const key = process.env.CLERK_PUBLISHABLE_KEY ?? ''
+  return key.length > 0 ? key : null
+})
+
+// ---------------------------------------------------------------------------
+// Clerk Auth — Browser-based Sign-In
+// Opens system browser with a local page that loads Clerk JS. User signs in
+// (any method: email, Google, Apple, etc.). After sign-in the page sends the
+// Clerk userId back. Main process creates a sign-in token via Clerk Backend
+// API and returns the ticket to the renderer for session creation.
+// ---------------------------------------------------------------------------
+
+const CLERK_BACKEND_API = 'https://api.clerk.com/v1'
+
+/**
+ * Extract the Clerk Frontend API domain from a publishable key.
+ * pk_test_<base64(domain$)> or pk_live_<base64(domain$)>
+ */
+function clerkFapiDomain(publishableKey: string): string {
+  const encoded = publishableKey.replace(/^pk_(test|live)_/, '')
+  return Buffer.from(encoded, 'base64').toString('utf-8').replace(/\$$/, '')
+}
+
+/**
+ * Build the HTML page that the system browser will show for sign-in.
+ * Loads Clerk JS from the official FAPI URL with auto-initialization via
+ * the data-clerk-publishable-key attribute. After sign-in the page POSTs
+ * the userId back to the local server.
+ */
+function buildSignInPage(publishableKey: string, port: number, nonce: string, provider: string): string {
+  const fapiDomain = clerkFapiDomain(publishableKey)
+  const clerkJsUrl = `https://${fapiDomain}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`
+  const safeNonce = nonce.replace(/'/g, "\\'")
+  const safeProvider = provider.replace(/'/g, "\\'")
+
+  return [
+    '<!DOCTYPE html>',
+    '<html lang="de"><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1">',
+    '<title>Anmelden</title>',
+    '<style>',
+    '*{margin:0;padding:0;box-sizing:border-box}',
+    'body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a0a;color:#e5e5e5;display:flex;align-items:center;justify-content:center;min-height:100vh}',
+    '#loading{text-align:center}',
+    '.spinner{width:32px;height:32px;border:3px solid #333;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}',
+    '@keyframes spin{to{transform:rotate(360deg)}}',
+    '#success{display:none;text-align:center;max-width:400px;padding:40px}',
+    '#success h1{font-size:24px;margin-bottom:12px;color:#22c55e}',
+    '#success p{color:#a0a0a0;line-height:1.6}',
+    '#error-box{display:none;text-align:center;max-width:400px;padding:40px;color:#ef4444}',
+    '#sign-in-box{min-width:400px}',
+    '</style></head><body>',
+    '<div id="loading"><div class="spinner"></div><p>Laden...</p></div>',
+    '<div id="sign-in-box"></div>',
+    '<div id="success"><h1>&#10003; Anmeldung erfolgreich!</h1>',
+    '<p>Du kannst dieses Fenster schlie&szlig;en und zur App zur&uuml;ckkehren.</p></div>',
+    '<div id="error-box"></div>',
+    // Load Clerk JS synchronously with data-clerk-publishable-key (creates window.Clerk instance)
+    `<script crossorigin="anonymous" data-clerk-publishable-key="${publishableKey}" src="${clerkJsUrl}"></script>`,
+    '<script>',
+    '(function(){',
+    'var PORT=' + String(port) + ';',
+    "var NONCE='" + safeNonce + "';",
+    "var PROVIDER='" + safeProvider + "';",
+    'var done=false;',
+    'function showError(m){document.getElementById("loading").style.display="none";document.getElementById("sign-in-box").style.display="none";var e=document.getElementById("error-box");e.textContent=m;e.style.display="block"}',
+    'function sendComplete(uid){if(done)return;done=true;fetch("http://127.0.0.1:"+PORT+"/auth-complete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:uid,nonce:NONCE})}).then(function(){document.getElementById("sign-in-box").style.display="none";document.getElementById("loading").style.display="none";document.getElementById("success").style.display="block"}).catch(function(){showError("Kommunikation mit der App fehlgeschlagen.")})}',
+    // window.Clerk is set by the sync script above — call load() to initialize
+    'if(!window.Clerk){showError("Clerk Script konnte nicht geladen werden.");return}',
+    'window.Clerk.load()',
+    '.then(function(){var clerk=window.Clerk;',
+    'document.getElementById("loading").style.display="none";',
+    // Handle OAuth callback return
+    'var s=window.location.search;',
+    'if(s.indexOf("__clerk")!==-1){document.getElementById("loading").style.display="block";document.getElementById("loading").querySelector("p").textContent="Anmeldung wird abgeschlossen...";',
+    'return clerk.handleRedirectCallback().then(function(){if(clerk.user){sendComplete(clerk.user.id)}}).catch(function(){})}',
+    // Already signed in
+    'if(clerk.user){sendComplete(clerk.user.id);return}',
+    // Google-direct: redirect to Google immediately
+    'if(PROVIDER==="google"){document.getElementById("loading").style.display="block";document.getElementById("loading").querySelector("p").textContent="Weiterleitung zu Google...";',
+    'return clerk.client.signIn.authenticateWithRedirect({strategy:"oauth_google",redirectUrl:"http://127.0.0.1:"+PORT+"/sso-callback",redirectUrlComplete:"http://127.0.0.1:"+PORT+"/"})}',
+    // Mount Clerk sign-in component
+    'var box=document.getElementById("sign-in-box");',
+    'clerk.mountSignIn(box,{appearance:{variables:{colorBackground:"#1a1a1a",colorText:"#e5e5e5",colorPrimary:"#3b82f6",colorInputBackground:"#0a0a0a",colorInputText:"#e5e5e5"}}});',
+    'clerk.addListener(function(p){if(p.user&&!done){clerk.unmountSignIn(box);sendComplete(p.user.id)}})',
+    '})',
+    '.catch(function(e){showError("Clerk konnte nicht geladen werden: "+(e.message||"Unbekannter Fehler"))})',
+    '})();',
+    '</script></body></html>',
+  ].join('\n')
+}
+
+ipcMain.handle('auth:clerk-browser-signin', async (_event, payload: unknown) => {
+  const publishableKey = process.env.CLERK_PUBLISHABLE_KEY ?? ''
+  if (publishableKey.length === 0) {
+    return { success: false, error: 'Clerk ist nicht konfiguriert (CLERK_PUBLISHABLE_KEY fehlt)' }
+  }
+
+  const secretKey = process.env.CLERK_SECRET_KEY ?? ''
+  if (secretKey.length === 0) {
+    return { success: false, error: 'CLERK_SECRET_KEY fehlt in .env' }
+  }
+
+  const provider = typeof payload === 'object' && payload !== null
+    ? ((payload as Record<string, unknown>)['provider'] as string | undefined) ?? ''
+    : ''
+
+  const nonce = randomBytes(32).toString('hex')
+
+  return new Promise<{ success: boolean; ticket?: string; error?: string }>((resolve) => {
+    let settled = false
+    let server: http.Server | null = null
+
+    const cleanup = (): void => {
+      if (server) {
+        server.close()
+        server = null
+      }
+    }
+
+    // Timeout after 5 minutes (user might need time to sign in / sign up)
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve({ success: false, error: 'Zeitüberschreitung — keine Antwort vom Browser' })
+    }, 300_000)
+
+    server = http.createServer((req, res) => {
+      // POST /auth-complete — browser page sends userId after sign-in
+      if (req.method === 'POST' && (req.url ?? '').startsWith('/auth-complete')) {
+        let body = ''
+        req.on('data', (chunk: Buffer) => { body += chunk.toString() })
+        req.on('end', () => {
+          // CORS for fetch from the local page
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          })
+          res.end('{"ok":true}')
+
+          if (settled) return
+          settled = true
+          clearTimeout(timeout)
+          cleanup()
+
+          void (async () => {
+            try {
+              const data = JSON.parse(body) as Record<string, unknown>
+
+              if (data['nonce'] !== nonce) {
+                resolve({ success: false, error: 'Ungültiger Nonce (CSRF-Schutz)' })
+                return
+              }
+
+              const userId = data['userId']
+              if (typeof userId !== 'string' || !userId.startsWith('user_')) {
+                resolve({ success: false, error: 'Ungültige User-ID vom Browser erhalten' })
+                return
+              }
+
+              // Create sign-in token via Clerk Backend API
+              const controller = new AbortController()
+              const apiTimeout = setTimeout(() => controller.abort(), 15_000)
+
+              const apiRes = await net.fetch(`${CLERK_BACKEND_API}/sign_in_tokens`, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${secretKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ user_id: userId }),
+                signal: controller.signal,
+              })
+              clearTimeout(apiTimeout)
+
+              if (!apiRes.ok) {
+                const errText = await apiRes.text()
+                resolve({ success: false, error: `Clerk API: ${errText}` })
+                return
+              }
+
+              const apiData = (await apiRes.json()) as { token?: string }
+              if (!apiData.token || typeof apiData.token !== 'string') {
+                resolve({ success: false, error: 'Kein Sign-In Token von Clerk erhalten' })
+                return
+              }
+
+              resolve({ success: true, ticket: apiData.token })
+            } catch (err) {
+              resolve({ success: false, error: err instanceof Error ? err.message : 'Unbekannter Fehler' })
+            }
+          })()
+        })
+        return
+      }
+
+      // CORS preflight for the POST
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        })
+        res.end()
+        return
+      }
+
+      // GET * — serve the sign-in page (same HTML for all paths incl. /sso-callback)
+      if (req.method === 'GET') {
+        const address = server?.address()
+        const port = typeof address === 'object' && address !== null ? address.port : 0
+        const html = buildSignInPage(publishableKey, port, nonce, provider)
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+        })
+        res.end(html)
+        return
+      }
+
+      res.writeHead(405)
+      res.end()
+    })
+
+    server.listen(0, '127.0.0.1')
+    server.on('listening', () => {
+      const address = server?.address()
+      const port = typeof address === 'object' && address !== null ? address.port : 0
+      void shell.openExternal(`http://127.0.0.1:${String(port)}/`)
+    })
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      resolve({ success: false, error: err.message })
+    })
+  })
 })
 
 ipcMain.handle('setup:validate-api-key', async (_event, payload: unknown) => {
@@ -493,7 +835,7 @@ ${tonBlock}
           model: { primary: model },
         },
       },
-      gateway: { port: 18789, bind: 'loopback' },
+      gateway: { port: 18789, bind: 'loopback', controlUi: { enabled: false } },
     }
     fs.writeFileSync(
       path.join(configDir, 'openclaw.json'),

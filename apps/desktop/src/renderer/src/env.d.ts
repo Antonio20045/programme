@@ -168,6 +168,7 @@ interface ElectronApi {
   pairingUnpair: () => Promise<SetupResult>
   setClerkToken: (token: string | null) => Promise<{ success: boolean; error?: string }>
   getClerkPublishableKey: () => Promise<string | null>
+  clerkBrowserSignIn: (provider?: string) => Promise<{ success: boolean; ticket?: string; error?: string }>
 }
 
 interface Window {

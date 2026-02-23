@@ -295,7 +295,12 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
         postPromise = window.api
           .gatewayFetch({ method: 'POST', path: '/api/message', body: { text: trimmed, sessionId } })
           .then((res) => {
-            if (!res.ok) throw new Error(`Gateway antwortet mit Status ${res.status.toString()}`)
+            if (!res.ok) {
+              const detail = typeof res.data === 'object' && res.data !== null
+                ? ((res.data as Record<string, unknown>)['error'] as string) ?? ''
+                : ''
+              throw new Error(`Gateway-Fehler ${res.status.toString()}${detail ? ': ' + detail : ''}`)
+            }
             return res.data
           })
       }

@@ -1,8 +1,12 @@
 import { defineConfig } from 'electron-vite'
+import { loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import { builtinModules } from 'module'
+
+// Load .env from apps/desktop/ (empty prefix = load ALL vars, not just VITE_)
+const env = loadEnv('production', __dirname, '')
 
 // Module die NUR per dynamischem import() geladen werden (webpackIgnore).
 // Graceful failure wenn nicht installiert.
@@ -19,6 +23,13 @@ const DYNAMIC_ONLY_EXTERNALS = [
 export default defineConfig({
   main: {
     plugins: [],
+    define: {
+      'process.env.CLERK_PUBLISHABLE_KEY': JSON.stringify(env['CLERK_PUBLISHABLE_KEY'] ?? ''),
+      'process.env.DEFAULT_GATEWAY_URL': JSON.stringify(env['DEFAULT_GATEWAY_URL'] ?? ''),
+      'process.env.GOOGLE_OAUTH_CLIENT_ID': JSON.stringify(env['GOOGLE_OAUTH_CLIENT_ID'] ?? ''),
+      'process.env.GOOGLE_OAUTH_CLIENT_SECRET': JSON.stringify(env['GOOGLE_OAUTH_CLIENT_SECRET'] ?? ''),
+      'process.env.CLERK_SECRET_KEY': JSON.stringify(env['CLERK_SECRET_KEY'] ?? ''),
+    },
     resolve: {
       alias: [
         { find: /^@ki-assistent\/shared$/, replacement: resolve(__dirname, '../../packages/shared/src/index.ts') },

@@ -146,4 +146,8 @@ contextBridge.exposeInMainWorld('api', {
   getClerkPublishableKey: (): Promise<string | null> => {
     return ipcRenderer.invoke('auth:get-clerk-publishable-key')
   },
+
+  clerkBrowserSignIn: (provider?: string): Promise<{ success: boolean; ticket?: string; error?: string }> => {
+    return ipcRenderer.invoke('auth:clerk-browser-signin', provider !== undefined ? { provider } : undefined)
+  },
 })

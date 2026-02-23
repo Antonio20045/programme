@@ -23,6 +23,9 @@ vi.mock('react', () => ({
   useEffect: vi.fn(),
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
   useMemo: <T,>(fn: () => T) => fn(),
+  useRef: (initial: unknown) => ({ current: initial }),
+  useContext: (ctx: { _currentValue: unknown }) => ctx._currentValue,
+  createContext: (defaultValue: unknown) => ({ _currentValue: defaultValue, Provider: 'MockProvider' }),
 }))
 
 // Mock child components

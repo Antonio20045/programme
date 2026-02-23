@@ -2,6 +2,7 @@ import './App.css'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuthContext } from './contexts/AuthContext'
+import { GatewayStatusProvider } from './contexts/GatewayStatusContext'
 import { useSessions } from './hooks/useSessions'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -144,7 +145,9 @@ export default function App(): JSX.Element {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <AppContent />
+        <GatewayStatusProvider>
+          <AppContent />
+        </GatewayStatusProvider>
       </AuthProvider>
     </ErrorBoundary>
   )
