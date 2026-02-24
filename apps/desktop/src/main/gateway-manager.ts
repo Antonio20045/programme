@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import http from 'node:http'
+import net from 'node:net'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -109,7 +110,7 @@ export class GatewayManager {
     this.restartCount = 0
     this.consecutiveFailures = 0
     this.clearRestartTimer()
-    this.spawnProcess()
+    void this.spawnProcess()
   }
 
   async stop(): Promise<void> {
@@ -156,11 +157,79 @@ export class GatewayManager {
   }
 
   // -----------------------------------------------------------------------
+  // Private — port preflight
+  // -----------------------------------------------------------------------
+
+  private async ensurePortFree(): Promise<boolean> {
+    const portFree = await this.isPortFree()
+    if (portFree) return true
+
+    // Port blocked — try to kill orphaned gateway
+    const killed = await this.killOrphanedGateway()
+    if (!killed) return false
+
+    // Wait 1s and re-check
+    await new Promise<void>((r) => setTimeout(r, 1000))
+    return this.isPortFree()
+  }
+
+  private isPortFree(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = net.createServer()
+      server.once('error', () => resolve(false))
+      server.once('listening', () => {
+        server.close(() => resolve(true))
+      })
+      server.listen(this.port, DEFAULT_HOST)
+    })
+  }
+
+  private killOrphanedGateway(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const lsof = spawn('lsof', ['-i', `:${String(this.port)}`, '-t'], { stdio: 'pipe' })
+      let stdout = ''
+      lsof.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
+      lsof.on('error', () => resolve(false))
+      lsof.on('close', () => {
+        const pids = stdout.trim().split('\n').filter(Boolean)
+        if (pids.length === 0) { resolve(false); return }
+
+        const pid = pids[0]!
+        const ps = spawn('ps', ['-p', pid, '-o', 'args='], { stdio: 'pipe' })
+        let args = ''
+        ps.stdout?.on('data', (d: Buffer) => { args += d.toString() })
+        ps.on('error', () => resolve(false))
+        ps.on('close', () => {
+          const cmdline = args.trim().toLowerCase()
+          if (cmdline.includes('openclaw') || cmdline.includes('gateway')) {
+            const killProc = spawn('kill', [pid], { stdio: 'ignore' })
+            killProc.on('close', (code) => {
+              this.emitLog('stderr', `[gateway-manager] Killed orphaned process ${pid} (${cmdline})`)
+              resolve(code === 0)
+            })
+            killProc.on('error', () => resolve(false))
+          } else {
+            this.emitLog('stderr', `[gateway-manager] Port ${String(this.port)} blocked by foreign process (PID ${pid}): ${cmdline}`)
+            resolve(false)
+          }
+        })
+      })
+    })
+  }
+
+  // -----------------------------------------------------------------------
   // Private — process lifecycle
   // -----------------------------------------------------------------------
 
-  private spawnProcess(): void {
+  private async spawnProcess(): Promise<void> {
     this.setStatus('starting')
+
+    const portReady = await this.ensurePortFree()
+    if (!portReady) {
+      this.emitLog('stderr', `[gateway-manager] Port ${String(this.port)} not available — cannot start`)
+      this.setStatus('error')
+      return
+    }
 
     const spawnEnv = this.env
       ? { ...process.env, ...this.env }
@@ -235,7 +304,7 @@ export class GatewayManager {
     this.restartTimer = setTimeout(() => {
       this.restartTimer = null
       if (!this.isShuttingDown) {
-        this.spawnProcess()
+        void this.spawnProcess()
       }
     }, this.restartDelayMs)
   }
@@ -275,6 +344,7 @@ export class GatewayManager {
 
       void this.performHealthCheck().then((ok) => {
         if (this.isShuttingDown) return
+        if (!this.child) return // Child dead — ignore stale health result (prevents green flicker)
 
         if (ok) {
           this.consecutiveFailures = 0
@@ -318,6 +388,16 @@ export class GatewayManager {
         resolve(false)
       })
     })
+  }
+
+  // -----------------------------------------------------------------------
+  // Private — logging helper
+  // -----------------------------------------------------------------------
+
+  private emitLog(stream: 'stdout' | 'stderr', data: string): void {
+    for (const listener of this.logListeners) {
+      listener(stream, data)
+    }
   }
 
   // -----------------------------------------------------------------------

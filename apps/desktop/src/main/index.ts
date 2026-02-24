@@ -416,10 +416,11 @@ function setupGateway(autoStart = true): void {
     gwArgs = [path.join(gwCwd, 'openclaw.mjs'), 'gateway']
   } else {
     // Dev: use system Node to avoid native module ABI mismatch
-    // (better-sqlite3 compiled for system Node, not Electron's bundled Node)
+    // openclaw.mjs imports dist/entry.js directly — no stale check, no rebuild.
+    // Gateway dist is pre-built by the predev script in package.json.
     gwCwd = path.join(__dirname, '../../../../packages/gateway')
     gwCommand = 'node'
-    gwArgs = ['scripts/run-node.mjs', 'gateway']
+    gwArgs = ['openclaw.mjs', 'gateway']
   }
 
   const sqliteDbPath = path.join(configDir, 'local.db')
@@ -436,12 +437,18 @@ function setupGateway(autoStart = true): void {
     args: gwArgs,
     cwd: gwCwd,
     port: 18789,
+    maxHealthFailures: 12, // Gateway braucht bis zu 60s zum Starten (12 × 5s)
     env: {
       ...(app.isPackaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       ...(Object.keys(keys).length > 0 ? keys : {}),
       ...envKeys,
       OPENCLAW_AUTH_TOKEN: readAgentTokenFromFile() ?? '',
       SQLITE_DB_PATH: sqliteDbPath,
+      // Skip heavy sidecars that block startup (NOT channels/providers — we need those)
+      OPENCLAW_SKIP_BROWSER_CONTROL_SERVER: '1',
+      OPENCLAW_SKIP_CANVAS_HOST: '1',
+      OPENCLAW_SKIP_CRON: '1',
+      OPENCLAW_SKIP_GMAIL_WATCHER: '1',
     },
   })
 
@@ -1718,3 +1725,14 @@ app.on('before-quit', (e) => {
 app.on('window-all-closed', () => {
   // Tray keeps the app running — don't quit on any platform
 })
+
+// Graceful shutdown on OS signals (prevents orphaned gateway processes)
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    if (gatewayManager) {
+      gatewayManager.stop().catch(() => {}).finally(() => process.exit(0))
+    } else {
+      process.exit(0)
+    }
+  })
+}

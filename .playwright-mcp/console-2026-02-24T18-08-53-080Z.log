@@ -1,0 +1,342 @@
+[    2217ms] TypeError: Cannot read properties of undefined (reading 'getSetupRequired')
+    at http://localhost:5173/src/App.tsx:41:16
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42)
+[    2221ms] TypeError: Cannot read properties of undefined (reading 'onGatewayStatus')
+    at http://localhost:5173/src/contexts/GatewayStatusContext.tsx:41:36
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42)
+[    2221ms] TypeError: Cannot read properties of undefined (reading 'getClerkPublishableKey')
+    at http://localhost:5173/src/contexts/AuthContext.tsx:77:16
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42)
+[    2142ms] [ERROR] The above error occurred in the <AppContent> component:
+
+    at AppContent (http://localhost:5173/src/App.tsx:34:45)
+    at GatewayStatusProvider (http://localhost:5173/src/contexts/GatewayStatusContext.tsx:36:41)
+    at AuthProvider (http://localhost:5173/src/contexts/AuthContext.tsx:73:32)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:7:5)
+    at App
+    at Router (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:7091:13)
+    at HashRouter (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary. @ http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:14079
+[    2142ms] [ERROR] ErrorBoundary caught: TypeError: Cannot read properties of undefined (reading 'getSetupRequired')
+    at http://localhost:5173/src/App.tsx:41:16
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42) {componentStack: 
+    at AppContent (http://localhost:5173/src/App.…vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)} @ http://localhost:5173/src/components/ErrorBoundary.tsx:13
+[    2142ms] [ERROR] The above error occurred in the <GatewayStatusProvider> component:
+
+    at GatewayStatusProvider (http://localhost:5173/src/contexts/GatewayStatusContext.tsx:36:41)
+    at AuthProvider (http://localhost:5173/src/contexts/AuthContext.tsx:73:32)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:7:5)
+    at App
+    at Router (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:7091:13)
+    at HashRouter (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary. @ http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:14079
+[    2142ms] [ERROR] ErrorBoundary caught: TypeError: Cannot read properties of undefined (reading 'onGatewayStatus')
+    at http://localhost:5173/src/contexts/GatewayStatusContext.tsx:41:36
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42) {componentStack: 
+    at GatewayStatusProvider (http://localhost:51…vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)} @ http://localhost:5173/src/components/ErrorBoundary.tsx:13
+[    2142ms] [ERROR] The above error occurred in the <AuthProvider> component:
+
+    at AuthProvider (http://localhost:5173/src/contexts/AuthContext.tsx:73:32)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:7:5)
+    at App
+    at Router (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:7091:13)
+    at HashRouter (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary. @ http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:14079
+[    2143ms] [ERROR] ErrorBoundary caught: TypeError: Cannot read properties of undefined (reading 'getClerkPublishableKey')
+    at http://localhost:5173/src/contexts/AuthContext.tsx:77:16
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42) {componentStack: 
+    at AuthProvider (http://localhost:5173/src/co…vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)} @ http://localhost:5173/src/components/ErrorBoundary.tsx:13
+[    2313ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/favicon.ico:0
+[    7974ms] TypeError: Cannot read properties of undefined (reading 'getSetupRequired')
+    at http://localhost:5173/src/App.tsx:41:16
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42)
+[    7974ms] TypeError: Cannot read properties of undefined (reading 'onGatewayStatus')
+    at http://localhost:5173/src/contexts/GatewayStatusContext.tsx:41:36
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42)
+[    7974ms] TypeError: Cannot read properties of undefined (reading 'getClerkPublishableKey')
+    at http://localhost:5173/src/contexts/AuthContext.tsx:77:16
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42)
+[    7743ms] [ERROR] The above error occurred in the <AppContent> component:
+
+    at AppContent (http://localhost:5173/src/App.tsx:34:45)
+    at GatewayStatusProvider (http://localhost:5173/src/contexts/GatewayStatusContext.tsx:36:41)
+    at AuthProvider (http://localhost:5173/src/contexts/AuthContext.tsx:73:32)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:7:5)
+    at App
+    at Router (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:7091:13)
+    at HashRouter (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary. @ http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:14079
+[    7743ms] [ERROR] ErrorBoundary caught: TypeError: Cannot read properties of undefined (reading 'getSetupRequired')
+    at http://localhost:5173/src/App.tsx:41:16
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42) {componentStack: 
+    at AppContent (http://localhost:5173/src/App.…vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)} @ http://localhost:5173/src/components/ErrorBoundary.tsx:13
+[    7744ms] [ERROR] The above error occurred in the <GatewayStatusProvider> component:
+
+    at GatewayStatusProvider (http://localhost:5173/src/contexts/GatewayStatusContext.tsx:36:41)
+    at AuthProvider (http://localhost:5173/src/contexts/AuthContext.tsx:73:32)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:7:5)
+    at App
+    at Router (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:7091:13)
+    at HashRouter (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary. @ http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:14079
+[    7744ms] [ERROR] ErrorBoundary caught: TypeError: Cannot read properties of undefined (reading 'onGatewayStatus')
+    at http://localhost:5173/src/contexts/GatewayStatusContext.tsx:41:36
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42) {componentStack: 
+    at GatewayStatusProvider (http://localhost:51…vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)} @ http://localhost:5173/src/components/ErrorBoundary.tsx:13
+[    7744ms] [ERROR] The above error occurred in the <AuthProvider> component:
+
+    at AuthProvider (http://localhost:5173/src/contexts/AuthContext.tsx:73:32)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:7:5)
+    at App
+    at Router (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:7091:13)
+    at HashRouter (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary. @ http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:14079
+[    7744ms] [ERROR] ErrorBoundary caught: TypeError: Cannot read properties of undefined (reading 'getClerkPublishableKey')
+    at http://localhost:5173/src/contexts/AuthContext.tsx:77:16
+    at commitHookEffectListMount (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:16963:34)
+    at commitPassiveMountOnFiber (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18206:19)
+    at commitPassiveMountEffects_complete (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18179:17)
+    at commitPassiveMountEffects_begin (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18169:15)
+    at commitPassiveMountEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:18159:11)
+    at flushPassiveEffectsImpl (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19543:11)
+    at flushPassiveEffects (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19500:22)
+    at http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:19381:17
+    at workLoop (http://localhost:5173/@fs/Users/efstathia/Downloads/videos/programme/apps/desktop/node_modules/.vite/deps/chunk-XI35OFE4.js?v=ba76a5c4:197:42) {componentStack: 
+    at AuthProvider (http://localhost:5173/src/co…vite/deps/react-router-dom.js?v=ba76a5c4:10325:3)} @ http://localhost:5173/src/components/ErrorBoundary.tsx:13
+[  178796ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  179800ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  180801ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  181803ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  182805ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  183808ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  184810ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  185811ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  186813ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  187818ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  188820ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  189821ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  190824ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  191827ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  192830ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  193833ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  194839ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  195845ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  196855ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  197861ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  198865ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  199889ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  200907ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  201923ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  202957ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  203981ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  205006ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  206075ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  207097ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  208145ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  209198ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  210269ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  211329ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  212566ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  213692ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  214809ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  216124ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  217679ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  218890ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  220699ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  222420ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  224471ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  226567ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  228127ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  230361ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  235198ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  239023ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  242989ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  248695ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  253261ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  255963ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  258529ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  262544ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  267918ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  270320ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  274442ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  279547ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  284665ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  288127ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  293895ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  297819ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  302072ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  305167ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  308558ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  311737ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  316794ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  321436ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  325029ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  327170ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  329775ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  332670ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  337166ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  342739ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  346710ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  350389ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  356030ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  360073ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  361075ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  362078ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  363079ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  364083ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  365085ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  366091ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  367100ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  368107ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  369118ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  370196ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  371306ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  372458ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  373951ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  375231ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  378492ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  383631ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  387626ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  390860ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  396386ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  401505ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  406078ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  408383ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  413384ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  417131ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  422324ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  427162ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  431308ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  433864ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  438570ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  443727ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  448761ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  451842ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  457570ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  460150ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  462458ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  464606ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  467258ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  470605ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  476049ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  480666ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  481668ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  482670ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  483672ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  484675ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  485679ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  486684ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  487693ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  488701ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  489714ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  490770ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  491898ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  493095ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  494681ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  496238ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  499054ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  501796ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  507644ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  511479ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  516801ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  521119ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  524287ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  529343ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  533577ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  537094ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  540451ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034
+[  542976ms] [ERROR] WebSocket connection to 'ws://localhost:5173/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/@vite/client:1034

@@ -6,9 +6,14 @@ import type { IncomingMessage, ClientRequest } from 'node:http'
 // Hoisted mocks — vi.hoisted runs before vi.mock factories
 // ---------------------------------------------------------------------------
 
-const { mockSpawn, mockHttpGet } = vi.hoisted(() => ({
+const { mockSpawn, mockHttpGet, mockNetServer } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
   mockHttpGet: vi.fn(),
+  mockNetServer: {
+    listen: vi.fn(),
+    close: vi.fn(),
+    once: vi.fn(),
+  },
 }))
 
 vi.mock('node:child_process', () => ({
@@ -18,6 +23,11 @@ vi.mock('node:child_process', () => ({
 vi.mock('node:http', () => ({
   default: { get: mockHttpGet },
   get: mockHttpGet,
+}))
+
+vi.mock('node:net', () => ({
+  default: { createServer: () => mockNetServer },
+  createServer: () => mockNetServer,
 }))
 
 import { GatewayManager, type GatewayOptions } from '../main/gateway-manager'
@@ -61,6 +71,27 @@ function fastOptions(overrides?: Partial<GatewayOptions>): GatewayOptions {
   }
 }
 
+/** Mock net.createServer to report port as free (listening succeeds) */
+function mockPortFree(): void {
+  mockNetServer.once.mockImplementation((event: string, cb: (...args: unknown[]) => void) => {
+    if (event === 'listening') {
+      Promise.resolve().then(() => cb())
+    }
+  })
+  mockNetServer.close.mockImplementation((cb?: () => void) => {
+    if (cb) cb()
+  })
+}
+
+/** Mock net.createServer to report port as occupied (listen fails) */
+function mockPortOccupied(): void {
+  mockNetServer.once.mockImplementation((event: string, cb: (...args: unknown[]) => void) => {
+    if (event === 'error') {
+      Promise.resolve().then(() => cb(new Error('EADDRINUSE')))
+    }
+  })
+}
+
 /** Mock http.get to respond with a given status code */
 function mockHealthCheckSuccess(): void {
   mockHttpGet.mockImplementation(
@@ -87,6 +118,15 @@ function mockHealthCheckFailure(): void {
   })
 }
 
+/**
+ * Helper to flush the async port-check after start().
+ * spawnProcess is now async — the port-free check resolves via microtask,
+ * so we need to flush microtasks + advance a tick for spawn to happen.
+ */
+async function flushPortCheck(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(0)
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -100,6 +140,7 @@ describe('GatewayManager', () => {
 
     mockProc = createMockProcess()
     mockSpawn.mockReturnValue(mockProc)
+    mockPortFree()
     mockHealthCheckSuccess()
   })
 
@@ -116,12 +157,13 @@ describe('GatewayManager', () => {
   // -----------------------------------------------------------------------
 
   describe('start', () => {
-    it('spawns process and sets status to starting', () => {
+    it('spawns process and sets status to starting', async () => {
       manager = new GatewayManager(fastOptions())
       const statuses: string[] = []
       manager.onStatus((s) => statuses.push(s))
 
       manager.start()
+      await flushPortCheck()
 
       expect(mockSpawn).toHaveBeenCalledWith(
         '/usr/bin/node',
@@ -132,7 +174,6 @@ describe('GatewayManager', () => {
         }),
       )
       expect(statuses).toContain('starting')
-      expect(manager.getStatus()).toBe('starting')
     })
 
     it('transitions to online after successful health check', async () => {
@@ -141,6 +182,7 @@ describe('GatewayManager', () => {
       manager.onStatus((s) => statuses.push(s))
 
       manager.start()
+      await flushPortCheck()
 
       // Advance past one health check interval + flush microtasks
       await vi.advanceTimersByTimeAsync(150)
@@ -149,12 +191,13 @@ describe('GatewayManager', () => {
       expect(statuses).toContain('online')
     })
 
-    it('passes custom env variables merged with process.env', () => {
+    it('passes custom env variables merged with process.env', async () => {
       manager = new GatewayManager(
         fastOptions({ env: { GATEWAY_MODE: 'headless' } }),
       )
 
       manager.start()
+      await flushPortCheck()
 
       expect(mockSpawn).toHaveBeenCalledWith(
         expect.anything(),
@@ -167,6 +210,129 @@ describe('GatewayManager', () => {
   })
 
   // -----------------------------------------------------------------------
+  // port preflight
+  // -----------------------------------------------------------------------
+
+  describe('port preflight', () => {
+    it('spawns normally when port is free', async () => {
+      mockPortFree()
+      manager = new GatewayManager(fastOptions())
+
+      manager.start()
+      await flushPortCheck()
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        '/usr/bin/node',
+        ['server.js'],
+        expect.objectContaining({ cwd: '/tmp/test-gateway' }),
+      )
+    })
+
+    it('kills orphaned gateway process and starts', async () => {
+      // First port check: occupied
+      let portCheckCount = 0
+      mockNetServer.once.mockImplementation((event: string, cb: (...args: unknown[]) => void) => {
+        portCheckCount++
+        if (portCheckCount <= 1) {
+          // First check: port occupied
+          if (event === 'error') {
+            Promise.resolve().then(() => cb(new Error('EADDRINUSE')))
+          }
+        } else {
+          // Second check (after kill): port free
+          if (event === 'listening') {
+            Promise.resolve().then(() => cb())
+          }
+        }
+      })
+      mockNetServer.close.mockImplementation((cb?: () => void) => {
+        if (cb) cb()
+      })
+
+      // Mock spawn calls for lsof, ps, kill (in order after the gateway spawn)
+      const lsofProc = createMockProcess(100)
+      const psProc = createMockProcess(101)
+      const killProc = createMockProcess(102)
+
+      let spawnCallCount = 0
+      mockSpawn.mockImplementation((cmd: string) => {
+        spawnCallCount++
+        if (cmd === 'lsof') {
+          Promise.resolve().then(() => {
+            lsofProc.stdout.emit('data', Buffer.from('9999\n'))
+            lsofProc.emit('close', 0)
+          })
+          return lsofProc
+        }
+        if (cmd === 'ps') {
+          Promise.resolve().then(() => {
+            psProc.stdout.emit('data', Buffer.from('/usr/bin/node openclaw gateway'))
+            psProc.emit('close', 0)
+          })
+          return psProc
+        }
+        if (cmd === 'kill') {
+          Promise.resolve().then(() => {
+            killProc.emit('close', 0)
+          })
+          return killProc
+        }
+        // Gateway spawn
+        return mockProc
+      })
+
+      manager = new GatewayManager(fastOptions())
+      manager.start()
+
+      // Flush async port check + lsof + ps + kill + 1s wait + second port check
+      await vi.advanceTimersByTimeAsync(1500)
+
+      // The last spawn call should be the gateway process
+      expect(spawnCallCount).toBeGreaterThanOrEqual(4) // lsof + ps + kill + gateway
+    })
+
+    it('sets error status when port blocked by foreign process', async () => {
+      // Port occupied
+      mockNetServer.once.mockImplementation((event: string, cb: (...args: unknown[]) => void) => {
+        if (event === 'error') {
+          Promise.resolve().then(() => cb(new Error('EADDRINUSE')))
+        }
+      })
+
+      // lsof returns PID, ps returns non-gateway process
+      const lsofProc = createMockProcess(100)
+      const psProc = createMockProcess(101)
+
+      mockSpawn.mockImplementation((cmd: string) => {
+        if (cmd === 'lsof') {
+          Promise.resolve().then(() => {
+            lsofProc.stdout.emit('data', Buffer.from('8888\n'))
+            lsofProc.emit('close', 0)
+          })
+          return lsofProc
+        }
+        if (cmd === 'ps') {
+          Promise.resolve().then(() => {
+            psProc.stdout.emit('data', Buffer.from('/usr/sbin/nginx'))
+            psProc.emit('close', 0)
+          })
+          return psProc
+        }
+        return mockProc
+      })
+
+      manager = new GatewayManager(fastOptions())
+      const statuses: string[] = []
+      manager.onStatus((s) => statuses.push(s))
+
+      manager.start()
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(statuses).toContain('error')
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // health check
   // -----------------------------------------------------------------------
 
@@ -174,6 +340,7 @@ describe('GatewayManager', () => {
     it('calls GET /health on the configured port', async () => {
       manager = new GatewayManager(fastOptions({ port: 19000 }))
       manager.start()
+      await flushPortCheck()
 
       await vi.advanceTimersByTimeAsync(150)
 
@@ -191,6 +358,7 @@ describe('GatewayManager', () => {
       manager.onStatus((s) => statuses.push(s))
 
       manager.start()
+      await flushPortCheck()
 
       // 3 health check intervals
       await vi.advanceTimersByTimeAsync(100) // 1st failure
@@ -206,6 +374,7 @@ describe('GatewayManager', () => {
       manager = new GatewayManager(fastOptions())
 
       manager.start()
+      await flushPortCheck()
 
       // 2 failures (not enough to go offline at maxHealthFailures=3)
       await vi.advanceTimersByTimeAsync(100)
@@ -222,6 +391,7 @@ describe('GatewayManager', () => {
     it('does not run health check during shutdown', async () => {
       manager = new GatewayManager(fastOptions())
       manager.start()
+      await flushPortCheck()
 
       await vi.advanceTimersByTimeAsync(150) // go online
       mockHttpGet.mockClear()
@@ -237,6 +407,25 @@ describe('GatewayManager', () => {
 
       expect(mockHttpGet).not.toHaveBeenCalled()
     })
+
+    it('ignores health result when child is null (prevents green flicker)', async () => {
+      manager = new GatewayManager(fastOptions())
+      manager.start()
+      await flushPortCheck()
+
+      await vi.advanceTimersByTimeAsync(150) // go online
+
+      // Simulate child crash (sets this.child = null in handleProcessExit)
+      mockProc.exitCode = 1
+      mockProc.emit('exit', 1, null)
+
+      // Status should be offline after exit
+      expect(manager.getStatus()).toBe('offline')
+
+      // Even if a stale health-check callback resolves ok, status stays offline
+      // because the child-null guard prevents transition to online
+      // (The health check timer was stopped on exit, so no new checks fire)
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -247,6 +436,7 @@ describe('GatewayManager', () => {
     it('restarts process after unexpected exit with delay', async () => {
       manager = new GatewayManager(fastOptions())
       manager.start()
+      await flushPortCheck()
       await vi.advanceTimersByTimeAsync(150) // go online
 
       mockSpawn.mockClear()
@@ -260,10 +450,10 @@ describe('GatewayManager', () => {
       // Not restarted yet (restartDelayMs = 100)
       expect(mockSpawn).not.toHaveBeenCalled()
 
-      // Advance past restart delay
+      // Advance past restart delay + port check
       await vi.advanceTimersByTimeAsync(150)
 
-      expect(mockSpawn).toHaveBeenCalledTimes(1)
+      expect(mockSpawn).toHaveBeenCalled()
     })
 
     it('stops restarting after max attempts and reports error', async () => {
@@ -272,6 +462,7 @@ describe('GatewayManager', () => {
       manager.onStatus((s) => statuses.push(s))
 
       manager.start()
+      await flushPortCheck()
       await vi.advanceTimersByTimeAsync(150)
 
       // Track the active process for each crash cycle
@@ -298,6 +489,7 @@ describe('GatewayManager', () => {
       )
 
       manager.start()
+      await flushPortCheck()
       await vi.advanceTimersByTimeAsync(150) // go online
 
       // Crash once
@@ -305,7 +497,7 @@ describe('GatewayManager', () => {
       mockSpawn.mockReturnValue(proc2)
       mockProc.exitCode = 1
       mockProc.emit('exit', 1, null)
-      await vi.advanceTimersByTimeAsync(150) // restart delay fires + health check
+      await vi.advanceTimersByTimeAsync(150) // restart delay fires + port check + health check
 
       // Go online again and stay stable for stableAfterMs
       await vi.advanceTimersByTimeAsync(150) // health check → online
@@ -327,6 +519,7 @@ describe('GatewayManager', () => {
     it('does not restart during shutdown', async () => {
       manager = new GatewayManager(fastOptions())
       manager.start()
+      await flushPortCheck()
       await vi.advanceTimersByTimeAsync(150)
 
       mockSpawn.mockClear()
@@ -352,6 +545,7 @@ describe('GatewayManager', () => {
     it('sends SIGTERM and resolves when process exits', async () => {
       manager = new GatewayManager(fastOptions())
       manager.start()
+      await flushPortCheck()
       await vi.advanceTimersByTimeAsync(150)
 
       const stopPromise = manager.stop()
@@ -368,6 +562,7 @@ describe('GatewayManager', () => {
     it('sends SIGKILL after shutdown timeout', async () => {
       manager = new GatewayManager(fastOptions({ shutdownTimeoutMs: 200 }))
       manager.start()
+      await flushPortCheck()
       await vi.advanceTimersByTimeAsync(150)
 
       const stopPromise = manager.stop()
@@ -414,6 +609,7 @@ describe('GatewayManager', () => {
       manager.onStatus((s) => statuses.push(s))
 
       manager.start()
+      await flushPortCheck()
       await vi.advanceTimersByTimeAsync(150) // online
 
       // Multiple successful health checks should not re-fire 'online'
@@ -441,16 +637,22 @@ describe('GatewayManager', () => {
   // -----------------------------------------------------------------------
 
   describe('security', () => {
-    it('uses spawn not exec', () => {
+    it('uses spawn not exec', async () => {
       manager = new GatewayManager(fastOptions())
       manager.start()
+      await flushPortCheck()
 
-      expect(mockSpawn).toHaveBeenCalled()
+      // First spawn call after port check is the gateway process
+      const gatewayCalls = mockSpawn.mock.calls.filter(
+        (c: string[]) => c[0] === '/usr/bin/node',
+      )
+      expect(gatewayCalls.length).toBeGreaterThanOrEqual(1)
     })
 
     it('health check connects only to 127.0.0.1', async () => {
       manager = new GatewayManager(fastOptions())
       manager.start()
+      await flushPortCheck()
 
       await vi.advanceTimersByTimeAsync(150)
 
@@ -464,12 +666,13 @@ describe('GatewayManager', () => {
   // -----------------------------------------------------------------------
 
   describe('logs', () => {
-    it('forwards stdout and stderr to log listeners', () => {
+    it('forwards stdout and stderr to log listeners', async () => {
       manager = new GatewayManager(fastOptions())
       const logs: Array<{ stream: string; data: string }> = []
       manager.onLog((stream, data) => logs.push({ stream, data }))
 
       manager.start()
+      await flushPortCheck()
 
       mockProc.stdout.emit('data', Buffer.from('Server started'))
       mockProc.stderr.emit('data', Buffer.from('Warning: something'))

@@ -70,7 +70,20 @@
       "Bash(kill 30241 30720 30709 30708 30675 30205 30187 29744 29737 25146 2>/dev/null; sleep 1; pgrep -f \"electron\" | head -5)",
       "Bash(kill -9 30675 2>/dev/null; sleep 1; pgrep -f \"electron\" | head -5)",
       "Bash(pkill -9 -f \"Electron\" 2>/dev/null; sleep 1; pgrep -f \"electron\\\\|Electron\" | head -5)",
-      "Bash(open -a Safari http://localhost:5173 2>/dev/null\nsleep 5\nscreencapture -x /tmp/safari-screenshot.png 2>&1)"
+      "Bash(open -a Safari http://localhost:5173 2>/dev/null\nsleep 5\nscreencapture -x /tmp/safari-screenshot.png 2>&1)",
+      "Bash(sleep 3; ps -p 15816 -o state= 2>/dev/null; lsof -p 15816 -i TCP -P -n 2>/dev/null | head -5; echo \"===\"; curl -s -m 3 http://127.0.0.1:18789/health && echo \"\" || echo \"Keine Antwort\")",
+      "Bash(ps -p 15816 -o pid,ppid,state,args 2>/dev/null; echo \"---\"; lsof -p 15816 -i -P -n 2>/dev/null | grep -v rapportd | head -10)",
+      "mcp__playwright__browser_navigate",
+      "Bash(ps -p 17035 -o pid,ppid,state,command 2>/dev/null)",
+      "Bash(ps -p 23083 -o pid,ppid,state,args= 2>/dev/null)",
+      "Bash(pgrep -P 23270 2>/dev/null | while read pid; do ps -p $pid -o pid,state,args= 2>/dev/null; done)",
+      "Bash(launchctl list)",
+      "Bash(launchctl unload ~/Library/LaunchAgents/ai.openclaw.gateway.plist 2>&1 && kill -9 23563 2>/dev/null; sleep 1 && lsof -i :18789 2>/dev/null || echo \"Port 18789 ist frei\")",
+      "Bash(kill -9 23270 2>/dev/null; pgrep -f 'electron-vite' | xargs kill -9 2>/dev/null; sleep 2 && ps aux | grep -E 'electron-vite|Electron.app.*MacOS/Electron ' | grep -v grep | grep -v 'Visual Studio')",
+      "Bash(pgrep -P 24021 2>/dev/null | while read pid; do ps -p $pid -o pid,state,args= 2>/dev/null; done)",
+      "mcp__playwright__browser_install",
+      "Bash(wc -c ~/.openclaw/.env 2>/dev/null && echo \"chars\" && awk '{print length}' ~/.openclaw/.env)",
+      "Bash(ps -p 24893 -o pid,state,rss,vsz,args= 2>/dev/null && echo \"---\" && lsof -p 24893 -i 2>/dev/null | head -10)"
     ]
   },
   "enabledMcpjsonServers": [
