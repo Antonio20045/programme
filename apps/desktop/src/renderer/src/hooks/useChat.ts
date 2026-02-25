@@ -292,9 +292,11 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
           return res.json() as Promise<unknown>
         })
       } else {
+        console.log('[useChat] sending via IPC:', { method: 'POST', path: '/api/message', sessionId })
         postPromise = window.api
           .gatewayFetch({ method: 'POST', path: '/api/message', body: { text: trimmed, sessionId } })
           .then((res) => {
+            console.log('[useChat] gateway response:', { ok: res.ok, status: res.status, data: res.data })
             if (!res.ok) {
               const detail = typeof res.data === 'object' && res.data !== null
                 ? ((res.data as Record<string, unknown>)['error'] as string) ?? ''
@@ -451,6 +453,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
           setIsLoading(false)
           const message =
             err instanceof Error ? err.message : 'Unbekannter Fehler'
+          console.log('[useChat] ERROR:', message)
           setError(message)
         })
     },
