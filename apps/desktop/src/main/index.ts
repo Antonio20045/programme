@@ -1347,13 +1347,11 @@ setInterval(() => {
  * Returns: { ok, status, data } — data is the parsed JSON body or null.
  */
 ipcMain.handle('gateway:fetch', async (_event, payload: unknown) => {
-  console.log('[gateway:fetch] called with:', JSON.stringify(payload))
   if (
     typeof payload !== 'object' || payload === null ||
     typeof (payload as Record<string, unknown>)['method'] !== 'string' ||
     typeof (payload as Record<string, unknown>)['path'] !== 'string'
   ) {
-    console.log('[gateway:fetch] INVALID PAYLOAD — returning 400')
     return { ok: false, status: 400, data: null }
   }
 
@@ -1384,7 +1382,6 @@ ipcMain.handle('gateway:fetch', async (_event, payload: unknown) => {
     : 'http://127.0.0.1:18789'
 
   const token = readAgentTokenFromFile()
-  console.log('[gateway:fetch] baseUrl:', baseUrl, '| token:', token ? 'SET' : 'MISSING', '| full URL:', `${baseUrl}${reqPath}`)
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token !== null && token !== '') {
     headers['Authorization'] = `Bearer ${token}`
@@ -1406,8 +1403,6 @@ ipcMain.handle('gateway:fetch', async (_event, payload: unknown) => {
       signal: controller.signal,
     })
     clearTimeout(timeout)
-    console.log('[gateway:fetch] response:', response.status, response.ok)
-
     let data: unknown = null
     try {
       data = await response.json() as unknown
@@ -1419,7 +1414,6 @@ ipcMain.handle('gateway:fetch', async (_event, payload: unknown) => {
   } catch (err) {
     clearTimeout(timeout)
     const message = err instanceof Error ? err.message : 'Fetch fehlgeschlagen'
-    console.log('[gateway:fetch] FETCH ERROR:', message)
     return { ok: false, status: 0, data: null, error: message }
   }
 })
