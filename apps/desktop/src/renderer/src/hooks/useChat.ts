@@ -341,7 +341,8 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
           if (!es) return
 
           es.addEventListener('token', (e: MessageEvent<string>) => {
-            assistantBufferRef.current += e.data
+            // Gateway sends accumulated text (snapshot per turn), not deltas
+            assistantBufferRef.current = e.data
             const currentContent = assistantBufferRef.current
             const currentId = assistantIdRef.current
             setMessages((prev) =>
@@ -431,7 +432,29 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
             })
           })
 
-          es.addEventListener('done', () => {
+          es.addEventListener('done', (e: MessageEvent<string>) => {
+            // Apply final text from gateway to ensure completeness
+            try {
+              const parsed: unknown = JSON.parse(e.data)
+              if (
+                typeof parsed === 'object' &&
+                parsed !== null &&
+                'text' in parsed &&
+                typeof (parsed as { text: string }).text === 'string'
+              ) {
+                const finalText = (parsed as { text: string }).text
+                if (finalText.length > 0) {
+                  const currentId = assistantIdRef.current
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === currentId ? { ...m, content: finalText } : m,
+                    ),
+                  )
+                }
+              }
+            } catch {
+              // done event may not carry text — that's ok
+            }
             es.close()
             eventSourceRef.current = null
             setIsLoading(false)

@@ -83,7 +83,9 @@
       "Bash(pgrep -P 24021 2>/dev/null | while read pid; do ps -p $pid -o pid,state,args= 2>/dev/null; done)",
       "mcp__playwright__browser_install",
       "Bash(wc -c ~/.openclaw/.env 2>/dev/null && echo \"chars\" && awk '{print length}' ~/.openclaw/.env)",
-      "Bash(ps -p 24893 -o pid,state,rss,vsz,args= 2>/dev/null && echo \"---\" && lsof -p 24893 -i 2>/dev/null | head -10)"
+      "Bash(ps -p 24893 -o pid,state,rss,vsz,args= 2>/dev/null && echo \"---\" && lsof -p 24893 -i 2>/dev/null | head -10)",
+      "Bash(openclaw configure --help 2>&1 | head -30)",
+      "Bash(pgrep -f \"openclaw.*gateway\\\\|openclaw-gateway\" | head -5)"
     ]
   },
   "enabledMcpjsonServers": [
