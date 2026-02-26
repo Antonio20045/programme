@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { DesktopAgentBridge } from '../../../../packages/gateway/tool-router'
 import { DesktopAgent } from '../main/agent'
+import type { GetTokenFn } from '../main/agent'
 import { registerTool, _resetRegistry } from '@ki-assistent/tools'
 import type { ExtendedAgentTool } from '@ki-assistent/tools'
 
@@ -13,6 +14,7 @@ import type { ExtendedAgentTool } from '@ki-assistent/tools'
 
 let testPort = 29_500
 const TOKEN = 'agent-test-token'
+const staticToken: GetTokenFn = () => ({ kind: 'static', value: TOKEN })
 
 function makeTool(overrides?: Partial<ExtendedAgentTool>): ExtendedAgentTool {
   return {
@@ -50,7 +52,7 @@ describe('DesktopAgent', () => {
     _resetRegistry()
     bridge = new DesktopAgentBridge({ port: testPort, token: TOKEN })
     bridge.start()
-    agent = new DesktopAgent(`ws://127.0.0.1:${String(testPort)}`, TOKEN)
+    agent = new DesktopAgent(`ws://127.0.0.1:${String(testPort)}`, staticToken)
   })
 
   afterEach(async () => {
@@ -188,5 +190,58 @@ describe('DesktopAgent', () => {
     // Restart bridge so afterEach cleanup works
     bridge = new DesktopAgentBridge({ port: testPort, token: TOKEN })
     bridge.start()
+  })
+
+  it('fetches fresh token on reconnect', async () => {
+    const TOKEN_V2 = 'refreshed-token'
+    let callCount = 0
+    const getToken: GetTokenFn = () => {
+      callCount++
+      // Return original token on first connect, new token on reconnect
+      const value = callCount === 1 ? TOKEN : TOKEN_V2
+      return { kind: 'static', value }
+    }
+
+    agent.disconnect() // disconnect the beforeEach agent
+    agent = new DesktopAgent(`ws://127.0.0.1:${String(testPort)}`, getToken)
+    agent.connect()
+    await waitForConnection(bridge)
+    expect(callCount).toBe(1)
+
+    // Stop bridge to trigger reconnect
+    await bridge.stop()
+
+    // Restart bridge accepting both tokens (use resolveUserId for flexible auth)
+    bridge = new DesktopAgentBridge({
+      port: testPort,
+      resolveUserId: (tok) => (tok === TOKEN || tok === TOKEN_V2 ? 'user-1' : null),
+    })
+    bridge.start()
+
+    await waitForConnection(bridge, 10_000)
+    expect(callCount).toBe(2)
+    expect(bridge.isConnected()).toBe(true)
+  }, 15_000)
+
+  it('sends clerkToken field for clerk auth mode', async () => {
+    const CLERK_JWT = 'eyJhbGciOiJSUzI1NiJ9.test-jwt'
+    const clerkToken: GetTokenFn = () => ({ kind: 'clerk', value: CLERK_JWT })
+
+    // Use a custom bridge with _clerkVerify to accept any JWT
+    await bridge.stop()
+    bridge = new DesktopAgentBridge({
+      port: testPort,
+      clerkSecretKey: 'sk_test_fake',
+      _clerkVerify: async () => ({ data: { sub: 'user_clerk_123' } }),
+    })
+    bridge.start()
+
+    agent.disconnect()
+    agent = new DesktopAgent(`ws://127.0.0.1:${String(testPort)}`, clerkToken)
+    agent.connect()
+    await waitForConnection(bridge)
+
+    expect(bridge.isConnected()).toBe(true)
+    expect(agent.getStatus()).toBe('connected')
   })
 })

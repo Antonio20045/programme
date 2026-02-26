@@ -55,7 +55,7 @@ export interface DbPool {
   query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>
 }
 
-export interface GoogleOAuthContext {
+export interface OAuthContext {
   readonly accessToken: string
   readonly refreshToken: string
   readonly clientId: string
@@ -63,3 +63,6 @@ export interface GoogleOAuthContext {
   readonly expiresAt: number // Unix timestamp ms, 0 = unknown
   readonly onTokenRefreshed?: (newAccessToken: string, newExpiresAt: number) => Promise<void>
 }
+
+/** @deprecated Use OAuthContext instead */
+export type GoogleOAuthContext = OAuthContext

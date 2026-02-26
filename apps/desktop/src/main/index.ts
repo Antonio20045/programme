@@ -370,7 +370,12 @@ function setupGateway(autoStart = true): void {
       return
     }
 
-    desktopAgent = new DesktopAgent(serverUrl, token)
+    desktopAgent = new DesktopAgent(serverUrl, () => {
+      if (clerkToken) {
+        return { kind: 'clerk', value: clerkToken }
+      }
+      return { kind: 'static', value: token }
+    })
     desktopAgent.onConnect = () => {
       const win = mainWindow
       if (win && !win.isDestroyed()) {

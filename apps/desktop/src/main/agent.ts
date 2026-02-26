@@ -361,6 +361,14 @@ interface PingMessage {
 
 type ServerMessage = ToolRequest | PingMessage
 
+// ─── Auth Token Types ───────────────────────────────────────
+
+export type TokenResult =
+  | { readonly kind: 'static'; readonly value: string }
+  | { readonly kind: 'clerk'; readonly value: string }
+
+export type GetTokenFn = () => TokenResult
+
 // ─── DesktopAgent ────────────────────────────────────────────
 
 export class DesktopAgent {
@@ -377,7 +385,7 @@ export class DesktopAgent {
 
   constructor(
     private readonly serverUrl: string,
-    private readonly token: string,
+    private readonly getToken: GetTokenFn,
   ) {}
 
   connect(): void {
@@ -410,8 +418,12 @@ export class DesktopAgent {
     const ws = new WebSocket(this.serverUrl)
 
     ws.addEventListener('open', () => {
-      // Authenticate immediately
-      ws.send(JSON.stringify({ type: 'auth', token: this.token }))
+      // Authenticate immediately — fetch current token on every connect/reconnect
+      const token = this.getToken()
+      const authMsg = token.kind === 'clerk'
+        ? { type: 'auth', clerkToken: token.value }
+        : { type: 'auth', token: token.value }
+      ws.send(JSON.stringify(authMsg))
       this.setStatus('connected')
       this.reconnectDelay = INITIAL_RECONNECT_DELAY
       this.startStableTimer()
