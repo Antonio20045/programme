@@ -38,6 +38,7 @@ const MessageBubble = memo(function MessageBubble({
     toolCallId: string,
     decision: 'execute' | 'reject',
     modifiedParams?: Record<string, unknown>,
+    oauthTokens?: { accessToken: string; refreshToken: string; expiresAt: number },
   ) => void
 }): JSX.Element {
   const isUser = message.role === 'user'

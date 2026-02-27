@@ -20,6 +20,12 @@ interface UseChatOptions {
   readonly onSessionCreated?: (sessionId: string) => void
 }
 
+interface OAuthTokens {
+  readonly accessToken: string
+  readonly refreshToken: string
+  readonly expiresAt: number
+}
+
 interface UseChatReturn {
   readonly messages: readonly ChatMessage[]
   readonly isLoading: boolean
@@ -29,6 +35,7 @@ interface UseChatReturn {
     toolCallId: string,
     decision: 'execute' | 'reject',
     modifiedParams?: Record<string, unknown>,
+    oauthTokens?: OAuthTokens,
   ) => void
 }
 
@@ -169,6 +176,14 @@ function buildToolPreview(
         type: 'notes',
         fields: {
           Titel: str(params['title'] ?? ''),
+        },
+      }
+    case 'connect-google':
+      return {
+        type: 'oauth_connect' as ToolPreviewType,
+        fields: {
+          Provider: 'Google',
+          Dienste: 'Gmail, Kalender',
         },
       }
     default: {
@@ -458,6 +473,15 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
             setIsLoading(false)
           })
 
+          es.addEventListener('token_refreshed', (e: MessageEvent<string>) => {
+            try {
+              const data = JSON.parse(e.data) as { provider: string; accessToken: string; expiresAt: number }
+              void window.api.updateOAuthToken(data)
+            } catch {
+              // invalid payload — ignore
+            }
+          })
+
           es.addEventListener('error', (e: Event) => {
             es.close()
             eventSourceRef.current = null
@@ -485,6 +509,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
       toolCallId: string,
       decision: 'execute' | 'reject',
       modifiedParams?: Record<string, unknown>,
+      oauthTokens?: OAuthTokens,
     ) => {
       const sessionId = currentSessionIdRef.current
       if (sessionId === null) return
@@ -492,6 +517,9 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
       const body: Record<string, unknown> = { toolCallId, decision }
       if (modifiedParams !== undefined) {
         body['modifiedParams'] = modifiedParams
+      }
+      if (oauthTokens !== undefined) {
+        body['oauthTokens'] = oauthTokens
       }
 
       window.api.gatewayFetch({

@@ -150,4 +150,15 @@ contextBridge.exposeInMainWorld('api', {
   clerkBrowserSignIn: (provider?: string): Promise<{ success: boolean; ticket?: string; error?: string }> => {
     return ipcRenderer.invoke('auth:clerk-browser-signin', provider !== undefined ? { provider } : undefined)
   },
+
+  startOAuth: (data: { service: string }): Promise<{
+    success: boolean; error?: string;
+    tokens?: { accessToken: string; refreshToken: string; expiresAt: number }
+  }> => {
+    return ipcRenderer.invoke('auth:start-oauth', data)
+  },
+
+  updateOAuthToken: (data: { provider: string; accessToken: string; expiresAt: number }): Promise<{ success: boolean }> => {
+    return ipcRenderer.invoke('oauth:update-token', data)
+  },
 })

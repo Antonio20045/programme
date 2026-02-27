@@ -10,7 +10,8 @@ import { GatewayManager } from './gateway-manager'
 import { PairingManager } from './pairing'
 import { DesktopAgent } from './agent'
 import { readMemoryEntries, deleteMemoryEntry, readActivityLog } from './memory-reader'
-import { OAuthServer, exchangeAndStoreTokens, revokeTokens, getIntegrationStatus } from './oauth-server'
+import { OAuthServer, exchangeAndStoreTokens, revokeTokens, getIntegrationStatus, readEncryptedToken, writeEncryptedToken } from './oauth-server'
+import type { TokenData } from './oauth-server'
 import { TrayManager } from './tray'
 import { initAutoUpdater, stopAutoUpdater } from './updater'
 
@@ -280,6 +281,60 @@ function readAgentTokenFromFile(): string | null {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Token-Sync: Desktop safeStorage → Gateway in-memory store
+// ---------------------------------------------------------------------------
+
+async function syncTokenToGateway(service: string): Promise<void> {
+  const token: TokenData | null = readEncryptedToken(service)
+  if (!token) return
+  const agentToken = readAgentTokenFromFile()
+  if (!agentToken) return
+
+  const expiresAt = token.obtained_at + token.expires_in * 1000
+  await net.fetch('http://127.0.0.1:18789/api/integrations/sync-token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${agentToken}`,
+    },
+    body: JSON.stringify({
+      provider: 'google',
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token,
+      expiresAt,
+    }),
+  })
+}
+
+async function unsyncTokenFromGateway(service: string): Promise<void> {
+  void service // provider is always 'google' for now
+  const agentToken = readAgentTokenFromFile()
+  if (!agentToken) return
+
+  await net.fetch('http://127.0.0.1:18789/api/integrations/sync-token', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${agentToken}`,
+    },
+    body: JSON.stringify({ provider: 'google' }),
+  })
+}
+
+async function syncAllTokensToGateway(): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      for (const service of ['gmail', 'calendar']) {
+        await syncTokenToGateway(service)
+      }
+      return
+    } catch {
+      await new Promise((r) => setTimeout(r, 500))
+    }
+  }
+}
+
 /**
  * Build a sanitized gateway config for the renderer.
  * Converts ws:// URLs to http:// and masks token to last 4 chars.
@@ -449,6 +504,8 @@ function setupGateway(autoStart = true): void {
       ...envKeys,
       OPENCLAW_AUTH_TOKEN: readAgentTokenFromFile() ?? '',
       SQLITE_DB_PATH: sqliteDbPath,
+      GOOGLE_CLIENT_ID: process.env['GOOGLE_OAUTH_CLIENT_ID'] ?? '',
+      GOOGLE_CLIENT_SECRET: process.env['GOOGLE_OAUTH_CLIENT_SECRET'] ?? '',
       // Skip heavy sidecars that block startup (NOT channels/providers — we need those)
       OPENCLAW_SKIP_BROWSER_CONTROL_SERVER: '1',
       OPENCLAW_SKIP_CANVAS_HOST: '1',
@@ -462,6 +519,9 @@ function setupGateway(autoStart = true): void {
     const win = mainWindow
     if (win && !win.isDestroyed()) {
       win.webContents.send('gateway:status', status)
+    }
+    if (status === 'online') {
+      void syncAllTokensToGateway()
     }
   })
 
@@ -1170,6 +1230,7 @@ ipcMain.handle('integrations:connect', async (_event, payload: unknown) => {
     void shell.openExternal(authUrl)
     const code = await server.waitForCallback()
     await exchangeAndStoreTokens(code, service)
+    void syncTokenToGateway(service)
     return { success: true }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Verbindung fehlgeschlagen' }
@@ -1192,6 +1253,7 @@ ipcMain.handle('integrations:disconnect', async (_event, payload: unknown) => {
 
   try {
     await revokeTokens(service)
+    void unsyncTokenFromGateway(service)
     return { success: true }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Trennen fehlgeschlagen' }
@@ -1200,6 +1262,92 @@ ipcMain.handle('integrations:disconnect', async (_event, payload: unknown) => {
 
 ipcMain.handle('integrations:status', () => {
   return getIntegrationStatus()
+})
+
+// ---------------------------------------------------------------------------
+// Chat-based OAuth IPC (connect-google tool flow)
+// ---------------------------------------------------------------------------
+
+ipcMain.handle('auth:start-oauth', async (_event, payload: unknown) => {
+  if (
+    typeof payload !== 'object' || payload === null ||
+    typeof (payload as Record<string, unknown>)['service'] !== 'string'
+  ) {
+    return { success: false, error: 'Ungültige Eingabe' }
+  }
+  const { service } = payload as { service: string }
+  if (service !== 'google') {
+    return { success: false, error: 'Unbekannter Service' }
+  }
+
+  const clientId = process.env['GOOGLE_OAUTH_CLIENT_ID'] ?? ''
+  const clientSecret = process.env['GOOGLE_OAUTH_CLIENT_SECRET'] ?? ''
+  if (clientId === '' || clientSecret === '') {
+    return { success: false, error: 'Google OAuth ist nicht konfiguriert' }
+  }
+
+  const server = new OAuthServer()
+  try {
+    server.start()
+    const authUrl = server.buildCombinedAuthUrl(['gmail', 'calendar'])
+    void shell.openExternal(authUrl)
+    const code = await server.waitForCallback()
+
+    // Exchange code — combined scopes, store under 'gmail' key
+    await exchangeAndStoreTokens(code, 'gmail')
+    const gmailToken: TokenData | null = readEncryptedToken('gmail')
+    if (!gmailToken) {
+      return { success: false, error: 'Token-Exchange fehlgeschlagen' }
+    }
+
+    // Store same token for calendar (combined scopes cover both)
+    writeEncryptedToken('calendar', gmailToken)
+
+    // Sync to gateway
+    void syncTokenToGateway('gmail')
+
+    const expiresAt = gmailToken.obtained_at + gmailToken.expires_in * 1000
+    return {
+      success: true,
+      tokens: {
+        accessToken: gmailToken.access_token,
+        refreshToken: gmailToken.refresh_token,
+        expiresAt,
+      },
+    }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Verbindung fehlgeschlagen' }
+  } finally {
+    await server.stop()
+  }
+})
+
+ipcMain.handle('oauth:update-token', async (_event, payload: unknown) => {
+  if (
+    typeof payload !== 'object' || payload === null ||
+    typeof (payload as Record<string, unknown>)['provider'] !== 'string' ||
+    typeof (payload as Record<string, unknown>)['accessToken'] !== 'string' ||
+    typeof (payload as Record<string, unknown>)['expiresAt'] !== 'number'
+  ) {
+    return { success: false, error: 'Ungültige Eingabe' }
+  }
+
+  const { accessToken, expiresAt } = payload as { provider: string; accessToken: string; expiresAt: number }
+
+  // Update the gmail token in safeStorage (source of truth for Desktop)
+  const existing: TokenData | null = readEncryptedToken('gmail')
+  if (!existing) {
+    return { success: false, error: 'Kein bestehender Token gefunden' }
+  }
+
+  const updated: TokenData = {
+    ...existing,
+    access_token: accessToken,
+    obtained_at: Date.now(),
+    expires_in: Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)),
+  }
+  writeEncryptedToken('gmail', updated)
+  return { success: true }
 })
 
 // ---------------------------------------------------------------------------

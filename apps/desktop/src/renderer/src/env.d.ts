@@ -63,7 +63,7 @@ interface SettingsUpdateResult {
   error?: string
 }
 
-type ToolPreviewType = 'email' | 'calendar' | 'shell' | 'filesystem' | 'notes' | 'generic'
+type ToolPreviewType = 'email' | 'calendar' | 'shell' | 'filesystem' | 'notes' | 'oauth_connect' | 'generic'
 
 interface ToolPreview {
   type: ToolPreviewType
@@ -169,6 +169,11 @@ interface ElectronApi {
   setClerkToken: (token: string | null) => Promise<{ success: boolean; error?: string }>
   getClerkPublishableKey: () => Promise<string | null>
   clerkBrowserSignIn: (provider?: string) => Promise<{ success: boolean; ticket?: string; error?: string }>
+  startOAuth: (data: { service: string }) => Promise<{
+    success: boolean; error?: string;
+    tokens?: { accessToken: string; refreshToken: string; expiresAt: number }
+  }>
+  updateOAuthToken: (data: { provider: string; accessToken: string; expiresAt: number }) => Promise<{ success: boolean }>
 }
 
 interface Window {

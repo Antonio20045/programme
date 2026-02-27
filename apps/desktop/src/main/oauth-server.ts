@@ -34,7 +34,7 @@ const VALID_SERVICES = ['gmail', 'calendar', 'drive', 'docs', 'sheets', 'contact
 // Types
 // ---------------------------------------------------------------------------
 
-interface TokenData {
+export interface TokenData {
   access_token: string
   refresh_token: string
   expires_in: number
@@ -78,6 +78,26 @@ export class OAuthServer {
       redirect_uri: REDIRECT_URI,
       response_type: 'code',
       scope,
+      state: this.state,
+      access_type: 'offline',
+      prompt: 'consent',
+    })
+    return `${AUTH_ENDPOINT}?${params.toString()}`
+  }
+
+  buildCombinedAuthUrl(services: string[]): string {
+    const scopes = services
+      .map((s) => SERVICE_SCOPES[s])
+      .filter((s): s is string => Boolean(s))
+      .join(' ')
+    if (scopes.length === 0) throw new Error('Keine gültigen Services angegeben')
+
+    const clientId = process.env['GOOGLE_OAUTH_CLIENT_ID'] ?? ''
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: REDIRECT_URI,
+      response_type: 'code',
+      scope: scopes,
       state: this.state,
       access_type: 'offline',
       prompt: 'consent',
@@ -152,7 +172,7 @@ function getCredentialPath(service: string): string {
   return path.join(os.homedir(), '.openclaw', 'credentials', `oauth-${service}.enc`)
 }
 
-function readEncryptedToken(service: string): TokenData | null {
+export function readEncryptedToken(service: string): TokenData | null {
   const filePath = getCredentialPath(service)
   try {
     const encrypted = fs.readFileSync(filePath)
@@ -164,7 +184,7 @@ function readEncryptedToken(service: string): TokenData | null {
   }
 }
 
-function writeEncryptedToken(service: string, token: TokenData): void {
+export function writeEncryptedToken(service: string, token: TokenData): void {
   if (!safeStorage.isEncryptionAvailable()) {
     console.warn('safeStorage not available — OAuth token will NOT be persisted to disk')
     return
