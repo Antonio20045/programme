@@ -174,6 +174,13 @@ interface ElectronApi {
     tokens?: { accessToken: string; refreshToken: string; expiresAt: number }
   }>
   updateOAuthToken: (data: { provider: string; accessToken: string; expiresAt: number }) => Promise<{ success: boolean }>
+  onNotification: (callback: (notification: {
+    id: string; agentId: string; agentName: string;
+    type: string; summary: string; detail?: string;
+    priority: string; createdAt: number; proposalIds?: readonly string[];
+  }) => void) => () => void
+  onNotificationFocus: (callback: (notificationId: string) => void) => () => void
+  acknowledgeNotification: (id: string) => Promise<{ success: boolean; error?: string }>
 }
 
 interface Window {

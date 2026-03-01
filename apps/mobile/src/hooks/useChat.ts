@@ -176,6 +176,24 @@ export function useChat(): UseChatResult {
         setIsStreaming(false)
         break
       }
+
+      case 'notification': {
+        if (msg.notification) {
+          const id = nextId()
+          const n = msg.notification
+          const prefix = `[${n.agentName}] `
+          setMessages((prev) => [
+            ...prev,
+            {
+              id,
+              role: 'assistant',
+              content: prefix + n.summary,
+              timestamp: new Date().toISOString(),
+            },
+          ])
+        }
+        break
+      }
     }
   }, [])
 

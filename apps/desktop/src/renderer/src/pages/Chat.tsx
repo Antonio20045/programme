@@ -4,6 +4,7 @@ import type { ChatMessage } from '../hooks/useChat'
 import { useGatewayStatus } from '../hooks/useGatewayStatus'
 import { useGatewayConfig } from '../hooks/useGatewayConfig'
 import { useAgentStatus } from '../hooks/useAgentStatus'
+import { useNotifications } from '../hooks/useNotifications'
 import MarkdownMessage from '../components/MarkdownMessage'
 import FileDropZone from '../components/FileDropZone'
 import ChatInput from '../components/ChatInput'
@@ -11,6 +12,7 @@ import EmptyState from '../components/EmptyState'
 import StreamingCursor from '../components/StreamingCursor'
 import ToolExecution from '../components/ToolExecution'
 import ToolConfirmation from '../components/ToolConfirmation'
+import NotificationBanner from '../components/NotificationBanner'
 
 interface ChatProps {
   readonly activeSessionId: string | null
@@ -105,6 +107,7 @@ export default function Chat({ activeSessionId, onSessionCreated }: ChatProps): 
   const gatewayStatus = useGatewayStatus()
   const { mode } = useGatewayConfig()
   const agentStatus = useAgentStatus()
+  const { notifications, acknowledge, acknowledgeAll } = useNotifications()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const isOffline = gatewayStatus !== 'online' && gatewayStatus !== 'starting'
@@ -132,6 +135,13 @@ export default function Chat({ activeSessionId, onSessionCreated }: ChatProps): 
   return (
     <FileDropZone onFilesSelected={(files) => { handleSend('', files) }}>
       <div className="flex h-full flex-col">
+        {/* Notification banners from proactive sub-agents */}
+        <NotificationBanner
+          notifications={notifications}
+          onAcknowledge={acknowledge}
+          onAcknowledgeAll={acknowledgeAll}
+        />
+
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mx-auto flex max-w-3xl flex-col gap-4">

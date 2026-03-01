@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-non-literal-fs-filename */
 /* eslint-disable security/detect-object-injection */
-import { app, BrowserWindow, dialog, ipcMain, net, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, net, Notification, safeStorage, shell } from 'electron'
 import { randomBytes } from 'node:crypto'
 import http from 'node:http'
 import fs from 'fs'
@@ -14,6 +14,7 @@ import { OAuthServer, exchangeAndStoreTokens, revokeTokens, getIntegrationStatus
 import type { TokenData } from './oauth-server'
 import { TrayManager } from './tray'
 import { initAutoUpdater, stopAutoUpdater } from './updater'
+import { encrypt, encodeMessage, fromBase64, toBase64 } from '@ki-assistent/shared'
 
 // Fix: Run Chromium network service in-process to prevent out-of-process crash
 // (Electron 35 + macOS 13 — network_service_instance_impl.cc crash)
@@ -26,6 +27,10 @@ let pairingManager: PairingManager | null = null
 let trayManager: TrayManager | null = null
 let isQuitting = false
 let clerkToken: string | null = null
+let notificationStream: http.ClientRequest | null = null
+let notificationReconnectTimer: ReturnType<typeof setTimeout> | null = null
+let notificationReconnectDelay = 5_000
+let relayWs: WebSocket | null = null
 
 // ── SSE Stream Tokens (short-lived, single-use) ──────────────
 const SSE_TOKEN_TTL_MS = 60_000 // 60 seconds
@@ -522,6 +527,9 @@ function setupGateway(autoStart = true): void {
     }
     if (status === 'online') {
       void syncAllTokensToGateway()
+      connectNotificationStream()
+    } else {
+      disconnectNotificationStream()
     }
   })
 
@@ -534,6 +542,235 @@ function setupGateway(autoStart = true): void {
   if (autoStart) {
     gatewayManager.start()
   }
+}
+
+// ---------------------------------------------------------------------------
+// Notification Stream (SSE from Gateway → Native + IPC + Mobile)
+// ---------------------------------------------------------------------------
+
+const NOTIFICATION_RECONNECT_BASE_MS = 5_000
+const NOTIFICATION_RECONNECT_MAX_MS = 60_000
+
+function connectNotificationStream(): void {
+  disconnectNotificationStream()
+
+  const token = readAgentTokenFromFile()
+  if (!token) return
+
+  const req = http.get('http://127.0.0.1:18789/api/notifications', {
+    headers: { Authorization: `Bearer ${token}` },
+  }, (res) => {
+    if (res.statusCode !== 200) {
+      res.resume()
+      scheduleNotificationReconnect()
+      return
+    }
+
+    notificationReconnectDelay = NOTIFICATION_RECONNECT_BASE_MS
+
+    let buffer = ''
+    let currentEvent = ''
+    let currentData = ''
+
+    res.setEncoding('utf-8')
+    res.on('data', (chunk: string) => {
+      buffer += chunk
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (line === '') {
+          if (currentEvent === 'notification' && currentData) {
+            handleNotificationEvent(currentData)
+          }
+          currentEvent = ''
+          currentData = ''
+        } else if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7)
+        } else if (line.startsWith('data: ')) {
+          currentData += (currentData ? '\n' : '') + line.slice(6)
+        }
+      }
+    })
+
+    res.on('end', () => {
+      scheduleNotificationReconnect()
+    })
+
+    res.on('error', () => {
+      scheduleNotificationReconnect()
+    })
+  })
+
+  req.on('error', () => {
+    scheduleNotificationReconnect()
+  })
+
+  notificationStream = req
+}
+
+function disconnectNotificationStream(): void {
+  if (notificationReconnectTimer) {
+    clearTimeout(notificationReconnectTimer)
+    notificationReconnectTimer = null
+  }
+  if (notificationStream) {
+    notificationStream.destroy()
+    notificationStream = null
+  }
+  notificationReconnectDelay = NOTIFICATION_RECONNECT_BASE_MS
+}
+
+function scheduleNotificationReconnect(): void {
+  if (notificationReconnectTimer) return
+  notificationReconnectTimer = setTimeout(() => {
+    notificationReconnectTimer = null
+    connectNotificationStream()
+  }, notificationReconnectDelay)
+  notificationReconnectDelay = Math.min(
+    notificationReconnectDelay * 2,
+    NOTIFICATION_RECONNECT_MAX_MS,
+  )
+}
+
+interface NotificationPayload {
+  readonly id: string
+  readonly agentId: string
+  readonly agentName: string
+  readonly type: 'result' | 'needs-approval' | 'error'
+  readonly summary: string
+  readonly detail?: string
+  readonly priority: 'high' | 'normal' | 'low'
+  readonly createdAt: number
+  readonly expiresAt: number
+  readonly proposalIds?: readonly string[]
+}
+
+const VALID_NOTIFICATION_TYPES = new Set(['result', 'needs-approval', 'error'])
+const VALID_NOTIFICATION_PRIORITIES = new Set(['high', 'normal', 'low'])
+
+function isNotificationPayload(data: unknown): data is NotificationPayload {
+  if (typeof data !== 'object' || data === null) return false
+  const d = data as Record<string, unknown>
+  return typeof d['id'] === 'string' &&
+    typeof d['agentId'] === 'string' &&
+    typeof d['agentName'] === 'string' &&
+    typeof d['type'] === 'string' &&
+    VALID_NOTIFICATION_TYPES.has(d['type'] as string) &&
+    typeof d['summary'] === 'string' &&
+    typeof d['priority'] === 'string' &&
+    VALID_NOTIFICATION_PRIORITIES.has(d['priority'] as string) &&
+    typeof d['createdAt'] === 'number'
+}
+
+function handleNotificationEvent(rawData: string): void {
+  let data: unknown
+  try {
+    data = JSON.parse(rawData)
+  } catch {
+    return
+  }
+
+  if (!isNotificationPayload(data)) return
+
+  // 1. Send to renderer via IPC
+  const win = mainWindow
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('notification:received', data)
+  }
+
+  // 2. Show native OS notification
+  showNativeNotification(data)
+
+  // 3. Forward to mobile (if paired)
+  forwardNotificationToMobile(data)
+}
+
+function showNativeNotification(notification: NotificationPayload): void {
+  if (!Notification.isSupported()) return
+
+  const n = new Notification({
+    title: `Sub-Agent: ${notification.agentName}`,
+    body: notification.summary.slice(0, 200),
+    silent: notification.priority !== 'high',
+  })
+
+  n.on('click', () => {
+    const win = mainWindow
+    if (win && !win.isDestroyed()) {
+      win.show()
+      win.focus()
+      win.webContents.send('notification:focus', notification.id)
+    }
+  })
+
+  n.show()
+}
+
+function forwardNotificationToMobile(notification: NotificationPayload): void {
+  const relayUrl = getRelayUrl()
+  let mgr: PairingManager
+  try {
+    mgr = new PairingManager(relayUrl)
+  } catch {
+    return
+  }
+
+  const stored = mgr.getStoredPairing()
+  if (!stored) return
+
+  const jwt = mgr.getSecret('pairing:jwt')
+  const privateKeyB64 = mgr.getSecret('pairing:privateKey')
+  if (!jwt || !privateKeyB64) return
+
+  const partnerPublicKey = fromBase64(stored.partnerPublicKey)
+  const privateKey = fromBase64(privateKeyB64)
+
+  const innerMessage = {
+    type: 'notification',
+    notification: {
+      id: notification.id,
+      agentId: notification.agentId,
+      agentName: notification.agentName,
+      type: notification.type,
+      summary: notification.summary,
+      priority: notification.priority,
+    },
+  }
+
+  const plaintext = encodeMessage(JSON.stringify(innerMessage))
+  const encrypted = encrypt(plaintext, partnerPublicKey, privateKey)
+  const payload = toBase64(encrypted)
+
+  // Send via relay WebSocket (lazy-connect, fire-and-forget)
+  if (relayWs !== null && relayWs.readyState === 1) { // 1 = OPEN
+    relayWs.send(JSON.stringify({ type: 'message', payload }))
+    return
+  }
+
+  // Already connecting — skip to avoid orphaned WebSocket connections
+  if (relayWs !== null && relayWs.readyState === 0) { // 0 = CONNECTING
+    return
+  }
+
+  // Close stale WebSocket before creating a new one
+  if (relayWs !== null) {
+    relayWs.close()
+    relayWs = null
+  }
+
+  const wsUrl = relayUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:')
+  const ws = new WebSocket(`${wsUrl}/ws?token=${encodeURIComponent(jwt)}`)
+  ws.addEventListener('open', () => {
+    ws.send(JSON.stringify({ type: 'message', payload }))
+  })
+  ws.addEventListener('close', () => {
+    if (relayWs === ws) relayWs = null
+  })
+  ws.addEventListener('error', () => {
+    // close event follows
+  })
+  relayWs = ws
 }
 
 // ---------------------------------------------------------------------------
@@ -1571,6 +1808,34 @@ ipcMain.handle('gateway:fetch', async (_event, payload: unknown) => {
   }
 })
 
+ipcMain.handle('notifications:ack', async (_event, payload: unknown) => {
+  if (typeof payload !== 'string' || payload === '') {
+    return { success: false, error: 'Ungültige ID' }
+  }
+
+  const token = readAgentTokenFromFile()
+  if (!token) return { success: false, error: 'Kein Token' }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+
+  try {
+    const response = await net.fetch(
+      `http://127.0.0.1:18789/api/notifications/${encodeURIComponent(payload)}/ack`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      },
+    )
+    clearTimeout(timeout)
+    return { success: response.ok }
+  } catch {
+    clearTimeout(timeout)
+    return { success: false, error: 'Gateway nicht erreichbar' }
+  }
+})
+
 ipcMain.handle('config:set-gateway', async (_event, payload: unknown) => {
   if (typeof payload !== 'object' || payload === null) {
     return { success: false, error: 'Ungültige Eingabe' }
@@ -1854,6 +2119,11 @@ app.whenReady().then(() => {
 
 app.on('before-quit', (e) => {
   stopAutoUpdater()
+  disconnectNotificationStream()
+  if (relayWs) {
+    relayWs.close()
+    relayWs = null
+  }
 
   if (desktopAgent) {
     desktopAgent.disconnect()
