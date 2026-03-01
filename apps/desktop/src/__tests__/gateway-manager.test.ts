@@ -83,14 +83,6 @@ function mockPortFree(): void {
   })
 }
 
-/** Mock net.createServer to report port as occupied (listen fails) */
-function mockPortOccupied(): void {
-  mockNetServer.once.mockImplementation((event: string, cb: (...args: unknown[]) => void) => {
-    if (event === 'error') {
-      Promise.resolve().then(() => cb(new Error('EADDRINUSE')))
-    }
-  })
-}
 
 /** Mock http.get to respond with a given status code */
 function mockHealthCheckSuccess(): void {

@@ -11,6 +11,8 @@ const DEV_TOOL_PATH_PREFIXES = [
   '.>eslint',                     // Linter
   '.>@typescript-eslint/',        // Linter plugins
   'apps__mobile>babel-plugin-',   // Babel build tooling
+  '.>vitest>',                    // Test runner
+  'apps__mobile>jest-expo>',      // Expo test tooling
 ]
 
 const isDevToolPath = (p: string): boolean =>

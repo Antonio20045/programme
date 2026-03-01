@@ -75,6 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 18 — Agent Factory abgeschlossen
-Nächster Schritt: Tool-Factory Integration (createUserTools um agent-spezifische Tools erweitern), System-Prompt Agent-Liste, Gateway-Integration (classify() in in-app.ts Middleware, Approval-Flow via pending-approvals + ConfirmationManager)
-Letzter Commit: feat: agent factory tool for sub-agent creation
+Phase: 19 — Sub-Agent Gateway Integration abgeschlossen
+Nächster Schritt: Agent-Cron (cronSchedule mit CronService verdrahten), Agent-Lifecycle (täglicher Cleanup-Job), E2E-Tests
+Letzter Commit: feat: sub-agent gateway integration
