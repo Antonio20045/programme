@@ -75,5 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 11 — Prototyp finalisieren
-Letzter Commit: feat: Pattern Tracker — Migration, Modul, Tests
+Phase: 12 — Sub-Agent Executor (model-resolver fertig)
+Nächster Schritt: Agent Executor, Delegate-Tool, Orchestrator
+Letzter Commit: feat: add model-resolver with Gemini-First routing logic
