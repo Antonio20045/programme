@@ -50,6 +50,9 @@ Jedes Tool braucht Verhaltens-Tests UND Security-Tests (kein eval, kein unauthor
 ### Agent Lifecycle Manager
 `agent-lifecycle.ts` — pure utility module (no Tool interface), called as daily cron job. `runLifecycleCheck(pool, userId) → LifecycleReport` with cascading thresholds based on `lastUsedAt`: >180d → delete (any status, `deleteNamespace` + `deleteAgent`), >90d → archive (active/dormant only, `updateStatus` + memory cleanup except `preference` category), >30d → dormant (active only, `updateStatus` + null `cronSchedule`). Highest threshold checked first — 185-day active agent deleted directly, never passes through dormant. `reactivateAgent(pool, userId, agentId)` — dormant/archived → active + `touchAgent`. `runMemoryCleanup(pool) → number` — global `cleanupExpired` + `cleanupStaleCache(7)`. No own DB migration.
 
+### Agent Factory
+`agent-factory.ts` — `createAgentFactoryTool(userId, pool)` factory. Single-action tool (no `action` parameter). Parameters: `name` (1-50 chars, alphanumeric+spaces+hyphens+umlauts, case-insensitive duplicate check), `purpose` (1-2000 chars, becomes system prompt core), `tools` (1-10 entries, deduplicated, each must exist in registry), `schedule` (optional 5-field cron, min 15 min interval, semantic range validation), `model` (`haiku`|`sonnet` only, no opus). Derives `riskProfile` via `getToolRiskTier()` — all tools ≤ tier 1 → `read-only`, any ≥ 2 → `write-with-approval`. Builds German system prompt. Sets `maxSteps`: 5 (haiku) / 10 (sonnet), `maxTokens: 4096`, `timeoutMs: 30000`. `trustLevel` always `intern` (registry default). `requiresConfirmation: true`, `defaultRiskTier: 2`. Sanitized error handling.
+
 ## Tool-Caveats
 
 - Tool-Signierung: Ed25519 — `sign-tools.ts` signiert mit libsodium, `verify.ts` prüft mit Node crypto (timingSafeEqual + crypto.verify). Private Key NUR in `.env`, Public Key in `public-key.ts`. Gateway ruft `verifyTool()` vor dem Laden auf.
