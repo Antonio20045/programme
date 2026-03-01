@@ -9,12 +9,22 @@ User → POST /api/message (JSON oder FormData mit Dateien) → Gateway → LLM 
 - `tool_result` — JSON: toolName + result
 - `done`
 - `error`
+- `notification` — Proaktive Sub-Agent Notification (separater SSE-Stream auf `/api/notifications`)
 
 ## Client-Seite
 
 useChat verwaltet Messages-State, postet via `gateway:fetch` Proxy (JSON) oder direkten `fetch` (FormData), öffnet EventSource nach POST (URL via `getStreamUrl` IPC), baut Assistant-Nachricht aus token-Events, zeigt Tool-Ausführungen als ToolExecution-Komponente. Session-ID wird via Ref persistiert.
 
 Tools mit Bestätigungspflicht: SSE Event → Client zeigt Vorschau → User bestätigt → erst dann ausführen.
+
+## Proaktive Notifications (Sub-Agents)
+
+Sub-Agent produziert Ergebnis → Gateway NotificationStore (in-memory, max 200, 24h TTL) → SSE GET /api/notifications (persistent stream, 30s heartbeat) → Desktop Main Process → drei parallele Pfade:
+1. **IPC** → Renderer `useNotifications` Hook → `NotificationBanner` Komponente
+2. **Native OS Notification** (Electron `Notification` API, click → Fenster fokussieren)
+3. **Mobile-Forwarding** (wenn gepairt): verschlüsselt via Relay WS → Mobile `useChat` rendert als Assistant-Message
+
+Ack: Renderer → `acknowledgeNotification` IPC → Gateway POST `/api/notifications/:id/ack`.
 
 ## Hooks (automatisch bei Write/Edit)
 

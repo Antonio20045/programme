@@ -75,6 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 20 — Budget Controller abgeschlossen
-Nächster Schritt: Agent-Cron (cronSchedule mit CronService verdrahten), Agent-Lifecycle (täglicher Cleanup-Job), Trust Progression, E2E-Tests
-Letzter Commit: feat: budget controller with per-agent daily limits
+Phase: 21 — Proaktive Sub-Agent Notifications abgeschlossen
+Nächster Schritt: Trust Progression (agent-registry updateTrustMetrics/checkAndApplyPromotion), Agent-Cron (cronSchedule mit CronService verdrahten), Agent-Lifecycle (täglicher Cleanup-Job), E2E-Tests
+Letzter Commit: feat: proactive sub-agent notification delivery (SSE + native + mobile relay)

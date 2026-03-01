@@ -9,6 +9,7 @@ export interface DecryptedMessage {
     | 'tool_result'
     | 'tool_confirm'
     | 'error'
+    | 'notification'
   content?: string
   toolCall?: { name: string; args: unknown }
   toolResult?: { name: string; result: unknown; status: string }
@@ -17,6 +18,14 @@ export interface DecryptedMessage {
   message?: string
   code?: string
   clerkToken?: string
+  notification?: {
+    id: string
+    agentId: string
+    agentName: string
+    type: 'result' | 'needs-approval' | 'error'
+    summary: string
+    priority: 'high' | 'normal' | 'low'
+  }
 }
 
 /** Chat UI message */

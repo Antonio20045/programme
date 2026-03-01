@@ -161,4 +161,36 @@ contextBridge.exposeInMainWorld('api', {
   updateOAuthToken: (data: { provider: string; accessToken: string; expiresAt: number }): Promise<{ success: boolean }> => {
     return ipcRenderer.invoke('oauth:update-token', data)
   },
+
+  onNotification: (callback: (notification: {
+    id: string; agentId: string; agentName: string;
+    type: string; summary: string; detail?: string;
+    priority: string; createdAt: number; proposalIds?: readonly string[];
+  }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, notification: {
+      id: string; agentId: string; agentName: string;
+      type: string; summary: string; detail?: string;
+      priority: string; createdAt: number; proposalIds?: readonly string[];
+    }): void => {
+      callback(notification)
+    }
+    ipcRenderer.on('notification:received', handler)
+    return () => {
+      ipcRenderer.removeListener('notification:received', handler)
+    }
+  },
+
+  onNotificationFocus: (callback: (notificationId: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, notificationId: string): void => {
+      callback(notificationId)
+    }
+    ipcRenderer.on('notification:focus', handler)
+    return () => {
+      ipcRenderer.removeListener('notification:focus', handler)
+    }
+  },
+
+  acknowledgeNotification: (id: string): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('notifications:ack', id)
+  },
 })
