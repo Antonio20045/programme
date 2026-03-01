@@ -225,6 +225,8 @@ export function createArchiveTool(config?: ArchiveConfig): ExtendedAgentTool {
     parameters: PARAMETERS,
     permissions: ['fs:read', 'fs:write'],
     requiresConfirmation: true,
+    defaultRiskTier: 2,
+    riskTiers: { list: 1, create: 2, extract: 2 },
     runsOn: 'server',
 
     execute: async (args: unknown): Promise<AgentToolResult> => {

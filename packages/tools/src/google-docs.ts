@@ -356,6 +356,8 @@ export const googleDocsTool: ExtendedAgentTool = {
   parameters: docsParameters,
   permissions: ['net:http', 'google:docs'],
   requiresConfirmation: true,
+  defaultRiskTier: 2,
+  riskTiers: { read: 1, create: 2, append: 2, insert: 2, replace: 2 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

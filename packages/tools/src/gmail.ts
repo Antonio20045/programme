@@ -573,6 +573,8 @@ export function createGmailTool(oauth: GoogleOAuthContext): ExtendedAgentTool {
     parameters: gmailParameters,
     permissions: ['oauth:google', 'net:http'],
     requiresConfirmation: true,
+    defaultRiskTier: 3,
+    riskTiers: { readInbox: 1, searchEmails: 1, sendEmail: 3, replyToEmail: 3 },
     runsOn: 'server',
     execute: async (args: unknown): Promise<AgentToolResult> => {
       const parsed = parseArgs(args)

@@ -152,6 +152,8 @@ export function createMediaControlTool(adapter: MediaAdapter): ExtendedAgentTool
     parameters: PARAMETERS,
     permissions: ['media:control'],
     requiresConfirmation: false,
+    defaultRiskTier: 2,
+    riskTiers: { nowPlaying: 1, playPause: 2, next: 2, previous: 2, volume: 2, mute: 2 },
     runsOn: 'desktop',
 
     execute: async (args: unknown): Promise<AgentToolResult> => {

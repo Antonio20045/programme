@@ -581,6 +581,8 @@ export const calculatorTool: ExtendedAgentTool = {
   parameters,
   permissions: ['net:http'],
   requiresConfirmation: false,
+  defaultRiskTier: 0,
+  riskTiers: { calculate: 0, convert: 0, currency: 2 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

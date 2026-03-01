@@ -427,6 +427,8 @@ export const googleDriveTool: ExtendedAgentTool = {
   parameters: driveParameters,
   permissions: ['net:http', 'google:drive'],
   requiresConfirmation: true,
+  defaultRiskTier: 3,
+  riskTiers: { search: 1, list: 1, info: 1, download: 2, upload: 3, share: 3, createFolder: 2, move: 3, delete: 4 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

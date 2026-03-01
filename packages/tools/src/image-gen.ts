@@ -288,6 +288,8 @@ export const imageGenTool: ExtendedAgentTool = {
   parameters,
   permissions: ['net:http'],
   requiresConfirmation: true,
+  defaultRiskTier: 3,
+  riskTiers: { generate: 3, edit: 3 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

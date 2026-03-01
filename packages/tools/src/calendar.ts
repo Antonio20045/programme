@@ -492,6 +492,8 @@ export function createCalendarTool(oauth: GoogleOAuthContext): ExtendedAgentTool
     parameters,
     permissions: ['oauth:google', 'net:http'],
     requiresConfirmation: true,
+    defaultRiskTier: 3,
+    riskTiers: { listEvents: 1, createEvent: 3, updateEvent: 3, deleteEvent: 4 },
     runsOn: 'server',
     execute: async (args: unknown): Promise<AgentToolResult> => {
       const parsed = parseArgs(args)

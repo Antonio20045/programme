@@ -516,6 +516,7 @@ export const datetimeTool: ExtendedAgentTool = {
   parameters,
   permissions: [],
   requiresConfirmation: false,
+  defaultRiskTier: 0,
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

@@ -440,6 +440,8 @@ export const webSearchTool: ExtendedAgentTool = {
   parameters,
   permissions: ['net:http'],
   requiresConfirmation: true,
+  defaultRiskTier: 1,
+  riskTiers: { search: 1, fetchPage: 1 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

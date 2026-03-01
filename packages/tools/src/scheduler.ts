@@ -1,9 +1,14 @@
 /**
- * Scheduler tool — schedule tasks and manage a proactive working buffer.
- * Data stored as JSON in ~/.openclaw/workspace/.
+ * Scheduler tool — thin wrapper around CronService for scheduled execution,
+ * plus a proactive working buffer stored locally.
  *
- * No external dependencies. Atomic writes via tmp+rename.
- * No network access. No eval.
+ * When a CronBridge is provided (via factory), schedule/list/cancel delegate
+ * to the CronService for real execution (heartbeat runner, isolated sessions).
+ * When no bridge is provided, falls back to local file storage (no execution).
+ *
+ * Working buffer (addProactive/buffer/clearBuffer) is always local.
+ *
+ * No eval. No unauthorized network access.
  */
 
 import * as crypto from 'node:crypto'
@@ -13,17 +18,46 @@ import * as path from 'node:path'
 import type { AgentToolResult, ExtendedAgentTool, JSONSchema } from './types'
 
 // ---------------------------------------------------------------------------
-// Types
+// CronBridge — abstraction over OpenClaw CronService
 // ---------------------------------------------------------------------------
 
-interface ScheduledTask {
+/** Job returned by CronBridge.list() / CronBridge.add(). */
+export interface CronJobInfo {
   readonly id: string
   readonly name: string
-  readonly cron: string
-  readonly action: string
   readonly enabled: boolean
-  readonly createdAt: string
+  readonly schedule: { readonly kind: string; readonly expr?: string; readonly at?: string; readonly everyMs?: number }
+  readonly payload: { readonly kind: string; readonly message?: string }
 }
+
+/** Job creation input for CronBridge.add(). */
+export interface CronJobCreateInput {
+  readonly name: string
+  readonly enabled: boolean
+  readonly schedule: { readonly kind: 'cron'; readonly expr: string }
+  readonly sessionTarget: 'isolated'
+  readonly wakeMode: 'now'
+  readonly payload: {
+    readonly kind: 'agentTurn'
+    readonly message: string
+    readonly timeoutSeconds: number
+  }
+  readonly delivery?: { readonly mode: 'announce' }
+}
+
+/**
+ * Bridge to CronService. Injected via createSchedulerTool() factory.
+ * Implementations wrap CronService.add/list/remove calls.
+ */
+export interface CronBridge {
+  add(job: CronJobCreateInput): Promise<CronJobInfo>
+  list(): Promise<readonly CronJobInfo[]>
+  remove(id: string): Promise<{ readonly ok: boolean }>
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface ProactiveAction {
   readonly id: string
@@ -32,10 +66,6 @@ interface ProactiveAction {
   readonly triggerAt: string
   readonly source: string
   readonly createdAt: string
-}
-
-interface SchedulerStore {
-  readonly tasks: ScheduledTask[]
 }
 
 interface WorkingBuffer {
@@ -85,10 +115,11 @@ type SchedulerArgs = ScheduleArgs | ListArgs | CancelArgs | AddProactiveArgs | B
 // ---------------------------------------------------------------------------
 
 const WORKSPACE_DIR = path.join(os.homedir(), '.openclaw', 'workspace')
-const SCHEDULES_PATH = path.join(WORKSPACE_DIR, 'schedules.json')
 const BUFFER_PATH = path.join(WORKSPACE_DIR, 'working-buffer.json')
 
-const MAX_SCHEDULED_TASKS = 50
+const SUB_AGENT_PREFIX = 'sub-agent:'
+const AGENT_TURN_TIMEOUT_S = 120
+
 const MAX_BUFFER_ENTRIES = 50
 const MAX_HIGH_PRIORITY = 3
 const MAX_DAILY_PROACTIVE = 10
@@ -102,31 +133,8 @@ const VALID_PRIORITIES = ['high', 'normal', 'low'] as const
 type Priority = (typeof VALID_PRIORITIES)[number]
 
 // ---------------------------------------------------------------------------
-// Persistence
+// Working Buffer Persistence (local — independent of CronService)
 // ---------------------------------------------------------------------------
-
-async function loadSchedules(): Promise<SchedulerStore> {
-  try {
-    const raw = await fs.readFile(SCHEDULES_PATH, 'utf-8')
-    const data = JSON.parse(raw) as { tasks?: unknown[] }
-    if (!Array.isArray(data.tasks)) {
-      return { tasks: [] }
-    }
-    return data as SchedulerStore
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { tasks: [] }
-    }
-    throw err
-  }
-}
-
-async function saveSchedules(store: SchedulerStore): Promise<void> {
-  await fs.mkdir(WORKSPACE_DIR, { recursive: true })
-  const tmpPath = SCHEDULES_PATH + '.tmp.' + String(Date.now())
-  await fs.writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf-8')
-  await fs.rename(tmpPath, SCHEDULES_PATH)
-}
 
 async function loadBuffer(): Promise<WorkingBuffer> {
   try {
@@ -315,105 +323,140 @@ const parameters: JSONSchema = {
   required: ['action'],
 }
 
-export const schedulerTool: ExtendedAgentTool = {
-  name: 'scheduler',
-  description:
-    'Schedule tasks and manage a proactive working buffer. Actions: schedule(name, cron, taskAction) creates a scheduled task; list() shows all tasks; cancel(id) removes a task; addProactive(proactiveAction, priority, triggerAt, source) adds to buffer; buffer() shows pending; clearBuffer() empties buffer.',
-  parameters,
-  permissions: ['fs:read', 'fs:write'],
-  requiresConfirmation: false,
-  runsOn: 'server',
-  execute: async (args: unknown): Promise<AgentToolResult> => {
-    const parsed = parseArgs(args)
+/**
+ * Create the scheduler tool, optionally connected to the CronService.
+ *
+ * @param cronBridge - When provided, schedule/list/cancel delegate to CronService.
+ *                     When omitted, CronService actions throw (no local fallback).
+ */
+export function createSchedulerTool(cronBridge?: CronBridge): ExtendedAgentTool {
+  return {
+    name: 'scheduler',
+    description:
+      'Schedule tasks via CronService and manage a proactive working buffer. Actions: schedule(name, cron, taskAction) creates a cron job (runs in isolated agent session); list() shows all scheduled jobs; cancel(id) removes a job; addProactive(proactiveAction, priority, triggerAt, source) adds to working buffer; buffer() shows pending buffer items; clearBuffer() empties buffer.',
+    parameters,
+    permissions: ['fs:read', 'fs:write'],
+    requiresConfirmation: false,
+    defaultRiskTier: 2,
+    riskTiers: { list: 1, buffer: 1, schedule: 2, cancel: 2, addProactive: 2, clearBuffer: 2 },
+    runsOn: 'server',
+    execute: async (args: unknown): Promise<AgentToolResult> => {
+      const parsed = parseArgs(args)
 
-    switch (parsed.action) {
-      case 'schedule': {
-        const store = await loadSchedules()
-        if (store.tasks.length >= MAX_SCHEDULED_TASKS) {
-          throw new Error(`Max scheduled tasks reached (${String(MAX_SCHEDULED_TASKS)})`)
-        }
-
-        const task: ScheduledTask = {
-          id: generateId(),
-          name: parsed.name,
-          cron: parsed.cron,
-          action: parsed.taskAction,
-          enabled: true,
-          createdAt: new Date().toISOString(),
-        }
-
-        await saveSchedules({ tasks: [...store.tasks, task] })
-        return textResult(JSON.stringify({ scheduled: true, id: task.id, name: task.name, cron: task.cron }))
-      }
-
-      case 'list': {
-        const store = await loadSchedules()
-        return textResult(JSON.stringify({ tasks: store.tasks, count: store.tasks.length }))
-      }
-
-      case 'cancel': {
-        const store = await loadSchedules()
-        const idx = store.tasks.findIndex((t) => t.id === parsed.id)
-        if (idx === -1) {
-          throw new Error(`Task not found: ${parsed.id}`)
-        }
-        const mutableTasks = [...store.tasks]
-        mutableTasks.splice(idx, 1)
-        await saveSchedules({ tasks: mutableTasks })
-        return textResult(JSON.stringify({ cancelled: true, id: parsed.id }))
-      }
-
-      case 'addProactive': {
-        const buffer = await loadBuffer()
-
-        if (buffer.pendingActions.length >= MAX_BUFFER_ENTRIES) {
-          throw new Error(`Working buffer full (max ${String(MAX_BUFFER_ENTRIES)} entries)`)
-        }
-
-        const todayCount = countTodaysProactive(buffer.pendingActions)
-        if (todayCount >= MAX_DAILY_PROACTIVE) {
-          throw new Error(`Daily proactive limit reached (max ${String(MAX_DAILY_PROACTIVE)} per day)`)
-        }
-
-        if (parsed.priority === 'high') {
-          const highCount = countHighPriority(buffer.pendingActions)
-          if (highCount >= MAX_HIGH_PRIORITY) {
-            throw new Error(`Max high-priority actions reached (${String(MAX_HIGH_PRIORITY)})`)
+      switch (parsed.action) {
+        case 'schedule': {
+          if (!cronBridge) {
+            throw new Error('CronService not available — scheduler requires a running gateway with cron support')
           }
+          const job = await cronBridge.add({
+            name: `${SUB_AGENT_PREFIX}${parsed.name}`,
+            enabled: true,
+            schedule: { kind: 'cron', expr: parsed.cron },
+            sessionTarget: 'isolated',
+            wakeMode: 'now',
+            payload: {
+              kind: 'agentTurn',
+              message: parsed.taskAction,
+              timeoutSeconds: AGENT_TURN_TIMEOUT_S,
+            },
+            delivery: { mode: 'announce' },
+          })
+          return textResult(JSON.stringify({
+            scheduled: true,
+            id: job.id,
+            name: parsed.name,
+            cron: parsed.cron,
+          }))
         }
 
-        const proactive: ProactiveAction = {
-          id: generateId(),
-          priority: parsed.priority,
-          action: parsed.proactiveAction,
-          triggerAt: parsed.triggerAt,
-          source: parsed.source,
-          createdAt: new Date().toISOString(),
+        case 'list': {
+          if (!cronBridge) {
+            throw new Error('CronService not available — scheduler requires a running gateway with cron support')
+          }
+          const allJobs = await cronBridge.list()
+          // Filter to only our sub-agent jobs
+          const ourJobs = allJobs.filter((j) => j.name.startsWith(SUB_AGENT_PREFIX))
+          const tasks = ourJobs.map((j) => ({
+            id: j.id,
+            name: j.name.slice(SUB_AGENT_PREFIX.length),
+            enabled: j.enabled,
+            schedule: j.schedule,
+          }))
+          return textResult(JSON.stringify({ tasks, count: tasks.length }))
         }
 
-        await saveBuffer({ pendingActions: [...buffer.pendingActions, proactive] })
-        return textResult(JSON.stringify({
-          added: true,
-          id: proactive.id,
-          priority: proactive.priority,
-          dailyCount: todayCount + 1,
-        }))
-      }
+        case 'cancel': {
+          if (!cronBridge) {
+            throw new Error('CronService not available — scheduler requires a running gateway with cron support')
+          }
+          const result = await cronBridge.remove(parsed.id)
+          if (!result.ok) {
+            throw new Error(`Failed to cancel job: ${parsed.id}`)
+          }
+          return textResult(JSON.stringify({ cancelled: true, id: parsed.id }))
+        }
 
-      case 'buffer': {
-        const buffer = await loadBuffer()
-        return textResult(JSON.stringify({
-          pendingActions: buffer.pendingActions,
-          count: buffer.pendingActions.length,
-        }))
-      }
+        case 'addProactive': {
+          const buffer = await loadBuffer()
 
-      case 'clearBuffer': {
-        await saveBuffer({ pendingActions: [] })
-        return textResult(JSON.stringify({ cleared: true }))
+          if (buffer.pendingActions.length >= MAX_BUFFER_ENTRIES) {
+            throw new Error(`Working buffer full (max ${String(MAX_BUFFER_ENTRIES)} entries)`)
+          }
+
+          const todayCount = countTodaysProactive(buffer.pendingActions)
+          if (todayCount >= MAX_DAILY_PROACTIVE) {
+            throw new Error(`Daily proactive limit reached (max ${String(MAX_DAILY_PROACTIVE)} per day)`)
+          }
+
+          if (parsed.priority === 'high') {
+            const highCount = countHighPriority(buffer.pendingActions)
+            if (highCount >= MAX_HIGH_PRIORITY) {
+              throw new Error(`Max high-priority actions reached (${String(MAX_HIGH_PRIORITY)})`)
+            }
+          }
+
+          const proactive: ProactiveAction = {
+            id: generateId(),
+            priority: parsed.priority,
+            action: parsed.proactiveAction,
+            triggerAt: parsed.triggerAt,
+            source: parsed.source,
+            createdAt: new Date().toISOString(),
+          }
+
+          await saveBuffer({ pendingActions: [...buffer.pendingActions, proactive] })
+          return textResult(JSON.stringify({
+            added: true,
+            id: proactive.id,
+            priority: proactive.priority,
+            dailyCount: todayCount + 1,
+          }))
+        }
+
+        case 'buffer': {
+          const buffer = await loadBuffer()
+          return textResult(JSON.stringify({
+            pendingActions: buffer.pendingActions,
+            count: buffer.pendingActions.length,
+          }))
+        }
+
+        case 'clearBuffer': {
+          await saveBuffer({ pendingActions: [] })
+          return textResult(JSON.stringify({ cleared: true }))
+        }
       }
-    }
-  },
+    },
+  }
 }
 
-export { parseArgs, loadSchedules, saveSchedules, loadBuffer, saveBuffer, countTodaysProactive, countHighPriority }
+/**
+ * Default scheduler tool instance (no CronBridge).
+ * Used when gateway does not provide a CronService reference.
+ * schedule/list/cancel will throw with a clear error message.
+ *
+ * @deprecated Use createSchedulerTool(cronBridge) instead.
+ */
+export const schedulerTool: ExtendedAgentTool = createSchedulerTool()
+
+export { parseArgs, loadBuffer, saveBuffer, countTodaysProactive, countHighPriority }

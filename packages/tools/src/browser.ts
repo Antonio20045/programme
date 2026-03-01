@@ -732,6 +732,8 @@ export const browserTool: ExtendedAgentTool = {
   parameters,
   permissions: ['browser:navigate', 'browser:interact'],
   requiresConfirmation: true,
+  defaultRiskTier: 3,
+  riskTiers: { snapshot: 2, cookies: 2, openPage: 3, fillForm: 3, clickElement: 3, type: 3, select: 3, fill: 3, waitFor: 3 },
   runsOn: 'desktop',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

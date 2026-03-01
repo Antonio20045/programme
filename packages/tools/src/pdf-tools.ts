@@ -287,6 +287,8 @@ export function createPdfTool(config: PdfToolsConfig): ExtendedAgentTool {
     parameters: PARAMETERS,
     permissions: ['fs:read', 'fs:write'],
     requiresConfirmation: true,
+    defaultRiskTier: 2,
+    riskTiers: { extractText: 1, pageCount: 1, merge: 2, split: 2 },
     runsOn: 'desktop',
 
     execute: async (args: unknown): Promise<AgentToolResult> => {

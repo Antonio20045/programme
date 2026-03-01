@@ -283,6 +283,7 @@ export function createOcrTool(config: OcrToolConfig): ExtendedAgentTool {
     parameters: PARAMETERS,
     permissions: ['fs:read'],
     requiresConfirmation: false,
+    defaultRiskTier: 1,
     runsOn: 'server',
 
     execute: async (args: unknown): Promise<AgentToolResult> => {

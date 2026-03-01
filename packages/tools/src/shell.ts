@@ -222,6 +222,7 @@ export function createShellTool(options?: ShellToolOptions): ExtendedAgentTool {
     },
     permissions: ['exec:shell'],
     requiresConfirmation: true,
+    defaultRiskTier: 3,
     runsOn: 'desktop',
     execute: async (rawArgs: unknown): Promise<AgentToolResult> => {
       const parsed = parseArgs(rawArgs)

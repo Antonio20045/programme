@@ -96,6 +96,8 @@ function createClipboardTool(adapter: ClipboardAdapter): ExtendedAgentTool {
     parameters,
     permissions: ['clipboard:read', 'clipboard:write'],
     requiresConfirmation: true,
+    defaultRiskTier: 2,
+    riskTiers: { read: 1, write: 2 },
     runsOn: 'desktop',
     execute: async (args: unknown): Promise<AgentToolResult> => {
       const parsed = parseArgs(args)

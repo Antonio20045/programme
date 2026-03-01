@@ -255,6 +255,8 @@ export function createAppLauncherTool(config: AppLauncherConfig, adapter: AppLau
     parameters: PARAMETERS,
     permissions: ['app:launch'],
     requiresConfirmation: true,
+    defaultRiskTier: 2,
+    riskTiers: { open: 2, openFile: 2, running: 1, focus: 2, openUrl: 3 },
     runsOn: 'desktop',
 
     execute: async (args: unknown): Promise<AgentToolResult> => {

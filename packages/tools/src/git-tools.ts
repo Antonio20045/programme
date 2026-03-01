@@ -343,6 +343,8 @@ export function createGitTool(config: GitToolConfig, adapter: GitAdapter): Exten
     parameters: PARAMETERS,
     permissions: ['exec:git', 'fs:read'],
     requiresConfirmation: true,
+    defaultRiskTier: 2,
+    riskTiers: { status: 1, log: 1, diff: 1, blame: 1, branch: 2, commit: 2 },
     runsOn: 'desktop',
 
     execute: async (args: unknown): Promise<AgentToolResult> => {

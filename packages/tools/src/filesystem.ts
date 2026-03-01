@@ -290,6 +290,8 @@ export function createFilesystemTool(
     parameters: PARAMETERS,
     permissions: ['fs:read', 'fs:write'],
     requiresConfirmation: true,
+    defaultRiskTier: 2,
+    riskTiers: { readFile: 1, searchFiles: 1, listDirectory: 1, writeFile: 2, moveFile: 2, deleteFile: 4 },
     runsOn: 'desktop',
 
     execute: async (args: unknown): Promise<AgentToolResult> => {

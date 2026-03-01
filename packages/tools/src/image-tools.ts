@@ -391,6 +391,8 @@ export function createImageToolsTool(config: ImageToolsConfig): ExtendedAgentToo
     parameters: PARAMETERS,
     permissions: ['fs:read', 'fs:write'],
     requiresConfirmation: true,
+    defaultRiskTier: 2,
+    riskTiers: { info: 1, resize: 2, crop: 2, convert: 2, rotate: 2, compress: 2 },
     runsOn: 'server',
 
     execute: async (args: unknown): Promise<AgentToolResult> => {

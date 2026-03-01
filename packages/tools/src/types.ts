@@ -37,6 +37,16 @@ export interface AgentToolResult {
 
 export type ToolRunsOn = 'server' | 'desktop'
 
+/**
+ * Risk tier for tool actions.
+ * 0 = Pure computation (no external effect)
+ * 1 = Read-only operations (auto-execute, audit-logged)
+ * 2 = Create/modify local (preview + 1-click approve)
+ * 3 = Send externally / publish (detail preview + approve)
+ * 4 = Delete / irreversible (explicit confirmation required)
+ */
+export type RiskTier = 0 | 1 | 2 | 3 | 4
+
 export interface ExtendedAgentTool {
   readonly name: string
   readonly description: string
@@ -44,6 +54,10 @@ export interface ExtendedAgentTool {
   readonly permissions: readonly string[]
   readonly requiresConfirmation: boolean
   readonly runsOn: ToolRunsOn
+  /** Per-action risk tiers. Key = action name, value = tier. */
+  readonly riskTiers?: Readonly<Record<string, RiskTier>>
+  /** Fallback tier when action is not in riskTiers. */
+  readonly defaultRiskTier?: RiskTier
   readonly execute: (args: unknown) => Promise<AgentToolResult>
 }
 

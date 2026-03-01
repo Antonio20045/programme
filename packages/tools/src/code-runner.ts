@@ -283,6 +283,7 @@ export const codeRunnerTool: ExtendedAgentTool = {
   parameters,
   permissions: ['code:execute'],
   requiresConfirmation: true,
+  defaultRiskTier: 2,
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

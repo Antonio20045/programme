@@ -363,6 +363,8 @@ export const googleTasksTool: ExtendedAgentTool = {
   parameters: tasksParameters,
   permissions: ['net:http', 'google:tasks'],
   requiresConfirmation: true,
+  defaultRiskTier: 2,
+  riskTiers: { lists: 1, list: 1, add: 2, complete: 2, update: 2, createList: 2, delete: 4 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

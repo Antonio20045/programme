@@ -413,6 +413,8 @@ export const urlToolsTool: ExtendedAgentTool = {
   parameters,
   permissions: ['net:http'],
   requiresConfirmation: false,
+  defaultRiskTier: 0,
+  riskTiers: { parse: 0, validate: 0, build: 0, metadata: 1, resolve: 1 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)
