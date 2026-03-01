@@ -85,7 +85,10 @@
       "Bash(wc -c ~/.openclaw/.env 2>/dev/null && echo \"chars\" && awk '{print length}' ~/.openclaw/.env)",
       "Bash(ps -p 24893 -o pid,state,rss,vsz,args= 2>/dev/null && echo \"---\" && lsof -p 24893 -i 2>/dev/null | head -10)",
       "Bash(openclaw configure --help 2>&1 | head -30)",
-      "Bash(pgrep -f \"openclaw.*gateway\\\\|openclaw-gateway\" | head -5)"
+      "Bash(pgrep -f \"openclaw.*gateway\\\\|openclaw-gateway\" | head -5)",
+      "Bash(md5 /Users/efstathia/Downloads/videos/programme/packages/gateway/src/model-router.ts | head -1 && wc -l /Users/efstathia/Downloads/videos/programme/packages/gateway/src/model-router.ts)",
+      "Bash(sh -n /Users/efstathia/Downloads/videos/programme/docker/entrypoint.sh && echo \"Syntax OK\")",
+      "Bash(brew install bash 2>&1 | tail -5)"
     ]
   },
   "enabledMcpjsonServers": [
