@@ -41,6 +41,9 @@ Jedes Tool braucht Verhaltens-Tests UND Security-Tests (kein eval, kein unauthor
 ### Delegate Tool
 `delegate-tool.ts` wraps `executeAgent()` as `ExtendedAgentTool` via factory `createDelegateTool(userId, pool, llmClient)`. Single-action tool (no `action` parameter). Parameters: `agentId` (kebab-case, max 100 chars), `task` (max 10K), `context` (optional, max 5K). Validates agent exists and is active before executing. Maps all 4 result statuses to structured JSON. Sanitized error handling — no internal details leaked. `defaultRiskTier: 2`. Agent list for LLM comes via system prompt (not tool description).
 
+### Orchestrator Classifier
+`orchestrator-classifier.ts` classifies messages BEFORE the LLM call — pure rule-based, no LLM invocation. `classify(message, userId, pool) → ClassificationResult` with complexity (trivial/simple/moderate/complex), category, matchedAgents, modelTier (haiku/sonnet/opus), parallelExecution. Uses `getActiveAgents` (registry) for agent keyword matching, `trackRequest` (pattern-tracker) fire-and-forget. Heuristics mirrored from `gateway/src/model-router.ts` (keep in sync): `hasMultipleSubTasks`, `requestsAnalysis`, `isCodingTask`, `requiresMultiToolCoordination`. Trivial detection: short messages (≤30 chars) matching greeting/thanks/yes-no patterns. Model tier: /opus → opus, 2+ criteria → sonnet, default haiku.
+
 ## Tool-Caveats
 
 - Tool-Signierung: Ed25519 — `sign-tools.ts` signiert mit libsodium, `verify.ts` prüft mit Node crypto (timingSafeEqual + crypto.verify). Private Key NUR in `.env`, Public Key in `public-key.ts`. Gateway ruft `verifyTool()` vor dem Laden auf.

@@ -75,6 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 14 — Delegate-Tool abgeschlossen
-Nächster Schritt: Tool-Factory Integration, System-Prompt Agent-Liste, Orchestrator
-Letzter Commit: feat: delegate tool for sub-agent task delegation
+Phase: 15 — Orchestrator-Classifier abgeschlossen
+Nächster Schritt: Tool-Factory Integration, System-Prompt Agent-Liste, Gateway-Integration (classify() in in-app.ts Middleware)
+Letzter Commit: feat: orchestrator-classifier with rule-based message routing
