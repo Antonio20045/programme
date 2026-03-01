@@ -21,8 +21,13 @@ Phase abschließen: $ARGUMENTS
    e) Tool-Interface: Neue Tools oder geänderte Interfaces dokumentieren.
    f) Wenn CLAUDE.md über 300 Zeilen: Inhalte in .claude/rules/ auslagern.
 7. git add -A && git commit -m '[passende commit message]'
-8. git push -u origin aktueller-branch
-9. Pull Request erstellen (NICHT direkt mergen — Risk Policy Gate muss durchlaufen):
+8. Rebase auf main:
+   - git fetch origin main
+   - git rebase origin/main
+   - Falls Konflikte: löse sie automatisch, dann git rebase --continue
+   - Falls du Konflikte nicht sicher lösen kannst: git rebase --abort und melde dem User den Konflikt
+9. git push --force-with-lease -u origin aktueller-branch
+10. Pull Request erstellen (NICHT direkt mergen — Risk Policy Gate muss durchlaufen):
    - gh pr create --base main --title "Phase [nr] complete: [commit message]" --body "## Summary\n\n[Kurze Zusammenfassung der Phase]\n\n## Checks\n\n- [x] typecheck\n- [x] lint\n- [x] test\n- [x] audit-deps\n- [x] security-audit\n- [ ] Risk Policy Gate (läuft automatisch)\n\n## Next Step\n\n[nächster-schritt]"
    - PR-URL dem User anzeigen
    - Hinweis: "PR erstellt. Warte bis das Risk Policy Gate und alle CI Checks grün sind, dann manuell mergen."
