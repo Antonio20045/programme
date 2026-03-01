@@ -29,7 +29,7 @@ apps/
 packages/
   gateway/          OpenClaw Fork (NUR additive Änderungen)
   tools/            ALLE Tools selbst geschrieben (AgentTool Interface)
-    src/            web-search, filesystem, shell, browser, gmail, calendar, reminders, notes, agent-memory, agent-registry, pattern-tracker, model-resolver, agent-executor, delegate-tool, orchestrator-classifier
+    src/            web-search, filesystem, shell, browser, gmail, calendar, reminders, notes, agent-memory, agent-registry, pattern-tracker, model-resolver, agent-executor, delegate-tool, orchestrator-classifier, pending-approvals
     src/verify.ts   Tool-Signatur-Verifikation (Ed25519)
     __tests__/      Verhalten + Security pro Tool
   relay/            Cloudflare Worker (WebSocket-Relay, Pairing, Push)
