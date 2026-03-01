@@ -38,6 +38,9 @@ Jedes Tool braucht Verhaltens-Tests UND Security-Tests (kein eval, kein unauthor
 ### Agent Executor / LlmClient
 `agent-executor.ts` runs sub-agents as isolated LLM calls via `executeAgent(task, pool, llmClient)`. LLM access injected via `LlmClient` interface (same DI pattern as `CronBridge`). Safety limits: max 50 tool calls (`MAX_STEPS_LIMIT`), 5 min timeout (`MAX_TIMEOUT_MS`), 50 KB tool result truncation. Tool allowlist enforced (only tools from `agentDef.tools`). Risk tier resolution: tool-defined `riskTiers[action]` > `defaultRiskTier` > heuristic fallback. Approval threshold per trust level: intern≥2, junior≥3, senior≥4. Loop detection via SHA-256 hash dedup.
 
+### Delegate Tool
+`delegate-tool.ts` wraps `executeAgent()` as `ExtendedAgentTool` via factory `createDelegateTool(userId, pool, llmClient)`. Single-action tool (no `action` parameter). Parameters: `agentId` (kebab-case, max 100 chars), `task` (max 10K), `context` (optional, max 5K). Validates agent exists and is active before executing. Maps all 4 result statuses to structured JSON. Sanitized error handling — no internal details leaked. `defaultRiskTier: 2`. Agent list for LLM comes via system prompt (not tool description).
+
 ## Tool-Caveats
 
 - Tool-Signierung: Ed25519 — `sign-tools.ts` signiert mit libsodium, `verify.ts` prüft mit Node crypto (timingSafeEqual + crypto.verify). Private Key NUR in `.env`, Public Key in `public-key.ts`. Gateway ruft `verifyTool()` vor dem Laden auf.

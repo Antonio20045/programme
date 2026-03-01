@@ -75,6 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 13 — Agent Executor abgeschlossen
-Nächster Schritt: Delegate-Tool, Orchestrator
-Letzter Commit: feat: agent executor with isolated sub-agent LLM calls
+Phase: 14 — Delegate-Tool abgeschlossen
+Nächster Schritt: Tool-Factory Integration, System-Prompt Agent-Liste, Orchestrator
+Letzter Commit: feat: delegate tool for sub-agent task delegation
