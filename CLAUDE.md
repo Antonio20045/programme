@@ -76,3 +76,4 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 ## Aktueller Stand
 
 Phase: 11 — Prototyp finalisieren
+Letzter Commit: feat: Pattern Tracker — Migration, Modul, Tests
