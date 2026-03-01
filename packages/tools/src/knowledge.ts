@@ -423,6 +423,8 @@ export const knowledgeTool: ExtendedAgentTool = {
   parameters,
   permissions: ['fs:read', 'fs:write'],
   requiresConfirmation: false,
+  defaultRiskTier: 2,
+  riskTiers: { recall: 1, list: 1, reviewLearnings: 1, store: 2, update: 2, logLearning: 2, forget: 4 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

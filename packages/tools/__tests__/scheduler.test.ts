@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { assertNoEval, assertNoUnauthorizedFetch } from './helpers'
 import {
   schedulerTool,
+  createSchedulerTool,
   parseArgs,
   countTodaysProactive,
   countHighPriority,
 } from '../src/scheduler'
+import type { CronBridge, CronJobInfo, CronJobCreateInput } from '../src/scheduler'
 
 // ---------------------------------------------------------------------------
 // Source code for security tests
@@ -19,22 +21,13 @@ const SOURCE_PATH = resolve(currentDir, '../src/scheduler.ts')
 const sourceCode = readFileSync(SOURCE_PATH, 'utf-8')
 
 // ---------------------------------------------------------------------------
-// Mock filesystem
+// Mock filesystem (for working buffer)
 // ---------------------------------------------------------------------------
 
-let mockSchedules: string | null = null
 let mockBuffer: string | null = null
 
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(async (filePath: string) => {
-    if (typeof filePath === 'string' && filePath.includes('schedules.json')) {
-      if (mockSchedules === null) {
-        const err = new Error('ENOENT') as NodeJS.ErrnoException
-        err.code = 'ENOENT'
-        throw err
-      }
-      return mockSchedules
-    }
     if (typeof filePath === 'string' && filePath.includes('working-buffer.json')) {
       if (mockBuffer === null) {
         const err = new Error('ENOENT') as NodeJS.ErrnoException
@@ -48,15 +41,52 @@ vi.mock('node:fs/promises', () => ({
     throw err
   }),
   writeFile: vi.fn(async (filePath: string, data: string) => {
-    if (typeof filePath === 'string' && filePath.includes('schedules.json')) {
-      mockSchedules = data
-    } else if (typeof filePath === 'string' && filePath.includes('working-buffer.json')) {
+    if (typeof filePath === 'string' && filePath.includes('working-buffer.json')) {
       mockBuffer = data
     }
   }),
   rename: vi.fn(async () => undefined),
   mkdir: vi.fn(async () => undefined),
 }))
+
+// ---------------------------------------------------------------------------
+// Mock CronBridge
+// ---------------------------------------------------------------------------
+
+function createMockBridge(): CronBridge & {
+  jobs: CronJobInfo[]
+  addCalls: CronJobCreateInput[]
+  removeCalls: string[]
+} {
+  const state = {
+    jobs: [] as CronJobInfo[],
+    addCalls: [] as CronJobCreateInput[],
+    removeCalls: [] as string[],
+    add: vi.fn(async (input: CronJobCreateInput): Promise<CronJobInfo> => {
+      const job: CronJobInfo = {
+        id: `cron-${String(state.jobs.length + 1)}`,
+        name: input.name,
+        enabled: input.enabled,
+        schedule: input.schedule,
+        payload: input.payload,
+      }
+      state.jobs.push(job)
+      state.addCalls.push(input)
+      return job
+    }),
+    list: vi.fn(async (): Promise<readonly CronJobInfo[]> => {
+      return state.jobs
+    }),
+    remove: vi.fn(async (id: string): Promise<{ ok: boolean }> => {
+      state.removeCalls.push(id)
+      const idx = state.jobs.findIndex((j) => j.id === id)
+      if (idx === -1) return { ok: false }
+      state.jobs.splice(idx, 1)
+      return { ok: true }
+    }),
+  }
+  return state
+}
 
 // Helper to parse result text
 function parseResult(result: { content: readonly { type: string; text?: string }[] }): Record<string, unknown> {
@@ -69,7 +99,6 @@ function parseResult(result: { content: readonly { type: string; text?: string }
 
 describe('scheduler tool', () => {
   beforeEach(() => {
-    mockSchedules = null
     mockBuffer = null
   })
 
@@ -104,6 +133,13 @@ describe('scheduler tool', () => {
       expect(actionProp?.enum).toEqual([
         'schedule', 'list', 'cancel', 'addProactive', 'buffer', 'clearBuffer',
       ])
+    })
+
+    it('has risk tier metadata', () => {
+      expect(schedulerTool.defaultRiskTier).toBe(2)
+      expect(schedulerTool.riskTiers).toBeDefined()
+      expect(schedulerTool.riskTiers?.['list']).toBe(1)
+      expect(schedulerTool.riskTiers?.['schedule']).toBe(2)
     })
   })
 
@@ -209,84 +245,135 @@ describe('scheduler tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // schedule()
+  // schedule() — via CronBridge
   // -------------------------------------------------------------------------
 
-  describe('schedule()', () => {
-    it('creates a scheduled task', async () => {
-      const result = await schedulerTool.execute({
+  describe('schedule() with CronBridge', () => {
+    it('creates a cron job via bridge', async () => {
+      const bridge = createMockBridge()
+      const tool = createSchedulerTool(bridge)
+
+      const result = await tool.execute({
         action: 'schedule', name: 'Morning', cron: '0 8 * * *', taskAction: 'Report',
       })
       const parsed = parseResult(result)
       expect(parsed['scheduled']).toBe(true)
-      expect(parsed['id']).toBeDefined()
+      expect(parsed['id']).toBe('cron-1')
       expect(parsed['name']).toBe('Morning')
+      expect(parsed['cron']).toBe('0 8 * * *')
     })
 
-    it('enforces max tasks limit', async () => {
-      const tasks = Array.from({ length: 50 }, (_, i) => ({
-        id: String(i), name: `task${String(i)}`, cron: '0 8 * * *',
-        action: 'test', enabled: true, createdAt: new Date().toISOString(),
-      }))
-      mockSchedules = JSON.stringify({ tasks })
+    it('passes correct CronJobCreate to bridge', async () => {
+      const bridge = createMockBridge()
+      const tool = createSchedulerTool(bridge)
 
+      await tool.execute({
+        action: 'schedule', name: 'Test', cron: '*/5 * * * *', taskAction: 'Do something',
+      })
+
+      expect(bridge.addCalls).toHaveLength(1)
+      const input = bridge.addCalls[0]!
+      expect(input.name).toBe('sub-agent:Test')
+      expect(input.schedule).toEqual({ kind: 'cron', expr: '*/5 * * * *' })
+      expect(input.sessionTarget).toBe('isolated')
+      expect(input.wakeMode).toBe('now')
+      expect(input.payload).toEqual({
+        kind: 'agentTurn',
+        message: 'Do something',
+        timeoutSeconds: 120,
+      })
+      expect(input.delivery).toEqual({ mode: 'announce' })
+    })
+
+    it('throws when no CronBridge provided', async () => {
       await expect(
         schedulerTool.execute({ action: 'schedule', name: 'x', cron: '0 8 * * *', taskAction: 'x' }),
-      ).rejects.toThrow('Max scheduled tasks')
+      ).rejects.toThrow('CronService not available')
     })
   })
 
   // -------------------------------------------------------------------------
-  // list()
+  // list() — via CronBridge
   // -------------------------------------------------------------------------
 
-  describe('list()', () => {
-    it('lists all tasks', async () => {
-      await schedulerTool.execute({
-        action: 'schedule', name: 'Task A', cron: '0 8 * * *', taskAction: 'A',
+  describe('list() with CronBridge', () => {
+    it('lists only sub-agent jobs', async () => {
+      const bridge = createMockBridge()
+      // Add a sub-agent job and a non-sub-agent job
+      bridge.jobs.push({
+        id: 'j1', name: 'sub-agent:Morning', enabled: true,
+        schedule: { kind: 'cron', expr: '0 8 * * *' },
+        payload: { kind: 'agentTurn', message: 'Report' },
+      })
+      bridge.jobs.push({
+        id: 'j2', name: 'other-job', enabled: true,
+        schedule: { kind: 'cron', expr: '0 9 * * *' },
+        payload: { kind: 'systemEvent' },
       })
 
-      const result = await schedulerTool.execute({ action: 'list' })
+      const tool = createSchedulerTool(bridge)
+      const result = await tool.execute({ action: 'list' })
       const parsed = parseResult(result)
       expect(parsed['count']).toBe(1)
+      const tasks = parsed['tasks'] as Array<{ id: string; name: string }>
+      expect(tasks[0]!.name).toBe('Morning')
+      expect(tasks[0]!.id).toBe('j1')
     })
 
-    it('returns empty when no tasks', async () => {
-      const result = await schedulerTool.execute({ action: 'list' })
+    it('returns empty when no jobs', async () => {
+      const bridge = createMockBridge()
+      const tool = createSchedulerTool(bridge)
+      const result = await tool.execute({ action: 'list' })
       const parsed = parseResult(result)
       expect(parsed['count']).toBe(0)
       expect(parsed['tasks']).toEqual([])
     })
+
+    it('throws when no CronBridge provided', async () => {
+      await expect(
+        schedulerTool.execute({ action: 'list' }),
+      ).rejects.toThrow('CronService not available')
+    })
   })
 
   // -------------------------------------------------------------------------
-  // cancel()
+  // cancel() — via CronBridge
   // -------------------------------------------------------------------------
 
-  describe('cancel()', () => {
-    it('cancels a task by id', async () => {
-      const createResult = await schedulerTool.execute({
-        action: 'schedule', name: 'To cancel', cron: '0 8 * * *', taskAction: 'x',
+  describe('cancel() with CronBridge', () => {
+    it('cancels a job via bridge', async () => {
+      const bridge = createMockBridge()
+      bridge.jobs.push({
+        id: 'j1', name: 'sub-agent:Test', enabled: true,
+        schedule: { kind: 'cron', expr: '0 8 * * *' },
+        payload: { kind: 'agentTurn', message: 'x' },
       })
-      const taskId = parseResult(createResult)['id'] as string
 
-      const result = await schedulerTool.execute({ action: 'cancel', id: taskId })
+      const tool = createSchedulerTool(bridge)
+      const result = await tool.execute({ action: 'cancel', id: 'j1' })
       const parsed = parseResult(result)
       expect(parsed['cancelled']).toBe(true)
-
-      const listResult = await schedulerTool.execute({ action: 'list' })
-      expect(parseResult(listResult)['count']).toBe(0)
+      expect(parsed['id']).toBe('j1')
+      expect(bridge.removeCalls).toEqual(['j1'])
     })
 
-    it('throws on non-existent id', async () => {
+    it('throws when bridge returns not ok', async () => {
+      const bridge = createMockBridge()
+      const tool = createSchedulerTool(bridge)
       await expect(
-        schedulerTool.execute({ action: 'cancel', id: 'non-existent' }),
-      ).rejects.toThrow('Task not found')
+        tool.execute({ action: 'cancel', id: 'non-existent' }),
+      ).rejects.toThrow('Failed to cancel job')
+    })
+
+    it('throws when no CronBridge provided', async () => {
+      await expect(
+        schedulerTool.execute({ action: 'cancel', id: 'x' }),
+      ).rejects.toThrow('CronService not available')
     })
   })
 
   // -------------------------------------------------------------------------
-  // addProactive()
+  // addProactive() — local buffer (no bridge needed)
   // -------------------------------------------------------------------------
 
   describe('addProactive()', () => {
@@ -396,6 +483,28 @@ describe('scheduler tool', () => {
   })
 
   // -------------------------------------------------------------------------
+  // Factory
+  // -------------------------------------------------------------------------
+
+  describe('createSchedulerTool()', () => {
+    it('returns an ExtendedAgentTool', () => {
+      const tool = createSchedulerTool()
+      expect(tool.name).toBe('scheduler')
+      expect(tool.runsOn).toBe('server')
+    })
+
+    it('creates tool with bridge that delegates to CronService', async () => {
+      const bridge = createMockBridge()
+      const tool = createSchedulerTool(bridge)
+
+      await tool.execute({
+        action: 'schedule', name: 'T', cron: '0 8 * * *', taskAction: 'x',
+      })
+      expect(bridge.addCalls).toHaveLength(1)
+    })
+  })
+
+  // -------------------------------------------------------------------------
   // Exported helpers
   // -------------------------------------------------------------------------
 
@@ -447,10 +556,6 @@ describe('scheduler tool', () => {
 
     it('enforces action length limit', () => {
       expect(sourceCode).toContain('MAX_ACTION_LENGTH')
-    })
-
-    it('enforces max tasks limit', () => {
-      expect(sourceCode).toContain('MAX_SCHEDULED_TASKS')
     })
 
     it('validates cron expressions', () => {

@@ -275,6 +275,8 @@ function createNotesTool(userId: string, pool: DbPool): ExtendedAgentTool {
     parameters: notesParameters,
     permissions: [],
     requiresConfirmation: true,
+    defaultRiskTier: 2,
+    riskTiers: { searchNotes: 1, listNotes: 1, createNote: 2, updateNote: 2, deleteNote: 4 },
     runsOn: 'server',
     execute: async (args: unknown): Promise<AgentToolResult> => {
       const parsed = parseArgs(args)

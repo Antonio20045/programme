@@ -218,6 +218,8 @@ export const googleContactsTool: ExtendedAgentTool = {
   parameters: contactsParameters,
   permissions: ['net:http', 'google:contacts'],
   requiresConfirmation: true,
+  defaultRiskTier: 1,
+  riskTiers: { search: 1, get: 1, list: 1, groups: 1 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

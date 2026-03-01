@@ -106,6 +106,8 @@ function createScreenshotTool(adapter: ScreenshotAdapter): ExtendedAgentTool {
     parameters,
     permissions: ['screen:capture'],
     requiresConfirmation: true,
+    defaultRiskTier: 1,
+    riskTiers: { captureScreen: 1, captureWindow: 1 },
     runsOn: 'desktop',
     execute: async (args: unknown): Promise<AgentToolResult> => {
       const parsed = parseArgs(args)

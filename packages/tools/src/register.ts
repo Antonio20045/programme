@@ -47,7 +47,7 @@ import { googleDriveTool } from './google-drive'
 import { googleDocsTool } from './google-docs'
 import { googleSheetsTool } from './google-sheets'
 import { youtubeTool } from './youtube'
-import { schedulerTool } from './scheduler'
+import { createSchedulerTool, type CronBridge } from './scheduler'
 import { whatsappTool } from './whatsapp'
 
 // ---------------------------------------------------------------------------
@@ -64,6 +64,7 @@ export interface ToolAdapters {
 
 export interface ToolConfig {
   readonly allowedDirectories?: readonly string[]
+  readonly cronBridge?: CronBridge
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +135,8 @@ export interface OpenClawTool {
   readonly parameters: ExtendedAgentTool['parameters']
   readonly requiresConfirmation: boolean
   readonly runsOn: 'server' | 'desktop'
+  readonly riskTiers?: ExtendedAgentTool['riskTiers']
+  readonly defaultRiskTier?: ExtendedAgentTool['defaultRiskTier']
   readonly execute: (
     toolCallId: string,
     params: Record<string, unknown>,
@@ -148,6 +151,8 @@ export function bridgeToOpenClaw(tool: ExtendedAgentTool): OpenClawTool {
     parameters: tool.parameters,
     requiresConfirmation: tool.requiresConfirmation,
     runsOn: tool.runsOn,
+    riskTiers: tool.riskTiers,
+    defaultRiskTier: tool.defaultRiskTier,
     execute: async (
       _toolCallId: string,
       params: Record<string, unknown>,
@@ -204,7 +209,7 @@ export function initTools(adapters?: ToolAdapters, config?: ToolConfig): void {
   registerTool(youtubeTool)
 
   // Server tools — scheduler + WhatsApp
-  registerTool(schedulerTool)
+  registerTool(createSchedulerTool(config?.cronBridge))
   registerTool(whatsappTool)
 
   // Server tools with Config (only when allowedDirectories is configured)

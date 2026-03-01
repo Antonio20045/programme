@@ -222,6 +222,8 @@ function createRemindersInstance(userId: string, pool: DbPool): RemindersInstanc
     parameters,
     permissions: [],
     requiresConfirmation: false,
+    defaultRiskTier: 2,
+    riskTiers: { listReminders: 1, setReminder: 2, cancelReminder: 4 },
     runsOn: 'server',
     execute: async (args: unknown): Promise<AgentToolResult> => {
       const parsed = parseArgs(args)

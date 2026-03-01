@@ -196,6 +196,7 @@ export const systemInfoTool: ExtendedAgentTool = {
   parameters,
   permissions: ['system:read'],
   requiresConfirmation: false,
+  defaultRiskTier: 1,
   runsOn: 'desktop',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

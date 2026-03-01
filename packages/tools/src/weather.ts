@@ -226,6 +226,7 @@ export const weatherTool: ExtendedAgentTool = {
   parameters,
   permissions: ['net:http'],
   requiresConfirmation: false,
+  defaultRiskTier: 1,
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

@@ -1,20 +1,39 @@
 # Tool-Interface (OpenClaw AgentTool)
 
-Jedes Tool in `packages/tools/src/` implementiert das OpenClaw `AgentTool`-Interface:
+Jedes Tool in `packages/tools/src/` implementiert `ExtendedAgentTool`:
 
 ```typescript
-interface AgentTool {
+type RiskTier = 0 | 1 | 2 | 3 | 4
+
+interface ExtendedAgentTool {
   name: string
   description: string
-  parameters: JSONSchema          // JSON Schema für Argumente
-  execute: (args: unknown) => Promise<unknown>
+  parameters: JSONSchema
+  permissions: readonly string[]
+  requiresConfirmation: boolean       // Legacy — replaced by riskTiers
+  runsOn: 'server' | 'desktop'
+  riskTiers?: Record<string, RiskTier>  // Per-action risk tier
+  defaultRiskTier?: RiskTier            // Fallback when action not in riskTiers
+  execute: (args: unknown) => Promise<AgentToolResult>
 }
 ```
+
+### Risk Tiers (0-4)
+- **0** — Pure compute (calculator, datetime, json-tools). Auto-execute.
+- **1** — Read-only (gmail.readInbox, youtube.search). Auto-execute, audit-logged.
+- **2** — Local write (filesystem.writeFile, notes.createNote). Preview + approve.
+- **3** — External send (gmail.sendEmail, whatsapp.send). Detail preview + approve.
+- **4** — Delete/irreversible (filesystem.deleteFile, calendar.deleteEvent). Explicit confirm.
+
+Tier resolution: User override (`~/.openclaw/tier-overrides.json`) > `riskTiers[action]` > `defaultRiskTier` > global default (2). See `risk-tiers.ts`.
 
 Tools werden via LLM-native Function Calling aufgerufen (nicht String-Parsing).
 Registrierung über `createOpenClawCodingTools()` in `register.ts`.
 
 Jedes Tool braucht Verhaltens-Tests UND Security-Tests (kein eval, kein unauthorisierter fetch, kein Path Traversal).
+
+### Scheduler / CronBridge
+`scheduler.ts` delegates schedule/list/cancel to OpenClaw CronService via `CronBridge` interface (injected via `createSchedulerTool(bridge?)`). Working buffer (addProactive, buffer, clearBuffer) remains local.
 
 ## Tool-Caveats
 

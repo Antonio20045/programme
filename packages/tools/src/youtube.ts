@@ -405,6 +405,8 @@ export const youtubeTool: ExtendedAgentTool = {
   parameters,
   permissions: ['net:http', 'google:youtube'],
   requiresConfirmation: true,
+  defaultRiskTier: 1,
+  riskTiers: { search: 1, videoInfo: 1, channelInfo: 1, playlists: 1, playlistItems: 1, comments: 1, addToPlaylist: 3, removeFromPlaylist: 3 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

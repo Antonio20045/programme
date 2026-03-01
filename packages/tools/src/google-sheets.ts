@@ -328,6 +328,8 @@ export const googleSheetsTool: ExtendedAgentTool = {
   parameters: sheetsParameters,
   permissions: ['net:http', 'google:sheets'],
   requiresConfirmation: true,
+  defaultRiskTier: 2,
+  riskTiers: { read: 1, sheets: 1, write: 2, append: 2, create: 2, clear: 2 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

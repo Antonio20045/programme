@@ -419,6 +419,8 @@ export const httpClientTool: ExtendedAgentTool = {
   parameters,
   permissions: ['net:http'],
   requiresConfirmation: true,
+  defaultRiskTier: 2,
+  riskTiers: { request: 2, graphql: 2 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)

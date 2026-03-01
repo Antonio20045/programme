@@ -380,6 +380,8 @@ export const whatsappTool: ExtendedAgentTool = {
   parameters,
   permissions: ['net:http', 'whatsapp:send', 'whatsapp:read'],
   requiresConfirmation: true,
+  defaultRiskTier: 3,
+  riskTiers: { search: 1, recent: 1, chats: 1, contacts: 1, status: 1, send: 3, getQr: 3 },
   runsOn: 'server',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)
