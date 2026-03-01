@@ -19,6 +19,16 @@ const VALID_RISK_PROFILES = ['read-only', 'write-with-approval', 'full-autonomy'
 const VALID_STATUSES = ['active', 'dormant', 'archived'] as const
 const VALID_TRUST_LEVELS = ['intern', 'junior', 'senior'] as const
 
+const PROMOTION_INTERN_MIN_TASKS = 20
+const PROMOTION_INTERN_MIN_SUCCESS_RATE = 0.90
+const PROMOTION_INTERN_MIN_AGE_DAYS = 14
+const PROMOTION_JUNIOR_MIN_TASKS = 50
+const PROMOTION_JUNIOR_MIN_SUCCESS_RATE = 0.95
+const PROMOTION_JUNIOR_MAX_OVERRIDE_RATE = 0.10
+const DEMOTION_MAX_OVERRIDE_RATE = 0.15
+const DEMOTION_MIN_TASKS = 20
+const MS_PER_DAY = 86_400_000
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -81,8 +91,26 @@ interface UpdateAgentInput {
   readonly timeoutMs?: number
   readonly memoryNamespace?: string
   readonly cronSchedule?: string | null
+}
+
+/**
+ * Internal-only update type that includes trust fields.
+ * MUST NOT be exported — trust level changes go through checkAndApplyPromotion().
+ */
+interface InternalUpdateAgentInput extends UpdateAgentInput {
   readonly trustLevel?: TrustLevel
   readonly trustMetrics?: TrustMetrics
+}
+
+interface TrustOutcome {
+  readonly success: boolean
+  readonly overridden: boolean
+}
+
+interface TrustChange {
+  readonly result: 'promoted' | 'demoted' | 'unchanged'
+  readonly from?: TrustLevel
+  readonly to?: TrustLevel
 }
 
 // ---------------------------------------------------------------------------
@@ -301,7 +329,7 @@ async function updateAgent(
   pool: DbPool,
   userId: string,
   agentId: string,
-  input: UpdateAgentInput,
+  input: InternalUpdateAgentInput,
 ): Promise<AgentDefinition> {
   const setClauses: string[] = []
   const values: unknown[] = [userId, agentId]
@@ -423,6 +451,124 @@ async function deleteAgent(
 }
 
 // ---------------------------------------------------------------------------
+// Trust progression
+// ---------------------------------------------------------------------------
+
+/**
+ * Atomically updates trust metrics for a sub-agent after task completion.
+ *
+ * Integration points (JSDoc only — wiring happens in gateway integration):
+ * - After `executeAgent()` → `updateTrustMetrics(success=..., overridden: false)`
+ * - After `rejectApproval()` → `updateTrustMetrics(success: false, overridden: true)`
+ * - After `executeApproval()` with `modifiedParams` → `updateTrustMetrics(success: true, overridden: true)`
+ * - After `executeApproval()` without `modifiedParams` → `updateTrustMetrics(success: true, overridden: false)`
+ * - After each call, invoke `checkAndApplyPromotion()` and notify user on changes.
+ */
+async function updateTrustMetrics(
+  pool: DbPool,
+  userId: string,
+  agentId: string,
+  outcome: TrustOutcome,
+): Promise<TrustMetrics> {
+  const successInc = outcome.success ? 1 : 0
+  const overrideInc = outcome.overridden ? 1 : 0
+
+  const sql = [
+    'UPDATE agent_registry SET trust_metrics = ',
+    "jsonb_set(jsonb_set(jsonb_set(trust_metrics, '{totalTasks}', (COALESCE((trust_metrics->>'totalTasks')::int, 0) + 1)::text::jsonb), ",
+    "'{successfulTasks}', (COALESCE((trust_metrics->>'successfulTasks')::int, 0) + $3::int)::text::jsonb), ",
+    "'{userOverrides}', (COALESCE((trust_metrics->>'userOverrides')::int, 0) + $4::int)::text::jsonb) ",
+    'WHERE id = $2 AND user_id = $1 RETURNING trust_metrics',
+  ].join('')
+
+  const { rows } = await pool.query(sql, [userId, agentId, successInc, overrideInc])
+
+  const row = rows[0]
+  if (!row) throw new Error('Agent with id ' + agentId + ' not found')
+  return parseTrustMetrics(row['trust_metrics'])
+}
+
+/**
+ * Evaluates promotion/demotion rules and applies trust level changes.
+ *
+ * Demotion is checked first (overrideRate > 15% AND totalTasks >= 20):
+ * - senior → junior, junior → intern, intern stays (floor)
+ *
+ * Promotion:
+ * - intern → junior: ≥20 tasks, >90% success, agent >14 days old
+ * - junior → senior: ≥50 tasks, >95% success, <10% override rate
+ *
+ * Note: trust_metrics only stores aggregates, no sliding window.
+ * Override/success rates are lifetime rates.
+ */
+async function checkAndApplyPromotion(
+  pool: DbPool,
+  userId: string,
+  agentId: string,
+): Promise<TrustChange> {
+  const agent = await getAgent(pool, userId, agentId)
+  if (!agent) throw new Error('Agent with id ' + agentId + ' not found')
+
+  const { totalTasks, successfulTasks, userOverrides } = agent.trustMetrics
+  const currentLevel = agent.trustLevel
+
+  const successRate = totalTasks > 0 ? successfulTasks / totalTasks : 0
+  const overrideRate = totalTasks > 0 ? userOverrides / totalTasks : 0
+
+  // --- Demotion check (takes priority) ---
+  if (totalTasks >= DEMOTION_MIN_TASKS && overrideRate > DEMOTION_MAX_OVERRIDE_RATE) {
+    if (currentLevel === 'senior') {
+      await updateAgent(pool, userId, agentId, {
+        trustLevel: 'junior',
+        trustMetrics: { ...agent.trustMetrics, promotedAt: new Date().toISOString() },
+      })
+      return { result: 'demoted', from: 'senior', to: 'junior' }
+    }
+    if (currentLevel === 'junior') {
+      await updateAgent(pool, userId, agentId, {
+        trustLevel: 'intern',
+        trustMetrics: { ...agent.trustMetrics, promotedAt: new Date().toISOString() },
+      })
+      return { result: 'demoted', from: 'junior', to: 'intern' }
+    }
+    // intern cannot go lower
+    return { result: 'unchanged' }
+  }
+
+  // --- Promotion check ---
+  const agentAgeMs = Date.now() - new Date(agent.createdAt).getTime()
+  const agentAgeDays = agentAgeMs / MS_PER_DAY
+
+  if (
+    currentLevel === 'intern' &&
+    totalTasks >= PROMOTION_INTERN_MIN_TASKS &&
+    successRate > PROMOTION_INTERN_MIN_SUCCESS_RATE &&
+    agentAgeDays > PROMOTION_INTERN_MIN_AGE_DAYS
+  ) {
+    await updateAgent(pool, userId, agentId, {
+      trustLevel: 'junior',
+      trustMetrics: { ...agent.trustMetrics, promotedAt: new Date().toISOString() },
+    })
+    return { result: 'promoted', from: 'intern', to: 'junior' }
+  }
+
+  if (
+    currentLevel === 'junior' &&
+    totalTasks >= PROMOTION_JUNIOR_MIN_TASKS &&
+    successRate > PROMOTION_JUNIOR_MIN_SUCCESS_RATE &&
+    overrideRate < PROMOTION_JUNIOR_MAX_OVERRIDE_RATE
+  ) {
+    await updateAgent(pool, userId, agentId, {
+      trustLevel: 'senior',
+      trustMetrics: { ...agent.trustMetrics, promotedAt: new Date().toISOString() },
+    })
+    return { result: 'promoted', from: 'junior', to: 'senior' }
+  }
+
+  return { result: 'unchanged' }
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -435,15 +581,20 @@ export {
   updateStatus,
   touchAgent,
   deleteAgent,
+  updateTrustMetrics,
+  checkAndApplyPromotion,
   generateAgentId,
   toKebabCase,
   MAX_AGENTS_PER_USER,
+  DEMOTION_MIN_TASKS,
 }
 export type {
   AgentDefinition,
   CreateAgentInput,
   UpdateAgentInput,
   TrustMetrics,
+  TrustOutcome,
+  TrustChange,
   RiskProfile,
   AgentStatus,
   TrustLevel,
