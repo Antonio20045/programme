@@ -75,6 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 16 — Pending-Approval Store abgeschlossen
+Phase: 17 — Agent Lifecycle Manager abgeschlossen
 Nächster Schritt: Tool-Factory Integration, System-Prompt Agent-Liste, Gateway-Integration (classify() in in-app.ts Middleware, Approval-Flow via pending-approvals + ConfirmationManager)
-Letzter Commit: feat: pending-approval store for sub-agent action proposals
+Letzter Commit: feat: agent lifecycle manager with auto-cleanup and reactivation

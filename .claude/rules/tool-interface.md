@@ -47,6 +47,9 @@ Jedes Tool braucht Verhaltens-Tests UND Security-Tests (kein eval, kein unauthor
 ### Pending-Approval Store
 `pending-approvals.ts` holds `ActionProposal`s from sub-agents between creation and user decision (approve/reject). In-memory `Map<proposalId, StoredProposal>` — ephemeral (no DB). Functions: `storeProposal(proposal, agentId, ttlMs?)`, `getProposal(id)`, `removeProposal(id)`, `executeApproval(id, modifiedParams?)` (resolves tool via `getTool()` and executes), `rejectApproval(id)` (returns `StoredProposal` for trust-metric updates), `cleanupExpired()`. Safety: TTL default 10 min, max 1 hour. Store cap 1000 entries with auto-eviction. Sanitized error messages (no input reflection). Delete-before-execute prevents double-execution. Note: `modifiedParams` bypasses risk-tier re-evaluation — to be addressed during gateway integration.
 
+### Agent Lifecycle Manager
+`agent-lifecycle.ts` — pure utility module (no Tool interface), called as daily cron job. `runLifecycleCheck(pool, userId) → LifecycleReport` with cascading thresholds based on `lastUsedAt`: >180d → delete (any status, `deleteNamespace` + `deleteAgent`), >90d → archive (active/dormant only, `updateStatus` + memory cleanup except `preference` category), >30d → dormant (active only, `updateStatus` + null `cronSchedule`). Highest threshold checked first — 185-day active agent deleted directly, never passes through dormant. `reactivateAgent(pool, userId, agentId)` — dormant/archived → active + `touchAgent`. `runMemoryCleanup(pool) → number` — global `cleanupExpired` + `cleanupStaleCache(7)`. No own DB migration.
+
 ## Tool-Caveats
 
 - Tool-Signierung: Ed25519 — `sign-tools.ts` signiert mit libsodium, `verify.ts` prüft mit Node crypto (timingSafeEqual + crypto.verify). Private Key NUR in `.env`, Public Key in `public-key.ts`. Gateway ruft `verifyTool()` vor dem Laden auf.
