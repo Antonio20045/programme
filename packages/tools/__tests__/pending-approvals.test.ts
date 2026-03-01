@@ -282,7 +282,7 @@ describe('pending-approvals', () => {
     expect(stored!.proposal.id).toBe('__proto__')
 
     // Object.prototype should not be affected
-    expect(Object.prototype.hasOwnProperty('proposal')).toBe(false)
+    expect(Object.hasOwn(Object.prototype, 'proposal')).toBe(false)
   })
 })
 
