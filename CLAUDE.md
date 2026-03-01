@@ -75,6 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 12 — Risk-Tier-Mapping + Cron-Integration abgeschlossen
-Nächster Schritt: Agent Executor, Delegate-Tool, Orchestrator
-Letzter Commit: feat: per-action risk tiers (0-4) + scheduler CronBridge integration
+Phase: 13 — Agent Executor abgeschlossen
+Nächster Schritt: Delegate-Tool, Orchestrator
+Letzter Commit: feat: agent executor with isolated sub-agent LLM calls
