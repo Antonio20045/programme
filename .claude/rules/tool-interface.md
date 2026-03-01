@@ -44,6 +44,9 @@ Jedes Tool braucht Verhaltens-Tests UND Security-Tests (kein eval, kein unauthor
 ### Orchestrator Classifier
 `orchestrator-classifier.ts` classifies messages BEFORE the LLM call — pure rule-based, no LLM invocation. `classify(message, userId, pool) → ClassificationResult` with complexity (trivial/simple/moderate/complex), category, matchedAgents, modelTier (haiku/sonnet/opus), parallelExecution. Uses `getActiveAgents` (registry) for agent keyword matching, `trackRequest` (pattern-tracker) fire-and-forget. Heuristics mirrored from `gateway/src/model-router.ts` (keep in sync): `hasMultipleSubTasks`, `requestsAnalysis`, `isCodingTask`, `requiresMultiToolCoordination`. Trivial detection: short messages (≤30 chars) matching greeting/thanks/yes-no patterns. Model tier: /opus → opus, 2+ criteria → sonnet, default haiku.
 
+### Pending-Approval Store
+`pending-approvals.ts` holds `ActionProposal`s from sub-agents between creation and user decision (approve/reject). In-memory `Map<proposalId, StoredProposal>` — ephemeral (no DB). Functions: `storeProposal(proposal, agentId, ttlMs?)`, `getProposal(id)`, `removeProposal(id)`, `executeApproval(id, modifiedParams?)` (resolves tool via `getTool()` and executes), `rejectApproval(id)` (returns `StoredProposal` for trust-metric updates), `cleanupExpired()`. Safety: TTL default 10 min, max 1 hour. Store cap 1000 entries with auto-eviction. Sanitized error messages (no input reflection). Delete-before-execute prevents double-execution. Note: `modifiedParams` bypasses risk-tier re-evaluation — to be addressed during gateway integration.
+
 ## Tool-Caveats
 
 - Tool-Signierung: Ed25519 — `sign-tools.ts` signiert mit libsodium, `verify.ts` prüft mit Node crypto (timingSafeEqual + crypto.verify). Private Key NUR in `.env`, Public Key in `public-key.ts`. Gateway ruft `verifyTool()` vor dem Laden auf.
