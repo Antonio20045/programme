@@ -24,6 +24,7 @@ const mockGetActiveAgents = vi.fn()
 vi.mock('../src/agent-registry', () => ({
   createAgent: (...args: unknown[]) => mockCreateAgent(...args),
   getActiveAgents: (...args: unknown[]) => mockGetActiveAgents(...args),
+  VALID_RETENTIONS: ['persistent', 'seasonal', 'ephemeral'],
 }))
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,16 @@ const mockGetToolRiskTier = vi.fn()
 
 vi.mock('../src/agent-executor', () => ({
   getToolRiskTier: (...args: unknown[]) => mockGetToolRiskTier(...args),
+}))
+
+// ---------------------------------------------------------------------------
+// Mocks — agent-cron
+// ---------------------------------------------------------------------------
+
+const mockRegisterAgentCronJob = vi.fn()
+
+vi.mock('../src/agent-cron', () => ({
+  registerAgentCronJob: (...args: unknown[]) => mockRegisterAgentCronJob(...args),
 }))
 
 // ---------------------------------------------------------------------------
@@ -79,6 +90,8 @@ function makeAgentDef(overrides: Partial<AgentDefinition> = {}): AgentDefinition
     timeoutMs: 30_000,
     memoryNamespace: 'agent-test-agent-abc123',
     cronSchedule: null,
+    cronTask: null,
+    retention: 'persistent',
     status: 'active',
     trustLevel: 'intern',
     trustMetrics: { totalTasks: 0, successfulTasks: 0, userOverrides: 0, promotedAt: null },
@@ -196,6 +209,8 @@ describe('Metadata', () => {
     expect(tool.parameters.properties).toHaveProperty('tools')
     expect(tool.parameters.properties).toHaveProperty('schedule')
     expect(tool.parameters.properties).toHaveProperty('model')
+    expect(tool.parameters.properties).toHaveProperty('retention')
+    expect(tool.parameters.properties).toHaveProperty('cronTask')
   })
 })
 
@@ -287,9 +302,37 @@ describe('parseArgs', () => {
     expect(result.model).toBe('haiku')
   })
 
-  it('parses valid args with cron schedule', () => {
-    const result = parseArgs({ ...VALID_ARGS, schedule: '0 9 * * 1-5' })
+  it('parses valid args with cron schedule and cronTask', () => {
+    const result = parseArgs({ ...VALID_ARGS, schedule: '0 9 * * 1-5', cronTask: 'Check emails' })
     expect(result.schedule).toBe('0 9 * * 1-5')
+    expect(result.cronTask).toBe('Check emails')
+  })
+
+  it('rejects schedule without cronTask', () => {
+    expect(() => parseArgs({ ...VALID_ARGS, schedule: '0 9 * * 1-5' })).toThrow(
+      'cronTask is required when schedule is set',
+    )
+  })
+
+  it('applies heuristic: schedule set → persistent', () => {
+    const result = parseArgs({ ...VALID_ARGS, schedule: '0 9 * * 1-5', cronTask: 'Check emails' })
+    expect(result.retention).toBe('persistent')
+  })
+
+  it('applies heuristic: no schedule → ephemeral', () => {
+    const result = parseArgs(VALID_ARGS)
+    expect(result.retention).toBe('ephemeral')
+  })
+
+  it('accepts explicit retention override', () => {
+    const result = parseArgs({ ...VALID_ARGS, retention: 'seasonal' })
+    expect(result.retention).toBe('seasonal')
+  })
+
+  it('rejects invalid retention value', () => {
+    expect(() => parseArgs({ ...VALID_ARGS, retention: 'forever' })).toThrow(
+      'retention must be one of',
+    )
   })
 
   it('trims whitespace from all string fields', () => {
@@ -394,12 +437,13 @@ describe('Agent Creation', () => {
     expect(mockCreateAgent).toHaveBeenCalledTimes(1)
   })
 
-  it('creates agent with schedule', async () => {
+  it('creates agent with schedule and cronTask', async () => {
     const tool = createAgentFactoryTool(USER_ID, mockPool)
-    await tool.execute({ ...VALID_ARGS, schedule: '0 9 * * 1-5' })
+    await tool.execute({ ...VALID_ARGS, schedule: '0 9 * * 1-5', cronTask: 'Check emails' })
 
     const createInput = mockCreateAgent.mock.calls[0]![2] as Record<string, unknown>
     expect(createInput['cronSchedule']).toBe('0 9 * * 1-5')
+    expect(createInput['cronTask']).toBe('Check emails')
   })
 
   it('returns error for duplicate agent name', async () => {
@@ -444,7 +488,7 @@ describe('Agent Creation', () => {
   it('returns error for invalid cron expression', async () => {
     const tool = createAgentFactoryTool(USER_ID, mockPool)
 
-    const result = await tool.execute({ ...VALID_ARGS, schedule: 'not a cron' })
+    const result = await tool.execute({ ...VALID_ARGS, schedule: 'not a cron', cronTask: 'Check' })
     const data = parseResultContent(result)
 
     expect(data['status']).toBe('error')
@@ -455,7 +499,7 @@ describe('Agent Creation', () => {
   it('returns error for cron more frequent than 15 minutes', async () => {
     const tool = createAgentFactoryTool(USER_ID, mockPool)
 
-    const result = await tool.execute({ ...VALID_ARGS, schedule: '*/5 * * * *' })
+    const result = await tool.execute({ ...VALID_ARGS, schedule: '*/5 * * * *', cronTask: 'Check' })
     const data = parseResultContent(result)
 
     expect(data['status']).toBe('error')

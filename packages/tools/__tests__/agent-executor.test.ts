@@ -91,6 +91,8 @@ function makeAgentDef(overrides: Partial<AgentDefinition> = {}): AgentDefinition
     timeoutMs: 30_000,
     memoryNamespace: 'test',
     cronSchedule: null,
+    cronTask: null,
+    retention: 'persistent',
     status: 'active',
     trustLevel: 'senior',
     trustMetrics: { totalTasks: 0, successfulTasks: 0, userOverrides: 0, promotedAt: null },

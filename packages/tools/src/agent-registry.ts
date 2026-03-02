@@ -18,6 +18,7 @@ const MAX_AGENTS_PER_USER = 20
 const VALID_RISK_PROFILES = ['read-only', 'write-with-approval', 'full-autonomy'] as const
 const VALID_STATUSES = ['active', 'dormant', 'archived'] as const
 const VALID_TRUST_LEVELS = ['intern', 'junior', 'senior'] as const
+const VALID_RETENTIONS = ['persistent', 'seasonal', 'ephemeral'] as const
 
 const PROMOTION_INTERN_MIN_TASKS = 20
 const PROMOTION_INTERN_MIN_SUCCESS_RATE = 0.90
@@ -36,6 +37,7 @@ const MS_PER_DAY = 86_400_000
 type RiskProfile = (typeof VALID_RISK_PROFILES)[number]
 type AgentStatus = (typeof VALID_STATUSES)[number]
 type TrustLevel = (typeof VALID_TRUST_LEVELS)[number]
+type Retention = (typeof VALID_RETENTIONS)[number]
 
 interface TrustMetrics {
   readonly totalTasks: number
@@ -58,6 +60,8 @@ interface AgentDefinition {
   readonly timeoutMs: number
   readonly memoryNamespace: string
   readonly cronSchedule: string | null
+  readonly cronTask: string | null
+  readonly retention: Retention
   readonly status: AgentStatus
   readonly trustLevel: TrustLevel
   readonly trustMetrics: TrustMetrics
@@ -77,6 +81,8 @@ interface CreateAgentInput {
   readonly maxTokens?: number
   readonly timeoutMs?: number
   readonly cronSchedule?: string | null
+  readonly cronTask?: string | null
+  readonly retention?: Retention
 }
 
 interface UpdateAgentInput {
@@ -91,6 +97,8 @@ interface UpdateAgentInput {
   readonly timeoutMs?: number
   readonly memoryNamespace?: string
   readonly cronSchedule?: string | null
+  readonly cronTask?: string | null
+  readonly retention?: Retention
 }
 
 /**
@@ -176,6 +184,13 @@ function toAgentRow(row: Record<string, unknown>): AgentDefinition {
       row['cron_schedule'] === null || row['cron_schedule'] === undefined
         ? null
         : String(row['cron_schedule']),
+    cronTask:
+      row['cron_task'] === null || row['cron_task'] === undefined
+        ? null
+        : String(row['cron_task']),
+    retention: (VALID_RETENTIONS as readonly string[]).includes(String(row['retention'] ?? ''))
+      ? (String(row['retention']) as Retention)
+      : 'persistent',
     status: String(row['status'] ?? 'active') as AgentStatus,
     trustLevel: String(row['trust_level'] ?? 'intern') as TrustLevel,
     trustMetrics: parseTrustMetrics(row['trust_metrics']),
@@ -264,8 +279,8 @@ async function createAgent(
     `INSERT INTO agent_registry (
        id, user_id, name, description, system_prompt, tools, model,
        risk_profile, max_steps, max_tokens, timeout_ms, memory_namespace,
-       cron_schedule
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       cron_schedule, cron_task, retention
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
     [
       id,
@@ -281,6 +296,8 @@ async function createAgent(
       input.timeoutMs ?? 30000,
       memoryNamespace,
       input.cronSchedule ?? null,
+      input.cronTask ?? null,
+      input.retention ?? 'persistent',
     ],
   )
 
@@ -389,6 +406,17 @@ async function updateAgent(
     setClauses.push('cron_schedule = ' + nextParam())
     values.push(input.cronSchedule)
   }
+  if (input.cronTask !== undefined) {
+    setClauses.push('cron_task = ' + nextParam())
+    values.push(input.cronTask)
+  }
+  if (input.retention !== undefined) {
+    if (!(VALID_RETENTIONS as readonly string[]).includes(input.retention)) {
+      throw new Error('retention must be one of: ' + VALID_RETENTIONS.join(', '))
+    }
+    setClauses.push('retention = ' + nextParam())
+    values.push(input.retention)
+  }
   if (input.trustLevel !== undefined) {
     validateTrustLevel(input.trustLevel)
     setClauses.push('trust_level = ' + nextParam())
@@ -448,6 +476,51 @@ async function deleteAgent(
     [userId, agentId],
   )
   if (rows.length === 0) throw new Error(`Agent with id ${agentId} not found`)
+}
+
+// ---------------------------------------------------------------------------
+// Cross-user queries (used by cron and lifecycle jobs)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns all active agents with a cron_schedule set (cross-user).
+ * Used by agent-cron to register jobs at startup.
+ */
+async function getScheduledAgents(pool: DbPool): Promise<AgentDefinition[]> {
+  const { rows } = await pool.query(
+    "SELECT * FROM agent_registry WHERE status = 'active' AND cron_schedule IS NOT NULL",
+  )
+  return rows.map(toAgentRow)
+}
+
+/**
+ * Returns all distinct user IDs from the agent registry.
+ * Used by lifecycle cron to iterate over all users.
+ */
+async function getAllUserIds(pool: DbPool): Promise<string[]> {
+  const { rows } = await pool.query(
+    'SELECT DISTINCT user_id FROM agent_registry',
+  )
+  return rows.map((row: Record<string, unknown>) => String(row['user_id']))
+}
+
+/**
+ * Returns agents that can be delegated to:
+ * - active agents (always available)
+ * - dormant seasonal agents (auto-reactivated on delegation)
+ */
+async function getDelegatableAgents(
+  pool: DbPool,
+  userId: string,
+): Promise<AgentDefinition[]> {
+  const { rows } = await pool.query(
+    `SELECT * FROM agent_registry
+     WHERE user_id = $1
+       AND (status = 'active' OR (status = 'dormant' AND retention = 'seasonal'))
+     ORDER BY created_at DESC`,
+    [userId],
+  )
+  return rows.map(toAgentRow)
 }
 
 // ---------------------------------------------------------------------------
@@ -577,6 +650,9 @@ export {
   getAgent,
   getUserAgents,
   getActiveAgents,
+  getScheduledAgents,
+  getAllUserIds,
+  getDelegatableAgents,
   updateAgent,
   updateStatus,
   touchAgent,
@@ -585,6 +661,7 @@ export {
   checkAndApplyPromotion,
   generateAgentId,
   toKebabCase,
+  VALID_RETENTIONS,
   MAX_AGENTS_PER_USER,
   DEMOTION_MIN_TASKS,
 }
@@ -598,4 +675,5 @@ export type {
   RiskProfile,
   AgentStatus,
   TrustLevel,
+  Retention,
 }

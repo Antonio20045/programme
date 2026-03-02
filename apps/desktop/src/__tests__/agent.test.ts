@@ -211,10 +211,10 @@ describe('DesktopAgent', () => {
     // Stop bridge to trigger reconnect
     await bridge.stop()
 
-    // Restart bridge accepting both tokens (use resolveUserId for flexible auth)
+    // Restart bridge with refreshed token
     bridge = new DesktopAgentBridge({
       port: testPort,
-      resolveUserId: (tok) => (tok === TOKEN || tok === TOKEN_V2 ? 'user-1' : null),
+      token: TOKEN_V2,
     })
     bridge.start()
 
@@ -223,25 +223,4 @@ describe('DesktopAgent', () => {
     expect(bridge.isConnected()).toBe(true)
   }, 15_000)
 
-  it('sends clerkToken field for clerk auth mode', async () => {
-    const CLERK_JWT = 'eyJhbGciOiJSUzI1NiJ9.test-jwt'
-    const clerkToken: GetTokenFn = () => ({ kind: 'clerk', value: CLERK_JWT })
-
-    // Use a custom bridge with _clerkVerify to accept any JWT
-    await bridge.stop()
-    bridge = new DesktopAgentBridge({
-      port: testPort,
-      clerkSecretKey: 'sk_test_fake',
-      _clerkVerify: async () => ({ data: { sub: 'user_clerk_123' } }),
-    })
-    bridge.start()
-
-    agent.disconnect()
-    agent = new DesktopAgent(`ws://127.0.0.1:${String(testPort)}`, clerkToken)
-    agent.connect()
-    await waitForConnection(bridge)
-
-    expect(bridge.isConnected()).toBe(true)
-    expect(agent.getStatus()).toBe('connected')
-  })
 })

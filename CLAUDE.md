@@ -75,6 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 21 — Proaktive Sub-Agent Notifications abgeschlossen
-Nächster Schritt: Trust Progression (agent-registry updateTrustMetrics/checkAndApplyPromotion), Agent-Cron (cronSchedule mit CronService verdrahten), Agent-Lifecycle (täglicher Cleanup-Job), E2E-Tests
-Letzter Commit: feat: proactive sub-agent notification delivery (SSE + native + mobile relay)
+Phase: 22 — Agent Cron & Retention Lifecycle abgeschlossen
+Nächster Schritt: E2E-Tests (Sub-Agent Full-Flow: Factory → Cron → Execution → Retention → Lifecycle), Gateway-Integration (agent-cron init, delegate routing, classifier hookup)
+Letzter Commit: feat: agent cron ticker & retention lifecycle for sub-agents
