@@ -8,9 +8,10 @@
  * then delegates to agent-registry.createAgent().
  */
 
-import { createAgent, getActiveAgents } from './agent-registry'
-import type { CreateAgentInput, RiskProfile } from './agent-registry'
+import { createAgent, getActiveAgents, VALID_RETENTIONS } from './agent-registry'
+import type { CreateAgentInput, RiskProfile, Retention } from './agent-registry'
 import { getToolRiskTier } from './agent-executor'
+import { registerAgentCronJob } from './agent-cron'
 import { getTool } from './index'
 import type { AgentToolResult, DbPool, ExtendedAgentTool, JSONSchema, RiskTier } from './types'
 
@@ -109,6 +110,8 @@ interface AgentFactoryArgs {
   readonly tools: readonly string[]
   readonly schedule: string | null
   readonly model: ValidModel
+  readonly retention: Retention
+  readonly cronTask: string | null
 }
 
 function parseArgs(args: unknown): AgentFactoryArgs {
@@ -176,7 +179,42 @@ function parseArgs(args: unknown): AgentFactoryArgs {
   }
   const model = obj['model'] as ValidModel
 
-  return { name, purpose, tools: uniqueTools, schedule, model }
+  // retention (optional — heuristic fallback below)
+  let retention: Retention | undefined
+  if (obj['retention'] !== undefined && obj['retention'] !== null) {
+    if (typeof obj['retention'] !== 'string') {
+      throw new Error('retention must be a string')
+    }
+    if (!(VALID_RETENTIONS as readonly string[]).includes(obj['retention'])) {
+      throw new Error('retention must be one of: ' + VALID_RETENTIONS.join(', '))
+    }
+    retention = obj['retention'] as Retention
+  }
+
+  // cronTask (optional — required when schedule is set)
+  let cronTask: string | null = null
+  if (obj['cronTask'] !== undefined && obj['cronTask'] !== null) {
+    if (typeof obj['cronTask'] !== 'string') {
+      throw new Error('cronTask must be a string')
+    }
+    const trimmed = obj['cronTask'].trim()
+    if (trimmed.length > MAX_PURPOSE_LENGTH) {
+      throw new Error('cronTask must be at most ' + String(MAX_PURPOSE_LENGTH) + ' characters')
+    }
+    if (trimmed.length > 0) {
+      cronTask = trimmed
+    }
+  }
+
+  // Heuristic fallback for retention
+  const resolvedRetention: Retention = retention ?? (schedule !== null ? 'persistent' : 'ephemeral')
+
+  // cronTask is required when schedule is set
+  if (schedule !== null && cronTask === null) {
+    throw new Error('cronTask is required when schedule is set')
+  }
+
+  return { name, purpose, tools: uniqueTools, schedule, model, retention: resolvedRetention, cronTask }
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +292,23 @@ const PARAMETERS: JSONSchema = {
       type: 'string',
       description: 'LLM model tier: "haiku" (fast, cheap) or "sonnet" (smarter, slower).',
       enum: ['haiku', 'sonnet'],
+    },
+    retention: {
+      type: 'string',
+      description:
+        "Lebenszyklus des Agents. 'persistent' — dauerhafte, regelmäßige Aufgaben (Mails sortieren, tägliche Reports). " +
+        "'seasonal' — seltene aber wiederkehrende Aufgaben (Urlaub planen, Steuererklärung). Agent wird nach Erledigung automatisch pausiert und bei Bedarf reaktiviert. " +
+        "'ephemeral' — einmalige Aufgaben (Thema recherchieren, Dokument zusammenfassen). Agent wird nach Erledigung automatisch entfernt. " +
+        'Wähle basierend auf dem Purpose. Wenn unsicher: ephemeral für Einmaliges, persistent für Regelmäßiges.',
+      enum: ['persistent', 'seasonal', 'ephemeral'],
+    },
+    cronTask: {
+      type: 'string',
+      description:
+        'Spezifische Aufgabe für den Cron-Trigger (nur wenn schedule gesetzt). ' +
+        "Der Purpose beschreibt den Agent allgemein (z.B. 'E-Mail Management'), " +
+        "cronTask beschreibt was bei jedem Cron-Lauf passieren soll (z.B. 'Prüfe neue wichtige E-Mails und erstelle eine Zusammenfassung'). " +
+        'Pflicht wenn schedule gesetzt, sonst weglassen.',
     },
   },
   required: ['name', 'purpose', 'tools', 'model'],
@@ -346,12 +401,19 @@ function createAgentFactoryTool(userId: string, pool: DbPool): ExtendedAgentTool
           maxTokens: 4096,
           timeoutMs: 30_000,
           cronSchedule: parsed.schedule,
+          cronTask: parsed.cronTask,
+          retention: parsed.retention,
         }
 
         // 8. Create agent via registry
         const agent = await createAgent(pool, userId, input)
 
-        // 9. Return confirmation
+        // 9. Register cron job if scheduled
+        if (agent.cronSchedule) {
+          registerAgentCronJob(agent.id, userId, agent.cronSchedule)
+        }
+
+        // 10. Return confirmation
         return textResult({
           status: 'success',
           agent: {

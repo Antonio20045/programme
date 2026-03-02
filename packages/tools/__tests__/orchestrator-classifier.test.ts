@@ -65,6 +65,8 @@ function makeAgent(overrides: Partial<AgentDefinition> = {}): AgentDefinition {
     timeoutMs: 30_000,
     memoryNamespace: 'agent-test-agent-abc123',
     cronSchedule: null,
+    cronTask: null,
+    retention: 'persistent' as const,
     status: 'active',
     trustLevel: 'junior',
     trustMetrics: { totalTasks: 0, successfulTasks: 0, userOverrides: 0, promotedAt: null },

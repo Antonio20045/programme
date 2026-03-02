@@ -10,6 +10,9 @@
 import { getAgent } from './agent-registry'
 import { executeAgent } from './agent-executor'
 import type { LlmClient, AgentTask } from './agent-executor'
+import { handlePostExecution } from './agent-lifecycle'
+import { reactivateAgent } from './agent-lifecycle'
+import { unregisterAgentCronJob } from './agent-cron'
 import type { AgentToolResult, DbPool, ExtendedAgentTool, JSONSchema } from './types'
 
 // ---------------------------------------------------------------------------
@@ -146,7 +149,7 @@ function createDelegateTool(
 
       try {
         // 2. Look up agent
-        const agentDef = await getAgent(pool, userId, parsed.agentId)
+        let agentDef = await getAgent(pool, userId, parsed.agentId)
         if (!agentDef) {
           return textResult({
             status: 'failure',
@@ -156,8 +159,20 @@ function createDelegateTool(
           })
         }
 
-        // 3. Check status
-        if (agentDef.status !== 'active') {
+        // 3. Check status — auto-reactivate dormant seasonal agents
+        if (agentDef.status === 'dormant' && agentDef.retention === 'seasonal') {
+          await reactivateAgent(pool, userId, parsed.agentId)
+          const refreshed = await getAgent(pool, userId, parsed.agentId)
+          if (!refreshed) {
+            return textResult({
+              status: 'failure',
+              agentId: parsed.agentId,
+              error: 'Agent "' + parsed.agentId + '" not found after reactivation.',
+              reason: 'agent-not-found',
+            })
+          }
+          agentDef = refreshed
+        } else if (agentDef.status !== 'active') {
           return textResult({
             status: 'failure',
             agentId: parsed.agentId,
@@ -178,16 +193,33 @@ function createDelegateTool(
         // 5. Execute
         const result = await executeAgent(agentTask, pool, llmClient)
 
-        // 6. Map result
+        // 6. Post-execution retention handling
+        let postMessage: string | undefined
+        if (result.status === 'success') {
+          const postResult = await handlePostExecution(
+            pool, userId, agentDef.id, agentDef.name, agentDef.retention, result.status,
+          )
+          if (postResult.action !== 'none') {
+            try { unregisterAgentCronJob(agentDef.id) } catch { /* no-op */ }
+          }
+          postMessage = postResult.message
+        }
+
+        // 7. Map result
         switch (result.status) {
-          case 'success':
-            return textResult({
+          case 'success': {
+            const successData: Record<string, unknown> = {
               status: 'success',
               agentId: parsed.agentId,
               summary: result.output,
               toolCalls: result.toolCalls,
               usage: result.usage,
-            })
+            }
+            if (postMessage) {
+              successData['retentionNote'] = postMessage
+            }
+            return textResult(successData)
+          }
 
           case 'partial':
             return textResult({

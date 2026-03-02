@@ -36,6 +36,28 @@ vi.mock('../src/agent-executor', () => ({
 }))
 
 // ---------------------------------------------------------------------------
+// Mocks — agent-lifecycle
+// ---------------------------------------------------------------------------
+
+const mockHandlePostExecution = vi.fn()
+const mockReactivateAgent = vi.fn()
+
+vi.mock('../src/agent-lifecycle', () => ({
+  handlePostExecution: (...args: unknown[]) => mockHandlePostExecution(...args),
+  reactivateAgent: (...args: unknown[]) => mockReactivateAgent(...args),
+}))
+
+// ---------------------------------------------------------------------------
+// Mocks — agent-cron
+// ---------------------------------------------------------------------------
+
+const mockUnregisterAgentCronJob = vi.fn()
+
+vi.mock('../src/agent-cron', () => ({
+  unregisterAgentCronJob: (...args: unknown[]) => mockUnregisterAgentCronJob(...args),
+}))
+
+// ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
@@ -73,6 +95,8 @@ function makeAgentDef(overrides: Partial<AgentDefinition> = {}): AgentDefinition
     timeoutMs: 30_000,
     memoryNamespace: 'agent-research-bot-abc123',
     cronSchedule: null,
+    cronTask: null,
+    retention: 'persistent' as const,
     status: 'active',
     trustLevel: 'junior',
     trustMetrics: { totalTasks: 0, successfulTasks: 0, userOverrides: 0, promotedAt: null },
@@ -110,6 +134,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockGetAgent.mockResolvedValue(makeAgentDef())
   mockExecuteAgent.mockResolvedValue(makeSuccessResult())
+  mockHandlePostExecution.mockResolvedValue({ action: 'none' })
+  mockReactivateAgent.mockResolvedValue(undefined)
 })
 
 // ---------------------------------------------------------------------------
@@ -258,8 +284,8 @@ describe('Delegation', () => {
     expect(mockExecuteAgent).not.toHaveBeenCalled()
   })
 
-  it('returns failure when agent is dormant', async () => {
-    mockGetAgent.mockResolvedValue(makeAgentDef({ status: 'dormant' }))
+  it('returns failure when agent is dormant (non-seasonal)', async () => {
+    mockGetAgent.mockResolvedValue(makeAgentDef({ status: 'dormant', retention: 'persistent' }))
     const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
 
     const result = await tool.execute({ agentId: AGENT_ID, task: 'do something' })
@@ -268,6 +294,21 @@ describe('Delegation', () => {
     expect(data['status']).toBe('failure')
     expect(data['reason']).toBe('agent-inactive')
     expect(mockExecuteAgent).not.toHaveBeenCalled()
+  })
+
+  it('auto-reactivates dormant seasonal agent', async () => {
+    // First call returns dormant seasonal, second call (after reactivation) returns active
+    mockGetAgent
+      .mockResolvedValueOnce(makeAgentDef({ status: 'dormant', retention: 'seasonal' }))
+      .mockResolvedValueOnce(makeAgentDef({ status: 'active', retention: 'seasonal' }))
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    const result = await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+    const data = parseResultContent(result)
+
+    expect(data['status']).toBe('success')
+    expect(mockReactivateAgent).toHaveBeenCalledWith(mockPool, USER_ID, AGENT_ID)
+    expect(mockExecuteAgent).toHaveBeenCalledTimes(1)
   })
 
   it('returns failure when agent is archived', async () => {
@@ -416,7 +457,7 @@ describe('Delegation', () => {
   })
 
   it('does not expose agent status value in inactive error', async () => {
-    mockGetAgent.mockResolvedValue(makeAgentDef({ status: 'dormant' }))
+    mockGetAgent.mockResolvedValue(makeAgentDef({ status: 'dormant', retention: 'persistent' }))
     const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
 
     const result = await tool.execute({ agentId: AGENT_ID, task: 'do something' })
@@ -424,5 +465,43 @@ describe('Delegation', () => {
 
     // Error message must NOT contain internal status value
     expect(String(data['error'])).not.toContain('dormant')
+  })
+
+  it('calls handlePostExecution after success', async () => {
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+
+    expect(mockHandlePostExecution).toHaveBeenCalledWith(
+      mockPool, USER_ID, AGENT_ID, 'Research Bot', 'persistent', 'success',
+    )
+  })
+
+  it('does not call handlePostExecution after failure', async () => {
+    mockExecuteAgent.mockResolvedValue({
+      status: 'failure',
+      output: 'Error occurred',
+      toolCalls: 0,
+      pendingActions: [],
+      usage: { inputTokens: 0, outputTokens: 0 },
+      reason: 'llm-error',
+    })
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+
+    expect(mockHandlePostExecution).not.toHaveBeenCalled()
+  })
+
+  it('appends retentionNote to success output when post-execution has message', async () => {
+    mockHandlePostExecution.mockResolvedValue({
+      action: 'deleted',
+      message: 'Einmal-Agent wurde entfernt.',
+    })
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    const result = await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+    const data = parseResultContent(result)
+
+    expect(data['retentionNote']).toBe('Einmal-Agent wurde entfernt.')
   })
 })

@@ -56,6 +56,7 @@ import {
   runLifecycleCheck,
   reactivateAgent,
   runMemoryCleanup,
+  handlePostExecution,
 } from '../src/agent-lifecycle'
 import type { DbPool } from '../src/types'
 
@@ -90,6 +91,8 @@ function makeAgent(overrides: Record<string, unknown> = {}) {
     timeoutMs: 30000,
     memoryNamespace: 'agent-abc123',
     cronSchedule: null,
+    cronTask: null,
+    retention: 'persistent' as const,
     status: 'active' as const,
     trustLevel: 'intern' as const,
     trustMetrics: { totalTasks: 0, successfulTasks: 0, userOverrides: 0, promotedAt: null },
@@ -444,5 +447,147 @@ describe('runMemoryCleanup', () => {
     const total = await runMemoryCleanup(mockPool)
 
     expect(total).toBe(0)
+  })
+})
+
+// ===========================================================================
+// handlePostExecution
+// ===========================================================================
+
+describe('handlePostExecution', () => {
+  it('deletes ephemeral agent after success', async () => {
+    const result = await handlePostExecution(
+      mockPool, USER_ID, 'agent-eph', 'Einmal-Bot', 'ephemeral', 'success',
+    )
+
+    expect(result.action).toBe('deleted')
+    expect(result.message).toContain('Einmal-Agent')
+    expect(result.message).toContain('entfernt')
+    expect(mockDeleteNamespace).toHaveBeenCalledWith(mockPool, 'agent-eph', USER_ID)
+    expect(mockDeleteAgent).toHaveBeenCalledWith(mockPool, USER_ID, 'agent-eph')
+  })
+
+  it('sets seasonal agent to dormant after success', async () => {
+    const result = await handlePostExecution(
+      mockPool, USER_ID, 'agent-sea', 'Saison-Bot', 'seasonal', 'success',
+    )
+
+    expect(result.action).toBe('dormant')
+    expect(result.message).toContain('pausiert')
+    expect(mockUpdateStatus).toHaveBeenCalledWith(mockPool, USER_ID, 'agent-sea', 'dormant')
+  })
+
+  it('does nothing for persistent agent after success', async () => {
+    const result = await handlePostExecution(
+      mockPool, USER_ID, 'agent-per', 'Dauer-Bot', 'persistent', 'success',
+    )
+
+    expect(result.action).toBe('none')
+    expect(result.message).toBeUndefined()
+    expect(mockDeleteAgent).not.toHaveBeenCalled()
+    expect(mockUpdateStatus).not.toHaveBeenCalled()
+  })
+
+  it('does nothing for ephemeral agent on failure', async () => {
+    const result = await handlePostExecution(
+      mockPool, USER_ID, 'agent-eph', 'Einmal-Bot', 'ephemeral', 'failure',
+    )
+
+    expect(result.action).toBe('none')
+    expect(mockDeleteAgent).not.toHaveBeenCalled()
+    expect(mockDeleteNamespace).not.toHaveBeenCalled()
+  })
+
+  it('does nothing for seasonal agent on failure', async () => {
+    const result = await handlePostExecution(
+      mockPool, USER_ID, 'agent-sea', 'Saison-Bot', 'seasonal', 'failure',
+    )
+
+    expect(result.action).toBe('none')
+    expect(mockUpdateStatus).not.toHaveBeenCalled()
+  })
+})
+
+// ===========================================================================
+// Retention-aware Lifecycle
+// ===========================================================================
+
+describe('retention-aware lifecycle', () => {
+  it('skips ephemeral agents entirely', async () => {
+    const agent = makeAgent({
+      id: 'eph-agent',
+      retention: 'ephemeral',
+      lastUsedAt: daysAgo(200),
+      status: 'active',
+    })
+    mockGetUserAgents.mockResolvedValue([agent])
+
+    const report = await runLifecycleCheck(mockPool, USER_ID)
+
+    expect(report.deleted).toEqual([])
+    expect(report.dormant).toEqual([])
+    expect(report.archived).toEqual([])
+    expect(mockDeleteAgent).not.toHaveBeenCalled()
+    expect(mockUpdateStatus).not.toHaveBeenCalled()
+  })
+
+  it('seasonal agent at 35 days becomes dormant', async () => {
+    const agent = makeAgent({
+      id: 'sea-35',
+      retention: 'seasonal',
+      lastUsedAt: daysAgo(35),
+      status: 'active',
+    })
+    mockGetUserAgents.mockResolvedValue([agent])
+
+    const report = await runLifecycleCheck(mockPool, USER_ID)
+
+    expect(report.dormant).toEqual(['sea-35'])
+    expect(mockUpdateStatus).toHaveBeenCalledWith(mockPool, USER_ID, 'sea-35', 'dormant')
+  })
+
+  it('seasonal agent at 100 days is NOT archived', async () => {
+    const agent = makeAgent({
+      id: 'sea-100',
+      retention: 'seasonal',
+      lastUsedAt: daysAgo(100),
+      status: 'dormant',
+    })
+    mockGetUserAgents.mockResolvedValue([agent])
+
+    const report = await runLifecycleCheck(mockPool, USER_ID)
+
+    expect(report.archived).toEqual([])
+    expect(report.deleted).toEqual([])
+  })
+
+  it('seasonal agent at 200 days is NOT deleted', async () => {
+    const agent = makeAgent({
+      id: 'sea-200',
+      retention: 'seasonal',
+      lastUsedAt: daysAgo(200),
+      status: 'dormant',
+    })
+    mockGetUserAgents.mockResolvedValue([agent])
+
+    const report = await runLifecycleCheck(mockPool, USER_ID)
+
+    expect(report.deleted).toEqual([])
+    expect(mockDeleteAgent).not.toHaveBeenCalled()
+  })
+
+  it('persistent agent follows full lifecycle unchanged', async () => {
+    const agents = [
+      makeAgent({ id: 'per-35', retention: 'persistent', lastUsedAt: daysAgo(35), status: 'active' }),
+      makeAgent({ id: 'per-95', retention: 'persistent', lastUsedAt: daysAgo(95), status: 'dormant' }),
+      makeAgent({ id: 'per-185', retention: 'persistent', lastUsedAt: daysAgo(185), status: 'archived' }),
+    ]
+    mockGetUserAgents.mockResolvedValue(agents)
+
+    const report = await runLifecycleCheck(mockPool, USER_ID)
+
+    expect(report.dormant).toEqual(['per-35'])
+    expect(report.archived).toEqual(['per-95'])
+    expect(report.deleted).toEqual(['per-185'])
   })
 })

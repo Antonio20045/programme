@@ -6,6 +6,7 @@ import {
   getAgent,
   updateAgent,
 } from './agent-registry'
+import type { Retention } from './agent-registry'
 import {
   deleteNamespace,
   getByCategory,
@@ -53,6 +54,55 @@ function daysSinceLastUsed(lastUsedAt: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Post-Execution — Retention-based cleanup after agent run
+// ---------------------------------------------------------------------------
+
+interface PostExecutionResult {
+  readonly action: 'none' | 'dormant' | 'deleted'
+  readonly message?: string
+}
+
+/**
+ * Called after a sub-agent completes a task. Applies retention policy:
+ * - ephemeral + success → delete agent and memory
+ * - seasonal + success → set agent to dormant
+ * - persistent → no action
+ *
+ * Only acts on successful executions — failed runs leave the agent unchanged.
+ */
+async function handlePostExecution(
+  pool: DbPool,
+  userId: string,
+  agentId: string,
+  agentName: string,
+  retention: Retention,
+  resultStatus: string,
+): Promise<PostExecutionResult> {
+  if (resultStatus !== 'success') {
+    return { action: 'none' }
+  }
+
+  if (retention === 'ephemeral') {
+    await deleteNamespace(pool, agentId, userId)
+    await deleteAgent(pool, userId, agentId)
+    return {
+      action: 'deleted',
+      message: 'Einmal-Agent "' + agentName + '" wurde nach Erledigung entfernt.',
+    }
+  }
+
+  if (retention === 'seasonal') {
+    await updateStatus(pool, userId, agentId, 'dormant')
+    return {
+      action: 'dormant',
+      message: 'Agent "' + agentName + '" wird bis zur nächsten Nutzung pausiert.',
+    }
+  }
+
+  return { action: 'none' }
+}
+
+// ---------------------------------------------------------------------------
 // Core — Lifecycle Check
 // ---------------------------------------------------------------------------
 
@@ -74,7 +124,26 @@ async function runLifecycleCheck(
   const notifications: string[] = []
 
   for (const agent of agents) {
+    // Ephemeral agents are handled by post-execution — skip lifecycle
+    if (agent.retention === 'ephemeral') continue
+
     const days = daysSinceLastUsed(agent.lastUsedAt)
+
+    // Seasonal agents: only dormant threshold, no archive/delete
+    if (agent.retention === 'seasonal') {
+      if (days > DORMANT_THRESHOLD_DAYS && agent.status === 'active') {
+        await updateStatus(pool, userId, agent.id, 'dormant')
+
+        if (agent.cronSchedule !== null) {
+          await updateAgent(pool, userId, agent.id, { cronSchedule: null })
+        }
+
+        dormant.push(agent.id)
+      }
+      continue
+    }
+
+    // Persistent agents: full lifecycle (unchanged behavior)
 
     // --- Step 3: DELETE (> 180 days, any status) -------------------------
     if (days > DELETED_THRESHOLD_DAYS) {
@@ -170,9 +239,10 @@ export {
   runLifecycleCheck,
   reactivateAgent,
   runMemoryCleanup,
+  handlePostExecution,
   DORMANT_THRESHOLD_DAYS,
   ARCHIVED_THRESHOLD_DAYS,
   DELETED_THRESHOLD_DAYS,
 }
 
-export type { LifecycleReport }
+export type { LifecycleReport, PostExecutionResult }
