@@ -24,9 +24,14 @@
   --color-edge-focus: #42424e;
 
   /* Accent — warm amber/gold */
-  --color-accent: #e0a040;
-  --color-accent-hover: #eab050;
-  --color-accent-text: #f0c060;
+  --color-accent: #F0B060;
+  --color-accent-hover: #F4BE74;
+  --color-accent-text: #F8CC88;
+  --color-accent-muted: rgba(240,176,96,0.15);
+
+  /* Glass surfaces */
+  --color-surface-glass: rgba(20,20,26,0.80);
+  --color-surface-glass-hover: rgba(32,32,42,0.80);
 
   /* Semantic */
   --color-success: #3ecf8e;
@@ -37,8 +42,8 @@
   --color-user-bubble: #2a2a38;
 
   /* Font family */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+  --font-sans: 'Geist Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
 
   /* Border radius */
   --radius-sm: 6px;
@@ -47,10 +52,11 @@
   --radius-xl: 16px;
 
   /* Box shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(224, 160, 64, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px rgba(240, 176, 96, 0.15);
+  --shadow-accent: 0 0 0 1px rgba(240, 176, 96, 0.3), 0 0 12px rgba(240, 176, 96, 0.12);
 
   /* Sidebar widths */
   --spacing-sidebar: 260px;
@@ -105,8 +111,8 @@ html {
 
 /* Pulse glow (accent) */
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 160, 64, 0); }
-  50% { box-shadow: 0 0 8px 2px rgba(224, 160, 64, 0.3); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(240, 176, 96, 0); }
+  50% { box-shadow: 0 0 8px 2px rgba(240, 176, 96, 0.3); }
 }
 @utility animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
@@ -156,4 +162,50 @@ html {
 @utility active-press {
   transition: transform 0.1s ease;
   &:active { transform: scale(0.98); }
+}
+
+/* ============================================================
+   Glass & Glow Utilities
+   ============================================================ */
+
+@utility glass {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: var(--color-surface-glass);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+@utility glow-accent {
+  box-shadow: var(--shadow-accent);
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-edge-strong) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-edge-strong);
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--color-edge-focus);
+  }
+}
+
+/* ============================================================
+   Accessibility: Reduced Motion
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

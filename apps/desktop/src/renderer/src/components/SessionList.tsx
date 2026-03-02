@@ -1,5 +1,8 @@
 import { useState, useCallback, useMemo } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { formatRelativeDate, getTimeGroup } from '../utils/format-date'
+import { useReducedMotion } from '../hooks/useReducedMotion'
+import { sessionItemVariants, sessionItemTransition, staticVariants } from '../utils/motion'
 import type { Session } from '../hooks/useSessions'
 
 interface SessionListProps {
@@ -44,6 +47,7 @@ export default function SessionList({
 }: SessionListProps): JSX.Element {
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const reducedMotion = useReducedMotion()
 
   const groups = useMemo(() => groupSessions(sessions), [sessions])
 
@@ -98,39 +102,50 @@ export default function SessionList({
             {group.label}
           </div>
 
-          {group.sessions.map((session) => (
-            <button
-              key={session.id}
-              type="button"
-              onClick={() => { onSelect(session.id) }}
-              onContextMenu={(e) => { handleContextMenu(e, session.id) }}
-              className={`group active-press flex w-full items-center rounded-md px-3 py-2 text-left transition-colors ${
-                activeSessionId === session.id
-                  ? 'bg-surface-active text-content'
-                  : 'text-content-secondary hover:bg-surface-hover hover:text-content'
-              }`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{session.title}</div>
-                <div className="text-xs text-content-muted">{formatRelativeDate(session.lastMessageAt)}</div>
-              </div>
-
-              {/* Hover delete button */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleHoverDelete(session.id)
-                }}
-                className="ml-2 shrink-0 rounded p-1 text-content-muted opacity-0 transition-opacity hover:bg-error/20 hover:text-error group-hover:opacity-100"
-                aria-label="Chat löschen"
+          <AnimatePresence initial={false}>
+            {group.sessions.map((session) => (
+              <motion.div
+                key={session.id}
+                variants={reducedMotion ? staticVariants : sessionItemVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={sessionItemTransition}
+                layout={!reducedMotion}
               >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M3 3l8 8M11 3l-8 8" strokeLinecap="round" />
-                </svg>
-              </button>
-            </button>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => { onSelect(session.id) }}
+                  onContextMenu={(e) => { handleContextMenu(e, session.id) }}
+                  className={`group active-press flex w-full items-center rounded-md px-3 py-2 text-left transition-colors ${
+                    activeSessionId === session.id
+                      ? 'bg-surface-active text-content'
+                      : 'text-content-secondary hover:bg-surface-hover hover:text-content'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm">{session.title}</div>
+                    <div className="text-xs text-content-muted">{formatRelativeDate(session.lastMessageAt)}</div>
+                  </div>
+
+                  {/* Hover delete button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleHoverDelete(session.id)
+                    }}
+                    className="ml-2 shrink-0 rounded p-1 text-content-muted opacity-0 transition-opacity hover:bg-error/20 hover:text-error group-hover:opacity-100"
+                    aria-label="Chat löschen"
+                  >
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M3 3l8 8M11 3l-8 8" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       ))}
 

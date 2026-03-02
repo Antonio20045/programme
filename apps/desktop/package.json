@@ -15,10 +15,15 @@
     "lint": "eslint 'src/**/*.{ts,tsx}'"
   },
   "dependencies": {
+    "@fontsource/geist-mono": "^5.2.7",
+    "@fontsource/geist-sans": "^5.2.5",
     "@ki-assistent/shared": "workspace:*",
     "@ki-assistent/tools": "workspace:*",
+    "clsx": "^2.1.1",
     "electron-updater": "^6.0.0",
-    "qrcode": "^1.5.0"
+    "framer-motion": "^12.34.4",
+    "qrcode": "^1.5.0",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@clerk/clerk-react": "^5.60.2",

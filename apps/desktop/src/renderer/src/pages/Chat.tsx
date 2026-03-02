@@ -1,10 +1,12 @@
 import { useRef, useEffect, useCallback, memo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useChat } from '../hooks/useChat'
 import type { ChatMessage } from '../hooks/useChat'
 import { useGatewayStatus } from '../hooks/useGatewayStatus'
 import { useGatewayConfig } from '../hooks/useGatewayConfig'
 import { useAgentStatus } from '../hooks/useAgentStatus'
 import { useNotifications } from '../hooks/useNotifications'
+import { useReducedMotion } from '../hooks/useReducedMotion'
 import MarkdownMessage from '../components/MarkdownMessage'
 import FileDropZone from '../components/FileDropZone'
 import ChatInput from '../components/ChatInput'
@@ -13,6 +15,7 @@ import StreamingCursor from '../components/StreamingCursor'
 import ToolExecution from '../components/ToolExecution'
 import ToolConfirmation from '../components/ToolConfirmation'
 import NotificationBanner from '../components/NotificationBanner'
+import { typingDotVariants, typingDotTransition, messageVariants, messageTransition, staticVariants } from '../utils/motion'
 
 interface ChatProps {
   readonly activeSessionId: string | null
@@ -22,9 +25,16 @@ interface ChatProps {
 function TypingIndicator(): JSX.Element {
   return (
     <div className="flex items-center gap-1.5 px-1 py-2">
-      <span className="h-2 w-2 animate-bounce rounded-full bg-accent/60 [animation-delay:0ms]" />
-      <span className="h-2 w-2 animate-bounce rounded-full bg-accent/60 [animation-delay:150ms]" />
-      <span className="h-2 w-2 animate-bounce rounded-full bg-accent/60 [animation-delay:300ms]" />
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="h-2 w-2 rounded-full bg-accent/60"
+          variants={typingDotVariants}
+          initial="initial"
+          animate="animate"
+          transition={typingDotTransition(i)}
+        />
+      ))}
     </div>
   )
 }
@@ -43,6 +53,9 @@ const MessageBubble = memo(function MessageBubble({
     oauthTokens?: { accessToken: string; refreshToken: string; expiresAt: number },
   ) => void
 }): JSX.Element {
+  const reduced = useReducedMotion()
+  const v = reduced ? staticVariants : messageVariants
+  const t = reduced ? undefined : messageTransition
   const isUser = message.role === 'user'
 
   // Tool confirmation pending
@@ -53,7 +66,7 @@ const MessageBubble = memo(function MessageBubble({
     message.toolConfirmPreview !== undefined
   ) {
     return (
-      <div className="animate-slide-up">
+      <motion.div variants={v} initial="initial" animate="animate" transition={t}>
         <ToolConfirmation
           toolName={message.toolName}
           params={message.toolParams ?? {}}
@@ -61,14 +74,14 @@ const MessageBubble = memo(function MessageBubble({
           preview={message.toolConfirmPreview}
           onConfirm={onConfirmTool}
         />
-      </div>
+      </motion.div>
     )
   }
 
   // Tool execution message
   if (message.toolStartedAt !== undefined && message.toolName !== undefined) {
     return (
-      <div className="animate-slide-up">
+      <motion.div variants={v} initial="initial" animate="animate" transition={t}>
         <ToolExecution
           toolName={message.toolName}
           params={message.toolParams ?? {}}
@@ -76,29 +89,32 @@ const MessageBubble = memo(function MessageBubble({
           startedAt={message.toolStartedAt}
           finishedAt={message.toolFinishedAt}
         />
-      </div>
+      </motion.div>
     )
   }
 
   // Assistant message with markdown
   if (!isUser) {
     return (
-      <div className="animate-slide-up">
-        <div className="max-w-[720px]">
-          <MarkdownMessage content={message.content} />
-          {isStreaming && message.content.length > 0 && <StreamingCursor />}
+      <motion.div variants={v} initial="initial" animate="animate" transition={t}>
+        <div className="flex gap-3">
+          <div className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
+          <div className="max-w-[720px]">
+            <MarkdownMessage content={message.content} />
+            {isStreaming && message.content.length > 0 && <StreamingCursor />}
+          </div>
         </div>
-      </div>
+      </motion.div>
     )
   }
 
   // User message
   return (
-    <div className="animate-slide-up flex justify-end">
-      <div className="max-w-[75%] whitespace-pre-wrap rounded-xl bg-user-bubble px-4 py-2.5 text-sm text-content">
+    <motion.div variants={v} initial="initial" animate="animate" transition={t} className="flex justify-end">
+      <div className="max-w-[75%] whitespace-pre-wrap rounded-2xl border border-edge/50 bg-user-bubble px-4 py-2.5 text-sm text-content shadow-sm">
         {message.content}
       </div>
-    </div>
+    </motion.div>
   )
 })
 
@@ -148,14 +164,16 @@ export default function Chat({ activeSessionId, onSessionCreated }: ChatProps): 
             {messages.length === 0 && !isLoading && (
               <EmptyState onSuggestionClick={handleSuggestionClick} />
             )}
-            {messages.map((msg, idx) => (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                isStreaming={isLoading && idx === messages.length - 1 && msg.role === 'assistant' && msg.toolStartedAt === undefined}
-                onConfirmTool={confirmTool}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {messages.map((msg, idx) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isStreaming={isLoading && idx === messages.length - 1 && msg.role === 'assistant' && msg.toolStartedAt === undefined}
+                  onConfirmTool={confirmTool}
+                />
+              ))}
+            </AnimatePresence>
             {isLoading && (messages.length === 0 || messages[messages.length - 1]?.role === 'user') && (
               <TypingIndicator />
             )}

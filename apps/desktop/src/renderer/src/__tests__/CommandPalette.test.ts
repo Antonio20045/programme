@@ -8,6 +8,19 @@ interface StateSlot<T> {
 const stateSlots: StateSlot<unknown>[] = []
 let stateIndex = 0
 
+vi.mock('framer-motion', () => ({
+  AnimatePresence: 'AnimatePresence',
+  motion: { div: 'div', input: 'input' },
+}))
+
+vi.mock('../hooks/useReducedMotion', () => ({
+  useReducedMotion: () => false,
+}))
+
+vi.mock('../utils/cn', () => ({
+  cn: (...args: unknown[]) => args.filter(Boolean).join(' '),
+}))
+
 vi.mock('react', () => ({
   useState: <T,>(initial: T) => {
     if (stateIndex >= stateSlots.length) {
@@ -64,9 +77,11 @@ describe('CommandPalette', () => {
     expect(typeof CommandPalette).toBe('function')
   })
 
-  it('returns null when not open', () => {
+  it('renders no content when not open', () => {
     const result = CommandPalette(createProps({ open: false }))
-    expect(result).toBeNull()
+    const json = JSON.stringify(result)
+    expect(json).not.toContain('Befehl suchen...')
+    expect(json).not.toContain('Neuer Chat')
   })
 
   it('renders when open', () => {
@@ -120,16 +135,28 @@ describe('CommandPalette', () => {
     expect(json).toContain('bg-black/50')
   })
 
-  it('uses fade-in animation', () => {
+  it('uses glass styling on panel', () => {
     const result = CommandPalette(createProps())
     const json = JSON.stringify(result)
-    expect(json).toContain('animate-fade-in')
+    expect(json).toContain('glass')
   })
 
   it('shows empty state when no commands match', () => {
     const result = CommandPalette(createProps({ commands: [] }))
     const json = JSON.stringify(result)
     expect(json).toContain('Kein Befehl gefunden')
+  })
+
+  it('selected item has layoutId highlight', () => {
+    const result = CommandPalette(createProps())
+    const json = JSON.stringify(result)
+    expect(json).toContain('palette-highlight')
+  })
+
+  it('content elements have relative z-10 for layering above highlight', () => {
+    const result = CommandPalette(createProps())
+    const json = JSON.stringify(result)
+    expect(json).toContain('relative z-10')
   })
 
   it('exports CommandItem type', () => {

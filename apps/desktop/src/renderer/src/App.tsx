@@ -1,10 +1,13 @@
 import './App.css'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { AuthProvider, useAuthContext } from './contexts/AuthContext'
 import { GatewayStatusProvider } from './contexts/GatewayStatusContext'
 import { useSessions } from './hooks/useSessions'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useReducedMotion } from './hooks/useReducedMotion'
+import { pageVariants, pageTransition, staticVariants } from './utils/motion'
 import ErrorBoundary from './components/ErrorBoundary'
 import Sidebar from './components/Sidebar'
 import CommandPalette from './components/CommandPalette'
@@ -21,6 +24,8 @@ function AppContent(): JSX.Element {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const { isSignedIn, isLoaded, clerkEnabled } = useAuthContext()
   const navigate = useNavigate()
+  const location = useLocation()
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
     window.api.getSetupRequired().then(setSetupRequired)
@@ -116,19 +121,31 @@ function AppContent(): JSX.Element {
         onDeleteSession={deleteSession}
       />
       <main className="flex-1 overflow-auto">
-        <Routes>
-          <Route
-            path="/chat"
-            element={
-              <Chat
-                activeSessionId={activeSessionId}
-                onSessionCreated={handleSessionCreated}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            variants={reducedMotion ? staticVariants : pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={pageTransition}
+            className="h-full"
+          >
+            <Routes location={location}>
+              <Route
+                path="/chat"
+                element={
+                  <Chat
+                    activeSessionId={activeSessionId}
+                    onSessionCreated={handleSessionCreated}
+                  />
+                }
               />
-            }
-          />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Navigate to="/chat" replace />} />
-        </Routes>
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<Navigate to="/chat" replace />} />
+            </Routes>
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Command Palette (Cmd+K) */}

@@ -30,6 +30,28 @@ vi.mock('react', () => ({
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
 }))
 
+// Mock framer-motion
+vi.mock('framer-motion', () => ({
+  motion: new Proxy(
+    {},
+    {
+      get: (_target: object, prop: string) => {
+        return (props: Record<string, unknown>) => ({
+          type: `motion.${prop}`,
+          props,
+          $$typeof: Symbol.for('react.element'),
+        })
+      },
+    },
+  ),
+  AnimatePresence: ({ children }: { children: unknown }) => children,
+}))
+
+// Mock cn utility
+vi.mock('../utils/cn', () => ({
+  cn: (...args: string[]) => args.filter(Boolean).join(' '),
+}))
+
 // Mock child components
 vi.mock('../components/AttachmentButton', () => ({
   default: () => ({ type: 'mock-attachment-button' }),
@@ -84,5 +106,14 @@ describe('ChatInput', () => {
     const result = ChatInput({ onSend: vi.fn(), disabled: false, placeholder: 'Test...' })
     const json = JSON.stringify(result)
     expect(json).toContain('Test...')
+  })
+
+  it('uses glass card design', () => {
+    stateIndex = 0
+    const result = ChatInput({ onSend: vi.fn(), disabled: false })
+    const json = JSON.stringify(result)
+    expect(json).toContain('glass')
+    expect(json).toContain('rounded-xl')
+    expect(json).toContain('shadow-md')
   })
 })

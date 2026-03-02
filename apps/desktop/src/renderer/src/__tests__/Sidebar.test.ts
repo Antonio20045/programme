@@ -87,6 +87,18 @@ describe('Sidebar', () => {
     expect(json).toContain('Sidebar schließen')
   })
 
+  it('expanded sidebar uses glass class for glassmorphism', () => {
+    const result = Sidebar({
+      sessions: [],
+      activeSessionId: null,
+      onSelectSession: vi.fn(),
+      onCreateSession: vi.fn(),
+      onDeleteSession: vi.fn(),
+    })
+    const json = JSON.stringify(result)
+    expect(json).toContain('glass')
+  })
+
   it('contains gateway status area', () => {
     const result = Sidebar({
       sessions: [],

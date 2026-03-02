@@ -1,4 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useReducedMotion } from '../hooks/useReducedMotion'
+import { expandVariants, expandTransition, staticVariants } from '../utils/motion'
+import { PREVIEW_TYPE_ICONS, PREVIEW_TYPE_ICON_FALLBACK } from '../utils/tool-icons'
+import Button from './ui/Button'
 
 interface OAuthTokens {
   readonly accessToken: string
@@ -18,16 +23,6 @@ interface ToolConfirmationProps {
     oauthTokens?: OAuthTokens,
   ) => void
 }
-
-const TOOL_ICONS = new Map<ToolPreviewType, string>([
-  ['email', '\u2709'],
-  ['calendar', '\uD83D\uDCC5'],
-  ['shell', '\u26A0'],
-  ['filesystem', '\uD83D\uDCC1'],
-  ['notes', '\uD83D\uDCDD'],
-  ['oauth_connect', '\uD83D\uDD11'],
-  ['generic', '\u2699'],
-])
 
 type OAuthState = 'idle' | 'connecting' | 'success' | 'error' | 'timeout'
 
@@ -131,7 +126,7 @@ function OAuthConnectCard({
     <div
       role="region"
       aria-label="Google-Konto verbinden"
-      className="my-1 rounded-lg border border-accent/60 bg-surface-raised/50"
+      className="my-1 rounded-lg border border-accent/40 bg-surface-raised/20 backdrop-blur-sm"
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-accent/30 px-3 py-2">
@@ -177,20 +172,20 @@ function OAuthConnectCard({
       <div className="flex flex-wrap items-center gap-2 border-t border-edge px-3 py-2">
         {(oauthState === 'idle' || oauthState === 'error' || oauthState === 'timeout') && (
           <>
-            <button
-              type="button"
+            <Button
+              variant="success"
+              size="sm"
               onClick={() => void handleOAuthConnect()}
-              className="active-press rounded-md bg-success/80 px-3 py-1 text-xs font-medium text-content transition-colors hover:bg-success focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-1 focus-visible:ring-offset-surface-raised"
             >
               {oauthState === 'idle' ? 'Verbinden' : 'Nochmal versuchen'}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
               onClick={handleReject}
-              className="active-press rounded-md bg-error/80 px-3 py-1 text-xs font-medium text-content transition-colors hover:bg-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error focus-visible:ring-offset-1 focus-visible:ring-offset-surface-raised"
             >
               Ablehnen
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -207,6 +202,7 @@ export default function ToolConfirmation({
 }: ToolConfirmationProps): JSX.Element {
   const [editing, setEditing] = useState(false)
   const [editedFields, setEditedFields] = useState<Map<string, string>>(new Map())
+  const reduced = useReducedMotion()
 
   // OAuth connect card — special rendering (hooks already called above)
   if (preview.type === 'oauth_connect') {
@@ -219,7 +215,7 @@ export default function ToolConfirmation({
     )
   }
 
-  const icon = TOOL_ICONS.get(preview.type) ?? TOOL_ICONS.get('generic') ?? '\u2699'
+  const icon = PREVIEW_TYPE_ICONS.get(preview.type) ?? PREVIEW_TYPE_ICON_FALLBACK
 
   const handleFieldChange = useCallback((key: string, value: string) => {
     setEditedFields((prev) => new Map(prev).set(key, value))
@@ -246,7 +242,7 @@ export default function ToolConfirmation({
     <div
       role="region"
       aria-label={`Tool-Bestätigung für ${toolName}`}
-      className="my-1 rounded-lg border border-accent/60 bg-surface-raised/50"
+      className="my-1 rounded-lg border border-accent/40 bg-surface-raised/20 backdrop-blur-sm"
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-accent/30 px-3 py-2">
@@ -259,14 +255,25 @@ export default function ToolConfirmation({
         </span>
       </div>
 
-      {/* Preview fields */}
+      {/* Preview fields with edit-mode transition */}
       <div className="px-3 py-2">
-        <PreviewFields
-          fields={preview.fields}
-          editing={editing}
-          editedFields={editedFields}
-          onFieldChange={handleFieldChange}
-        />
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={editing ? 'edit' : 'view'}
+            variants={reduced ? staticVariants : expandVariants}
+            initial="collapsed"
+            animate="expanded"
+            exit="collapsed"
+            transition={expandTransition}
+          >
+            <PreviewFields
+              fields={preview.fields}
+              editing={editing}
+              editedFields={editedFields}
+              onFieldChange={handleFieldChange}
+            />
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* Warning */}
@@ -278,27 +285,27 @@ export default function ToolConfirmation({
 
       {/* Action buttons */}
       <div className="flex flex-wrap items-center gap-2 border-t border-edge px-3 py-2">
-        <button
-          type="button"
+        <Button
+          variant="success"
+          size="sm"
           onClick={handleExecute}
-          className="active-press rounded-md bg-success/80 px-3 py-1 text-xs font-medium text-content transition-colors hover:bg-success focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-1 focus-visible:ring-offset-surface-raised"
         >
           {editing ? 'Mit Änderungen ausführen' : 'Ausführen'}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={handleToggleEdit}
-          className="active-press rounded-md bg-accent/80 px-3 py-1 text-xs font-medium text-surface transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-raised"
         >
           {editing ? 'Abbrechen' : 'Bearbeiten'}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="danger"
+          size="sm"
           onClick={handleReject}
-          className="active-press rounded-md bg-error/80 px-3 py-1 text-xs font-medium text-content transition-colors hover:bg-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error focus-visible:ring-offset-1 focus-visible:ring-offset-surface-raised"
         >
           Ablehnen
-        </button>
+        </Button>
       </div>
     </div>
   )

@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { getExtension, isImage, formatSize, FILE_ICONS } from '../utils/file-validation'
+import { fileItemVariants } from '../utils/motion'
 
 function FileItem({
   file,
@@ -55,15 +57,25 @@ export default function FilePreview({
 
   return (
     <div className="flex flex-wrap gap-2 px-4 py-2">
-      {files.map((file, index) => (
-        <FileItem
-          key={`${file.name}-${file.size.toString()}`}
-          file={file}
-          onRemove={() => {
-            onRemove(index)
-          }}
-        />
-      ))}
+      <AnimatePresence>
+        {files.map((file, index) => (
+          <motion.div
+            key={`${file.name}-${file.size.toString()}`}
+            variants={fileItemVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.15 }}
+          >
+            <FileItem
+              file={file}
+              onRemove={() => {
+                onRemove(index)
+              }}
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </div>
   )
 }

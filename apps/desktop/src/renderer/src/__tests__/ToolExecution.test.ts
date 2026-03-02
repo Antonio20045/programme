@@ -32,6 +32,27 @@ vi.mock('react', () => ({
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
 }))
 
+vi.mock('framer-motion', () => ({
+  motion: new Proxy({}, {
+    get: (_target: object, prop: string) => {
+      return (props: Record<string, unknown>) => ({
+        type: `motion.${prop}`,
+        props,
+        $$typeof: Symbol.for('react.element'),
+      })
+    },
+  }),
+  AnimatePresence: ({ children }: { children: unknown }) => children,
+}))
+
+vi.mock('../hooks/useReducedMotion', () => ({
+  useReducedMotion: () => false,
+}))
+
+vi.mock('../utils/cn', () => ({
+  cn: (...args: unknown[]) => args.filter(Boolean).join(' '),
+}))
+
 import ToolExecution, {
   truncateResult,
   formatParams,
@@ -149,11 +170,11 @@ describe('ToolExecution', () => {
     expect(json).toContain('filesystem')
   })
 
-  it('shows spinner when tool is running (no finishedAt)', () => {
+  it('shows motion spinner when tool is running', () => {
     stateIndex = 0
     const result = ToolExecution(createProps({ finishedAt: undefined }))
     const json = JSON.stringify(result)
-    expect(json).toContain('animate-spin')
+    expect(json).toContain('"rotate":360')
     expect(json).toContain('läuft')
   })
 
@@ -165,15 +186,14 @@ describe('ToolExecution', () => {
     expect(json).toContain('2.5s')
   })
 
-  it('starts collapsed (max-h-0)', () => {
+  it('hides detail content when collapsed', () => {
     stateIndex = 0
     const result = ToolExecution(createProps())
     const json = JSON.stringify(result)
-    expect(json).toContain('max-h-0')
+    expect(json).not.toContain('Parameter')
   })
 
-  it('expands when state is true (max-h-96)', () => {
-    // Pre-set expanded state to true
+  it('shows detail content when expanded', () => {
     stateSlots = [
       {
         value: true,
@@ -183,7 +203,7 @@ describe('ToolExecution', () => {
     stateIndex = 0
     const result = ToolExecution(createProps())
     const json = JSON.stringify(result)
-    expect(json).toContain('max-h-96')
+    expect(json).toContain('Parameter')
   })
 
   it('shows params in expanded view', () => {
@@ -246,8 +266,6 @@ describe('ToolExecution', () => {
     stateIndex = 0
     const result = ToolExecution(createProps())
     const json = JSON.stringify(result)
-    // The arrow should not have rotate-90 class
-    // It should just have the base classes without rotation
     expect(json).not.toContain('rotate-90')
   })
 
@@ -263,6 +281,38 @@ describe('ToolExecution', () => {
     const result = ToolExecution(createProps({ params: { query: 'wetter' } }))
     const json = JSON.stringify(result)
     expect(json).toContain('query: wetter')
+  })
+
+  it('shows success checkmark when finished', () => {
+    stateIndex = 0
+    const result = ToolExecution(createProps({ startedAt: 0, finishedAt: 1000 }))
+    const json = JSON.stringify(result)
+    expect(json).toContain('\u2713')
+    expect(json).toContain('text-success')
+  })
+
+  it('does not show checkmark when running', () => {
+    stateIndex = 0
+    const result = ToolExecution(createProps({ finishedAt: undefined }))
+    const json = JSON.stringify(result)
+    expect(json).not.toContain('\u2713')
+    expect(json).not.toContain('text-success')
+  })
+
+  it('uses framer-motion expand for detail panel', () => {
+    stateSlots = [
+      {
+        value: true,
+        setter: () => {},
+      },
+    ]
+    stateIndex = 0
+    const result = ToolExecution(createProps())
+    const json = JSON.stringify(result)
+    // expandVariants keys present as variant names
+    expect(json).toContain('"initial":"collapsed"')
+    expect(json).toContain('"animate":"expanded"')
+    expect(json).toContain('"exit":"collapsed"')
   })
 })
 

@@ -1,6 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ---------------------------------------------------------------------------
+// Mock framer-motion, useReducedMotion, and motion utils
+// ---------------------------------------------------------------------------
+
+vi.mock('framer-motion', () => ({
+  AnimatePresence: ({ children }: { children: unknown }) => children,
+  motion: {
+    div: (props: Record<string, unknown>) => ({ type: 'div', props }),
+  },
+}))
+vi.mock('../hooks/useReducedMotion', () => ({ useReducedMotion: () => false }))
+vi.mock('../utils/motion', () => ({
+  sessionItemVariants: { initial: {}, animate: {}, exit: {} },
+  sessionItemTransition: { duration: 0.15 },
+  staticVariants: { initial: {}, animate: {}, exit: {} },
+}))
+
+// ---------------------------------------------------------------------------
 // Mock React hooks
 // ---------------------------------------------------------------------------
 
@@ -171,6 +188,28 @@ describe('SessionList', () => {
     const result = SessionList(props)
     const json = JSON.stringify(result)
     expect(json).toContain('Chat löschen')
+  })
+
+  it('wraps session items in motion.div with variants', () => {
+    const props = createProps({
+      sessions: [createSession('s1', 'Chat 1')],
+    })
+    stateIndex = 0
+    const result = SessionList(props)
+    const json = JSON.stringify(result)
+    expect(json).toContain('"initial":"initial"')
+    expect(json).toContain('"animate":"animate"')
+    expect(json).toContain('"exit":"exit"')
+  })
+
+  it('sets layout prop on motion.div for smooth reordering', () => {
+    const props = createProps({
+      sessions: [createSession('s1', 'Chat 1')],
+    })
+    stateIndex = 0
+    const result = SessionList(props)
+    const json = JSON.stringify(result)
+    expect(json).toContain('"layout":true')
   })
 })
 

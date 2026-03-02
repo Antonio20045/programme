@@ -1,11 +1,32 @@
 import { useCallback, useState } from 'react'
 import Markdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { motion, AnimatePresence } from 'framer-motion'
 import type { Components } from 'react-markdown'
+import { useReducedMotion } from '../hooks/useReducedMotion'
+import { cn } from '../utils/cn'
+import warmDark from '../utils/syntax-theme'
+
+function ClipboardIcon(): JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5.5" y="2" width="5" height="3" rx="0.5" />
+      <path d="M5.5 4H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1h-1.5" />
+    </svg>
+  )
+}
+
+function CheckIcon(): JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 8.5l3 3 6-7" />
+    </svg>
+  )
+}
 
 function CopyButton({ text }: { readonly text: string }): JSX.Element {
   const [copied, setCopied] = useState(false)
+  const reduced = useReducedMotion()
 
   const handleCopy = useCallback(() => {
     void navigator.clipboard.writeText(text).then(() => {
@@ -20,9 +41,35 @@ function CopyButton({ text }: { readonly text: string }): JSX.Element {
     <button
       type="button"
       onClick={handleCopy}
-      className="rounded px-2 py-0.5 text-xs text-content-secondary transition-colors hover:bg-surface-hover hover:text-content"
+      aria-label={copied ? 'Kopiert' : 'Kopieren'}
+      className={cn(
+        'rounded p-1 transition-colors hover:bg-surface-hover',
+        copied ? 'text-success' : 'text-content-secondary hover:text-content',
+      )}
     >
-      {copied ? 'Kopiert' : 'Kopieren'}
+      <AnimatePresence mode="wait" initial={false}>
+        {copied ? (
+          <motion.span
+            key="check"
+            initial={reduced ? undefined : { opacity: 0, scale: 0.8 }}
+            animate={reduced ? undefined : { opacity: 1, scale: 1 }}
+            exit={reduced ? undefined : { opacity: 0, scale: 0.8 }}
+            transition={reduced ? undefined : { duration: 0.15 }}
+          >
+            <CheckIcon />
+          </motion.span>
+        ) : (
+          <motion.span
+            key="copy"
+            initial={reduced ? undefined : { opacity: 0, scale: 0.8 }}
+            animate={reduced ? undefined : { opacity: 1, scale: 1 }}
+            exit={reduced ? undefined : { opacity: 0, scale: 0.8 }}
+            transition={reduced ? undefined : { duration: 0.15 }}
+          >
+            <ClipboardIcon />
+          </motion.span>
+        )}
+      </AnimatePresence>
     </button>
   )
 }
@@ -48,7 +95,7 @@ function MarkdownLink({
     <a
       href={href}
       onClick={handleClick}
-      className="text-accent-text underline hover:text-accent"
+      className="text-accent-text border-b border-transparent transition-colors hover:border-accent-text hover:text-accent"
     >
       {children}
     </a>
@@ -63,13 +110,13 @@ const markdownComponents: Components = {
     if (match) {
       const language = match[1] ?? 'text'
       return (
-        <div className="group relative my-2 rounded-lg bg-surface">
-          <div className="flex items-center justify-between border-b border-edge px-4 py-1">
-            <span className="text-xs text-content-muted">{language}</span>
+        <div className="group relative my-2 overflow-hidden rounded-lg border border-edge bg-surface transition-shadow hover:shadow-accent">
+          <div className="flex items-center justify-between border-b border-edge bg-surface-alt px-4 py-1">
+            <span className="text-xs uppercase tracking-wider text-content-muted">{language}</span>
             <CopyButton text={codeString} />
           </div>
           <SyntaxHighlighter
-            style={oneDark}
+            style={warmDark}
             language={language}
             PreTag="div"
             customStyle={{
@@ -86,7 +133,7 @@ const markdownComponents: Components = {
     }
 
     return (
-      <code className="rounded bg-surface-hover px-1.5 py-0.5 text-[0.8125rem] text-content">
+      <code className="rounded-md bg-surface-raised/60 px-1.5 py-0.5 font-mono text-[0.9em] text-accent-text">
         {children}
       </code>
     )
@@ -98,8 +145,8 @@ const markdownComponents: Components = {
 
   table({ children }) {
     return (
-      <div className="my-2 overflow-x-auto">
-        <table className="w-full border-collapse border border-edge text-sm">
+      <div className="my-2 overflow-x-auto rounded-lg border border-edge">
+        <table className="w-full border-collapse text-sm">
           {children}
         </table>
       </div>
@@ -107,12 +154,12 @@ const markdownComponents: Components = {
   },
 
   thead({ children }) {
-    return <thead className="bg-surface-raised">{children}</thead>
+    return <thead className="bg-surface-alt">{children}</thead>
   },
 
   th({ children }) {
     return (
-      <th className="border border-edge px-3 py-1.5 text-left font-medium text-content">
+      <th className="border-b border-edge px-3 py-1.5 text-left text-xs font-medium uppercase tracking-wider text-content-secondary">
         {children}
       </th>
     )
@@ -120,26 +167,26 @@ const markdownComponents: Components = {
 
   td({ children }) {
     return (
-      <td className="border border-edge px-3 py-1.5 text-content-secondary">
+      <td className="border-b border-edge px-3 py-1.5 text-content-secondary">
         {children}
       </td>
     )
   },
 
   tr({ children }) {
-    return <tr className="even:bg-surface-raised/50">{children}</tr>
+    return <tr className="even:bg-surface-raised/30">{children}</tr>
   },
 
   ul({ children }) {
-    return <ul className="my-1 ml-4 list-disc text-content-secondary">{children}</ul>
+    return <ul className="my-1 space-y-1.5 pl-5 list-disc marker:text-accent text-content-secondary">{children}</ul>
   },
 
   ol({ children }) {
-    return <ol className="my-1 ml-4 list-decimal text-content-secondary">{children}</ol>
+    return <ol className="my-1 space-y-1.5 pl-5 list-decimal marker:text-accent marker:font-mono text-content-secondary">{children}</ol>
   },
 
   li({ children }) {
-    return <li className="my-0.5">{children}</li>
+    return <li className="my-0">{children}</li>
   },
 
   p({ children }) {

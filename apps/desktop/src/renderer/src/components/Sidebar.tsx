@@ -135,7 +135,7 @@ export default function Sidebar({
 
   // Expanded sidebar
   return (
-    <aside className="flex h-full w-sidebar flex-col bg-surface-alt text-content transition-all duration-200">
+    <aside className="flex h-full w-sidebar flex-col glass text-content transition-all duration-200">
       {/* Header with collapse toggle */}
       <div className="flex items-center justify-between border-b border-edge px-3 py-2">
         <span className="text-xs font-medium uppercase tracking-wider text-content-muted">Chats</span>

@@ -4,6 +4,20 @@ import type React from 'react'
 // Mock CSS import
 vi.mock('../App.css', () => ({}))
 
+// Mock framer-motion, useReducedMotion, and motion utils
+vi.mock('framer-motion', () => ({
+  AnimatePresence: ({ children }: { children: unknown }) => children,
+  motion: {
+    div: (props: Record<string, unknown>) => ({ type: 'div', props }),
+  },
+}))
+vi.mock('../hooks/useReducedMotion', () => ({ useReducedMotion: () => false }))
+vi.mock('../utils/motion', () => ({
+  pageVariants: { initial: {}, animate: {}, exit: {} },
+  pageTransition: { duration: 0.15 },
+  staticVariants: { initial: {}, animate: {}, exit: {} },
+}))
+
 // Mock react-router-dom
 vi.mock('react-router-dom', () => ({
   Routes: vi.fn(),

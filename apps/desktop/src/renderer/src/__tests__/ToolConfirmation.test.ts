@@ -32,6 +32,31 @@ vi.mock('react', () => ({
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
 }))
 
+vi.mock('framer-motion', () => ({
+  motion: new Proxy({}, {
+    get: (_target: object, prop: string) => {
+      return (props: Record<string, unknown>) => ({
+        type: `motion.${prop}`,
+        props,
+        $$typeof: Symbol.for('react.element'),
+      })
+    },
+  }),
+  AnimatePresence: ({ children }: { children: unknown }) => children,
+}))
+
+vi.mock('../hooks/useReducedMotion', () => ({
+  useReducedMotion: () => false,
+}))
+
+vi.mock('../components/ui/Button', () => ({
+  default: (props: Record<string, unknown>) => ({
+    type: 'Button',
+    props,
+    $$typeof: Symbol.for('react.element'),
+  }),
+}))
+
 import ToolConfirmation from '../components/ToolConfirmation'
 import type { ToolConfirmationProps } from '../components/ToolConfirmation'
 
@@ -206,7 +231,6 @@ describe('ToolConfirmation', () => {
     stateIndex = 0
     const onConfirm = vi.fn()
     const result = ToolConfirmation(createProps({ onConfirm }))
-    // Find the execute button handler in the rendered tree
     const json = JSON.stringify(result)
     expect(json).toContain('Ausführen')
 
@@ -260,9 +284,36 @@ describe('ToolConfirmation', () => {
     stateIndex = 0
     const result = ToolConfirmation(createProps())
     const json = JSON.stringify(result)
-    // Count button occurrences
     expect(json).toContain('Ausführen')
     expect(json).toContain('Bearbeiten')
     expect(json).toContain('Ablehnen')
+  })
+
+  // --- Design system integration ---
+
+  it('uses glass styling with backdrop-blur', () => {
+    stateIndex = 0
+    const result = ToolConfirmation(createProps())
+    const json = JSON.stringify(result)
+    expect(json).toContain('backdrop-blur-sm')
+    expect(json).toContain('bg-surface-raised/20')
+  })
+
+  it('uses Button primitive with correct variants', () => {
+    stateIndex = 0
+    const result = ToolConfirmation(createProps())
+    const json = JSON.stringify(result)
+    expect(json).toContain('"variant":"success"')
+    expect(json).toContain('"variant":"ghost"')
+    expect(json).toContain('"variant":"danger"')
+  })
+
+  it('wraps preview fields with AnimatePresence for edit transitions', () => {
+    stateIndex = 0
+    const result = ToolConfirmation(createProps())
+    const json = JSON.stringify(result)
+    // expand variants used for edit transition
+    expect(json).toContain('"initial":"collapsed"')
+    expect(json).toContain('"animate":"expanded"')
   })
 })

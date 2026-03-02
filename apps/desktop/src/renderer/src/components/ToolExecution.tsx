@@ -1,5 +1,10 @@
 import { useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { formatDuration } from '../utils/format-date'
+import { useReducedMotion } from '../hooks/useReducedMotion'
+import { expandVariants, expandTransition, staticVariants } from '../utils/motion'
+import { TOOL_ICONS, TOOL_ICON_FALLBACK } from '../utils/tool-icons'
+import { cn } from '../utils/cn'
 
 interface ToolExecutionProps {
   readonly toolName: string
@@ -8,27 +13,6 @@ interface ToolExecutionProps {
   readonly startedAt: number
   readonly finishedAt?: number
 }
-
-/** Map tool names to descriptive icons */
-const TOOL_ICONS = new Map<string, string>([
-  ['web-search', '\u{1F50D}'],
-  ['filesystem', '\u{1F4C1}'],
-  ['shell', '\u{1F4BB}'],
-  ['browser', '\u{1F310}'],
-  ['gmail', '\u{2709}\uFE0F'],
-  ['calendar', '\u{1F4C5}'],
-  ['reminders', '\u{23F0}'],
-  ['notes', '\u{1F4DD}'],
-  ['calculator', '\u{1F522}'],
-  ['clipboard', '\u{1F4CB}'],
-  ['screenshot', '\u{1F4F7}'],
-  ['image-gen', '\u{1F3A8}'],
-  ['git-tools', '\u{1F500}'],
-  ['code-runner', '\u{25B6}\uFE0F'],
-  ['translator', '\u{1F30D}'],
-  ['weather', '\u{2600}\uFE0F'],
-  ['http-client', '\u{1F4E1}'],
-])
 
 function truncateResult(value: unknown, maxLength: number): string {
   const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
@@ -61,8 +45,9 @@ export default function ToolExecution({
   finishedAt,
 }: ToolExecutionProps): JSX.Element {
   const [expanded, setExpanded] = useState(false)
+  const reduced = useReducedMotion()
   const isRunning = finishedAt === undefined
-  const icon = TOOL_ICONS.get(toolName) ?? '\u{1F527}'
+  const icon = TOOL_ICONS.get(toolName) ?? TOOL_ICON_FALLBACK
   const summary = summarizeParams(params)
 
   const handleToggle = useCallback(() => {
@@ -78,7 +63,10 @@ export default function ToolExecution({
       >
         {/* Chevron */}
         <svg
-          className={`h-3 w-3 shrink-0 text-content-muted transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
+          className={cn(
+            'h-3 w-3 shrink-0 text-content-muted transition-transform duration-200',
+            expanded && 'rotate-90',
+          )}
           viewBox="0 0 12 12"
           fill="currentColor"
         >
@@ -97,37 +85,64 @@ export default function ToolExecution({
         {/* Status */}
         {isRunning ? (
           <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-accent">
-            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            <motion.svg
+              className="h-3 w-3 text-accent"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              animate={reduced ? undefined : { rotate: 360 }}
+              transition={reduced ? undefined : { repeat: Infinity, duration: 0.8, ease: 'linear' }}
+            >
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </motion.svg>
             läuft…
           </span>
         ) : (
-          <span className="ml-auto shrink-0 text-xs text-content-muted">
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-content-muted">
+            <motion.span
+              className="text-success"
+              initial={reduced ? undefined : { scale: 0, opacity: 0 }}
+              animate={reduced ? undefined : { scale: 1, opacity: 1 }}
+              transition={reduced ? undefined : { type: 'spring', stiffness: 500, damping: 25 }}
+            >
+              {'\u2713'}
+            </motion.span>
             abgeschlossen ({formatDuration(startedAt, finishedAt)})
           </span>
         )}
       </button>
 
-      <div
-        className={`overflow-hidden transition-all duration-200 ${expanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}
-      >
-        <div className="border-t border-edge px-3 py-2 text-xs">
-          <div className="mb-2">
-            <span className="font-medium text-content-secondary">Parameter</span>
-            <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-surface px-2 py-1.5 text-content-secondary">
-              {formatParams(params)}
-            </pre>
-          </div>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="tool-detail"
+            variants={reduced ? staticVariants : expandVariants}
+            initial="collapsed"
+            animate="expanded"
+            exit="collapsed"
+            transition={expandTransition}
+          >
+            <div className="border-t border-edge px-3 py-2 text-xs">
+              <div className="mb-2">
+                <span className="font-medium text-content-secondary">Parameter</span>
+                <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-surface px-2 py-1.5 text-content-secondary">
+                  {formatParams(params)}
+                </pre>
+              </div>
 
-          {result !== undefined && (
-            <div>
-              <span className="font-medium text-content-secondary">Ergebnis</span>
-              <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-surface px-2 py-1.5 text-content-secondary">
-                {truncateResult(result, 500)}
-              </pre>
+              {result !== undefined && (
+                <div>
+                  <span className="font-medium text-content-secondary">Ergebnis</span>
+                  <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-surface px-2 py-1.5 text-content-secondary">
+                    {truncateResult(result, 500)}
+                  </pre>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
