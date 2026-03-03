@@ -41,7 +41,7 @@ vi.mock('../src/pattern-tracker', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { classify, isTrivial, matchAgents, extractKeywords } from '../src/orchestrator-classifier'
+import { classify, isTrivial, matchAgents, extractKeywords, determineResponseMode } from '../src/orchestrator-classifier'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -208,6 +208,7 @@ describe('classify', () => {
       matchedAgents: [],
       modelTier: 'haiku',
       parallelExecution: false,
+      responseMode: 'conversation',
     })
 
     expect(mockGetActiveAgents).not.toHaveBeenCalled()
@@ -362,5 +363,87 @@ describe('classify', () => {
     )
 
     expect(result.modelTier).toBe('sonnet')
+  })
+
+  // responseMode integration
+  it('sets responseMode to conversation for trivial messages', async () => {
+    const result = await classify('Hey', USER_ID, mockPool)
+    expect(result.responseMode).toBe('conversation')
+  })
+
+  it('overrides responseMode to action when agents match', async () => {
+    const agent = makeAgent({
+      id: 'email-bot-abc123',
+      name: 'Email Bot',
+      description: 'E-Mails verwalten und sortieren',
+    })
+    mockGetActiveAgents.mockResolvedValue([agent])
+
+    // "Wann kommen meine E-Mails?" would be answer mode normally,
+    // but agent match forces action
+    const result = await classify('Wann kommen meine E-Mails?', USER_ID, mockPool)
+    expect(result.responseMode).toBe('action')
+  })
+
+  it('overrides responseMode to action for coding tasks (criteria >= 1)', async () => {
+    mockGetActiveAgents.mockResolvedValue([])
+
+    const result = await classify('Implementiere das Feature', USER_ID, mockPool)
+    expect(result.responseMode).toBe('action')
+  })
+
+  it('sets responseMode to answer for factual questions without agents', async () => {
+    mockGetActiveAgents.mockResolvedValue([])
+
+    const result = await classify('Wann ist mein nächster Termin?', USER_ID, mockPool)
+    expect(result.responseMode).toBe('answer')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// determineResponseMode
+// ---------------------------------------------------------------------------
+
+describe('determineResponseMode', () => {
+  // Action patterns
+  it.each([
+    ['Schick mir die E-Mail', 'imperative verb (DE)'],
+    ['Send the email', 'imperative verb (EN)'],
+    ['Fasse meine E-Mails zusammen', '"Fasse...zusammen" pattern'],
+    ['Bitte erstelle einen Termin', '"Bitte" + imperative'],
+    ['Can you check my calendar?', '"Can you" + action verb'],
+    ['Lösche die Datei', 'imperative delete (DE)'],
+    ['Show me the results', '"Show me" pattern'],
+    ['Zeig mir die Ergebnisse', '"Zeig mir" pattern'],
+    ['Summarize my emails', '"Summarize my" pattern'],
+  ])('detects "%s" as action (%s)', (msg) => {
+    expect(determineResponseMode(msg)).toBe('action')
+  })
+
+  // Answer patterns
+  it.each([
+    ['Wann ist mein nächster Termin?', '"Wann ist" + factual'],
+    ['What time is the meeting?', 'short factual question'],
+    ['Wie viel kostet das?', '"Wie viel"'],
+    ['What is TypeScript?', '"What is" pattern'],
+    ['Was steht an heute?', '"Was steht an" pattern'],
+    ['How much does it cost?', '"How much" pattern'],
+  ])('detects "%s" as answer (%s)', (msg) => {
+    expect(determineResponseMode(msg)).toBe('answer')
+  })
+
+  // Conversation patterns
+  it.each([
+    ['Was denkst du darüber?', 'opinion question (DE)'],
+    ['What do you think?', 'opinion question (EN)'],
+    ['Erzähl mir was über dich', 'chitchat (DE)'],
+    ['Meinst du das ernst?', '"Meinst du" pattern'],
+  ])('detects "%s" as conversation (%s)', (msg) => {
+    expect(determineResponseMode(msg)).toBe('conversation')
+  })
+
+  // Default fallback
+  it('defaults to action for ambiguous messages', () => {
+    expect(determineResponseMode('Projektplan Q3')).toBe('action')
   })
 })

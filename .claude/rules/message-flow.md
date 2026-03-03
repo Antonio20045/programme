@@ -17,6 +17,15 @@ useChat verwaltet Messages-State, postet via `gateway:fetch` Proxy (JSON) oder d
 
 Tools mit Bestätigungspflicht: SSE Event → Client zeigt Vorschau → User bestätigt → erst dann ausführen.
 
+## Response-Mode Enforcement
+
+Classifier bestimmt `responseMode` (action/answer/conversation) vor dem LLM-Call. Gateway injiziert mode-spezifische System-Prompt-Instruktion:
+- **action** — Sofort Tool-Calls, kein einleitender Text, Ergebnis max 2 Sätze
+- **answer** — Kurze direkte Antwort, max 2-3 Sätze
+- **conversation** — Keine zusätzliche Instruktion
+
+Output-Monitor (`monitorResponseMode`) loggt Violations: action >150 Zeichen vor Tool-Call, answer >250 Zeichen. Rein observierend, blockiert nicht.
+
 ## Proaktive Notifications (Sub-Agents)
 
 Sub-Agent produziert Ergebnis → Gateway NotificationStore (in-memory, max 200, 24h TTL) → SSE GET /api/notifications (persistent stream, 30s heartbeat) → Desktop Main Process → drei parallele Pfade:

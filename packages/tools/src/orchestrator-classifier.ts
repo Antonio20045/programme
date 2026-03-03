@@ -34,6 +34,7 @@ const CODING_PATTERN =
 
 type Complexity = 'trivial' | 'simple' | 'moderate' | 'complex'
 type ModelTier = 'haiku' | 'sonnet' | 'opus'
+type ResponseMode = 'action' | 'answer' | 'conversation'
 
 interface ClassificationResult {
   readonly complexity: Complexity
@@ -41,6 +42,7 @@ interface ClassificationResult {
   readonly matchedAgents: readonly string[]
   readonly modelTier: ModelTier
   readonly parallelExecution: boolean
+  readonly responseMode: ResponseMode
 }
 
 // ---------------------------------------------------------------------------
@@ -224,6 +226,53 @@ function deriveCategory(
 }
 
 // ---------------------------------------------------------------------------
+// Response-mode detection
+// ---------------------------------------------------------------------------
+
+/** Imperative verbs (DE + EN) that signal the user wants an action performed. */
+const ACTION_VERBS =
+  /^(?:schick|sende|erstelle|lösche|such[e]?|finde|mach|tu[e]?|sortiere|organisiere|plan[ée]?|buche|cancel|send|create|delete|find|search|make|do|book|schedule|move|copy|update|fix|set|add|remove|open|close|run|start|stop|zeig|show|check)\b/i
+
+/** "Can you / Bitte / Kannst du" + rest treated as imperative request. */
+const POLITE_PREFIX =
+  /^(?:kannst\s+du|könntest\s+du|bitte|please|can\s+you|could\s+you|would\s+you)\s+/i
+
+/** Compound action patterns (DE + EN). */
+const COMPOUND_ACTION =
+  /\b(?:fasse?\s.{0,40}zusammen|summarize\s+my|check\s+my|zeig\s+mir|show\s+me)\b/i
+
+/** Factual question starters (DE + EN). */
+const FACTUAL_QUESTION =
+  /^(?:wann\s+ist|when\s+is|wie\s+viel|how\s+much|how\s+many|was\s+ist|what\s+is|who\s+is|wer\s+ist|wo\s+ist|where\s+is|was\s+steht\s+an|what'?s\s+next|was\s+habe\s+ich|what\s+do\s+i\s+have)\b/i
+
+/** Conversation / opinion / chitchat patterns (DE + EN). */
+const CONVERSATION_PATTERN =
+  /\b(?:was\s+denkst\s+du|what\s+do\s+you\s+think|meinst\s+du|do\s+you\s+think|wie\s+findest\s+du|how\s+do\s+you\s+feel|erzähl\s+mir)\b/i
+
+function determineResponseMode(message: string): ResponseMode {
+  const trimmed = message.trim()
+
+  // 1. Conversation: opinion / chitchat
+  if (CONVERSATION_PATTERN.test(trimmed)) return 'conversation'
+
+  // 2. Action: polite prefix + rest, or bare imperative, or compound action
+  const withoutPolite = trimmed.replace(POLITE_PREFIX, '')
+  if (ACTION_VERBS.test(withoutPolite)) return 'action'
+  if (COMPOUND_ACTION.test(trimmed)) return 'action'
+
+  // 3. Answer: factual question patterns
+  if (FACTUAL_QUESTION.test(trimmed)) return 'answer'
+
+  // 4. Answer: short question (< 100 chars, ends with ?, no imperative)
+  if (trimmed.length < 100 && trimmed.endsWith('?') && !ACTION_VERBS.test(withoutPolite)) {
+    return 'answer'
+  }
+
+  // 5. Default: action (better to act than to chat)
+  return 'action'
+}
+
+// ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
@@ -246,6 +295,7 @@ async function classify(
       matchedAgents: [],
       modelTier: 'haiku',
       parallelExecution: false,
+      responseMode: 'conversation',
     }
   }
 
@@ -270,7 +320,14 @@ async function classify(
   // 7. Category
   const category = deriveCategory(safeMessage, matchedAgentIds, agents)
 
-  // 8. Pattern tracking — fire-and-forget (use original message for tracking)
+  // 8. Response mode
+  let responseMode = determineResponseMode(safeMessage)
+  // Override: agent match or coding/analysis criteria → always action
+  if (matchedAgentIds.length > 0 || criteriaCount >= 1) {
+    responseMode = 'action'
+  }
+
+  // 9. Pattern tracking — fire-and-forget (use original message for tracking)
   trackRequest(pool, userId, category, safeMessage).catch(() => {})
 
   return {
@@ -279,6 +336,7 @@ async function classify(
     matchedAgents: matchedAgentIds,
     modelTier,
     parallelExecution,
+    responseMode,
   }
 }
 
@@ -286,5 +344,5 @@ async function classify(
 // Exports
 // ---------------------------------------------------------------------------
 
-export { classify, isTrivial, matchAgents, extractKeywords }
-export type { ClassificationResult, Complexity, ModelTier }
+export { classify, isTrivial, matchAgents, extractKeywords, determineResponseMode }
+export type { ClassificationResult, Complexity, ModelTier, ResponseMode }
