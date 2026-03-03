@@ -75,6 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 22 — Agent Cron & Retention Lifecycle abgeschlossen
-Nächster Schritt: E2E-Tests (Sub-Agent Full-Flow: Factory → Cron → Execution → Retention → Lifecycle), Gateway-Integration (agent-cron init, delegate routing, classifier hookup)
-Letzter Commit: feat: agent cron ticker & retention lifecycle for sub-agents
+Phase: 23 — Gateway Classifier Hookup abgeschlossen
+Nächster Schritt: E2E-Tests (Sub-Agent Full-Flow: Factory → Cron → Execution → Retention → Lifecycle), Gateway-Integration (agent-cron init, delegate routing)
+Letzter Commit: feat: gateway classifier hookup — model routing via classify() + resolveModelForAgent()

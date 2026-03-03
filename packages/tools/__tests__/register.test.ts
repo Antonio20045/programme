@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ExtendedAgentTool } from '../src/types'
 import { _resetRegistry, registerTool } from '../src/index'
-import { bridgeToOpenClaw, createOpenClawCodingTools, withUserTools, _resetInitialized } from '../src/register'
+import { bridgeToOpenClaw, createOpenClawCodingTools, withUserTools, withDisabledTools, _resetInitialized } from '../src/register'
 
 function makeTool(overrides: Partial<ExtendedAgentTool> = {}): ExtendedAgentTool {
   return {
@@ -113,6 +113,60 @@ describe('withUserTools', () => {
     expect(tools.map((t) => t.name)).toContain('only-global')
     // Only global tools — count should match registry size
     expect(tools.length).toBe(1)
+  })
+})
+
+describe('withDisabledTools', () => {
+  afterEach(() => {
+    _resetRegistry()
+    _resetInitialized()
+  })
+
+  it('filters out disabled global tools', async () => {
+    registerTool(makeTool({ name: 'shell' }))
+    registerTool(makeTool({ name: 'browser' }))
+    registerTool(makeTool({ name: 'calculator' }))
+
+    await withDisabledTools(new Set(['shell', 'browser']), async () => {
+      const names = createOpenClawCodingTools().map(t => t.name)
+      expect(names).not.toContain('shell')
+      expect(names).not.toContain('browser')
+      expect(names).toContain('calculator')
+    })
+  })
+
+  it('filters out disabled user tools', async () => {
+    registerTool(makeTool({ name: 'calculator' }))
+    const userTool = makeTool({ name: 'notes' })
+
+    await withDisabledTools(new Set(['notes']), async () => {
+      await withUserTools([userTool], async () => {
+        const names = createOpenClawCodingTools().map(t => t.name)
+        expect(names).not.toContain('notes')
+        expect(names).toContain('calculator')
+      })
+    })
+  })
+
+  it('disabled tools are not filtered outside the callback', async () => {
+    registerTool(makeTool({ name: 'shell' }))
+
+    await withDisabledTools(new Set(['shell']), async () => {
+      expect(createOpenClawCodingTools().map(t => t.name)).not.toContain('shell')
+    })
+
+    expect(createOpenClawCodingTools().map(t => t.name)).toContain('shell')
+  })
+
+  it('empty disabled set filters nothing', async () => {
+    registerTool(makeTool({ name: 'shell' }))
+    registerTool(makeTool({ name: 'browser' }))
+
+    await withDisabledTools(new Set(), async () => {
+      const names = createOpenClawCodingTools().map(t => t.name)
+      expect(names).toContain('shell')
+      expect(names).toContain('browser')
+    })
   })
 })
 

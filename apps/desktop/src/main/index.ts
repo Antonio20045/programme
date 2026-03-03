@@ -14,7 +14,7 @@ import { OAuthServer, exchangeAndStoreTokens, revokeTokens, getIntegrationStatus
 import type { TokenData } from './oauth-server'
 import { TrayManager } from './tray'
 import { initAutoUpdater, stopAutoUpdater } from './updater'
-import { encrypt, encodeMessage, fromBase64, toBase64 } from '@ki-assistent/shared'
+import { encrypt, encodeMessage, fromBase64, toBase64, CAPABILITIES } from '@ki-assistent/shared'
 
 // Fix: Run Chromium network service in-process to prevent out-of-process crash
 // (Electron 35 + macOS 13 — network_service_instance_impl.cc crash)
@@ -1633,6 +1633,127 @@ ipcMain.handle('activity:read', async (_event, payload: unknown) => {
     return readActivityLog(params)
   } catch (err) {
     return { entries: [], hasMore: false, error: err instanceof Error ? err.message : 'Lesen fehlgeschlagen' }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Capabilities IPC handlers
+// ---------------------------------------------------------------------------
+
+ipcMain.handle('capabilities:read', async () => {
+  try {
+    const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json')
+    let config: Record<string, unknown> = {}
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+    } catch {
+      // No config — all defaults
+    }
+
+    const security = (config['security'] ?? {}) as Record<string, unknown>
+    const disabledCaps = Array.isArray(security['disabledCapabilities'])
+      ? (security['disabledCapabilities'] as unknown[]).filter((c): c is string => typeof c === 'string')
+      : []
+
+    // Determine which tools are actually available
+    const availableTools = new Set<string>()
+
+    // Always-available tools (registered globally)
+    const globalToolNames = [
+      'notes', 'reminders', 'web-search', 'news-feed', 'weather', 'youtube',
+      'archive', 'image-tools', 'ocr', 'shell', 'browser',
+      'clipboard', 'screenshot', 'app-launcher', 'media-control', 'system-info', 'git-tools',
+      'image-gen', 'diagram', 'whatsapp',
+    ]
+    for (const t of globalToolNames) availableTools.add(t)
+
+    // Google tools — only if OAuth credentials exist
+    const credDir = path.join(os.homedir(), '.openclaw', 'credentials')
+    let hasGoogleCreds = false
+    try {
+      const files = fs.readdirSync(credDir)
+      hasGoogleCreds = files.some(f => f.startsWith('google') && f.endsWith('.enc'))
+    } catch {
+      // No credentials directory
+    }
+    if (hasGoogleCreds) {
+      for (const t of ['gmail', 'connect-google', 'calendar', 'google-drive', 'google-docs', 'google-sheets', 'google-contacts', 'google-tasks']) {
+        availableTools.add(t)
+      }
+    }
+
+    // Sub-agent tools — only in server mode (PostgreSQL)
+    const gwMode = getGatewayMode()
+    if (gwMode === 'server') {
+      availableTools.add('delegate')
+      availableTools.add('create-agent')
+    }
+
+    // Build capability list — only capabilities with at least one available tool
+    const capabilities: Array<{ id: string; section: string; available: boolean }> = []
+    for (const cap of CAPABILITIES) {
+      const hasAvailableTool = cap.tools.some(t => availableTools.has(t))
+      if (hasAvailableTool) {
+        capabilities.push({ id: cap.id, section: cap.section, available: true })
+      }
+    }
+
+    return { capabilities, disabled: disabledCaps }
+  } catch (err) {
+    return { capabilities: [], disabled: [], error: err instanceof Error ? err.message : 'Capabilities lesen fehlgeschlagen' }
+  }
+})
+
+ipcMain.handle('capabilities:toggle', async (_event, payload: unknown) => {
+  if (
+    typeof payload !== 'object' || payload === null ||
+    typeof (payload as Record<string, unknown>)['id'] !== 'string' ||
+    typeof (payload as Record<string, unknown>)['enabled'] !== 'boolean'
+  ) {
+    return { success: false, error: 'Ungueltige Eingabe' }
+  }
+  const { id, enabled } = payload as { id: string; enabled: boolean }
+
+  // Validate that id is a known capability
+  const knownIds = new Set(CAPABILITIES.map(c => c.id))
+  if (!knownIds.has(id)) {
+    return { success: false, error: 'Unbekannte Capability' }
+  }
+
+  try {
+    const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json')
+    let config: Record<string, unknown> = {}
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+    } catch {
+      // Will create new config
+    }
+
+    const security = (config['security'] ?? {}) as Record<string, unknown>
+    let disabledCaps = Array.isArray(security['disabledCapabilities'])
+      ? (security['disabledCapabilities'] as unknown[]).filter((c): c is string => typeof c === 'string')
+      : []
+
+    if (enabled) {
+      // Remove from disabled list
+      disabledCaps = disabledCaps.filter(c => c !== id)
+    } else {
+      // Add to disabled list (if not already there)
+      if (!disabledCaps.includes(id)) {
+        disabledCaps.push(id)
+      }
+    }
+
+    config['security'] = { ...security, disabledCapabilities: disabledCaps }
+    const configDir = path.dirname(configPath)
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true })
+    }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Toggle fehlgeschlagen' }
   }
 })
 

@@ -206,6 +206,8 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
   const assistantBufferRef = useRef('')
   const assistantIdRef = useRef('')
   const currentSessionIdRef = useRef<string | null>(activeSessionId)
+  const messagesRef = useRef<readonly ChatMessage[]>(messages)
+  const pendingRetryRef = useRef<string | null>(null)
 
   // Close EventSource on unmount
   useEffect(() => {
@@ -213,6 +215,11 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
       eventSourceRef.current?.close()
     }
   }, [])
+
+  // Keep messagesRef in sync
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   // Load messages when activeSessionId changes
   useEffect(() => {
@@ -530,6 +537,14 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
         // Confirmation delivery failed — ignore silently
       })
 
+      // After OAuth success, remember the original user question for auto-retry
+      if (oauthTokens !== undefined && decision === 'execute') {
+        const lastUserMsg = [...messagesRef.current].reverse().find((m) => m.role === 'user')
+        if (lastUserMsg && lastUserMsg.content.trim().length > 0) {
+          pendingRetryRef.current = lastUserMsg.content
+        }
+      }
+
       setMessages((prev) =>
         prev.map((m) =>
           m.toolCallId === toolCallId
@@ -549,6 +564,18 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
     },
     [],
   )
+
+  // Auto-retry: resend the original user message after OAuth completes
+  const prevLoadingRef = useRef(false)
+  useEffect(() => {
+    if (prevLoadingRef.current && !isLoading && pendingRetryRef.current !== null) {
+      const retryText = pendingRetryRef.current
+      pendingRetryRef.current = null
+      // Short delay so Gateway can process the new OAuth tokens
+      setTimeout(() => { sendMessage(retryText) }, 500)
+    }
+    prevLoadingRef.current = isLoading
+  }, [isLoading, sendMessage])
 
   return { messages, isLoading, error, sendMessage, confirmTool }
 }

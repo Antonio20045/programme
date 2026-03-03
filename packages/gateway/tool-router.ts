@@ -324,6 +324,21 @@ export class DesktopAgentBridge {
     return this.connected
   }
 
+  /** Get the configured path (attached mode only). Returns undefined in standalone mode. */
+  getPath(): string | undefined {
+    return undefined
+  }
+
+  /** Whether the bridge is attached to an HTTP server. Always false in standalone mode. */
+  isAttached(): boolean {
+    return false
+  }
+
+  /** Attach to HTTP server for path-based upgrade routing. No-op in standalone mode. */
+  attachToServer(_server: unknown): void {
+    // Standalone mode — nothing to attach
+  }
+
   setStatusListener(fn: (connected: boolean) => void): void {
     this.onStatusChange = fn
   }

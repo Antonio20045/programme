@@ -527,9 +527,9 @@ describe('useChat', () => {
     expect(messagesSlot).toBeDefined()
   })
 
-  it('registers two useEffects (cleanup + session load)', () => {
+  it('registers four useEffects (cleanup, messagesRef sync, session load, auto-retry)', () => {
     callHook()
-    expect(effectCallbacks).toHaveLength(2)
+    expect(effectCallbacks).toHaveLength(4)
   })
 
   // -------------------------------------------------------------------

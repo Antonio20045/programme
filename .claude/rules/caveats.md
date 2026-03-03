@@ -4,6 +4,7 @@
 
 - Bindet auf 127.0.0.1, NIEMALS 0.0.0.0
 - Gateway-Fork ist von typecheck, lint, test und audit-deps excludet (eigene tsconfig, zu groß für Root-Checks)
+- Model-Routing: PostgreSQL → `classify()` + `resolveModelForAgent()` (Gemini-First, Anthropic-Fallback). SQLite → `selectModel()` + `resolveModel()`. User-Override via `getUserDefaultModel()` (ENV > Config). Fehlender `GEMINI_API_KEY` → sofort Anthropic-Fallback ohne Retry.
 
 ## Relay
 

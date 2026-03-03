@@ -193,4 +193,12 @@ contextBridge.exposeInMainWorld('api', {
   acknowledgeNotification: (id: string): Promise<{ success: boolean; error?: string }> => {
     return ipcRenderer.invoke('notifications:ack', id)
   },
+
+  capabilitiesRead: (): Promise<{ capabilities: Array<{ id: string; section: string; available: boolean }>; disabled: string[] }> => {
+    return ipcRenderer.invoke('capabilities:read')
+  },
+
+  capabilitiesToggle: (data: { id: string; enabled: boolean }): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('capabilities:toggle', data)
+  },
 })

@@ -113,6 +113,7 @@ const noopMediaAdapter: MediaAdapter = {
 // ---------------------------------------------------------------------------
 
 const userToolContext = new AsyncLocalStorage<readonly ExtendedAgentTool[]>()
+const disabledToolsContext = new AsyncLocalStorage<ReadonlySet<string>>()
 
 /**
  * Run a function with per-request user tools visible to createOpenClawCodingTools().
@@ -123,6 +124,17 @@ export function withUserTools<T>(
   fn: () => Promise<T>,
 ): Promise<T> {
   return userToolContext.run(tools, fn)
+}
+
+/**
+ * Run a function with certain tools disabled (filtered out of createOpenClawCodingTools).
+ * Used by the gateway to enforce capability toggles from user settings.
+ */
+export function withDisabledTools<T>(
+  disabledNames: ReadonlySet<string>,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return disabledToolsContext.run(disabledNames, fn)
 }
 
 // ---------------------------------------------------------------------------
@@ -255,8 +267,11 @@ export function createOpenClawCodingTools(): OpenClawTool[] {
     initTools()
   }
 
+  const disabled = disabledToolsContext.getStore()
+
   const result: OpenClawTool[] = []
   for (const tool of getAllTools().values()) {
+    if (disabled?.has(tool.name)) continue
     result.push(bridgeToOpenClaw(tool))
   }
 
@@ -264,6 +279,7 @@ export function createOpenClawCodingTools(): OpenClawTool[] {
   const userTools = userToolContext.getStore()
   if (userTools) {
     for (const tool of userTools) {
+      if (disabled?.has(tool.name)) continue
       result.push(bridgeToOpenClaw(tool))
     }
   }

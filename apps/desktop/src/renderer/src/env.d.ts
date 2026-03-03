@@ -181,6 +181,19 @@ interface ElectronApi {
   }) => void) => () => void
   onNotificationFocus: (callback: (notificationId: string) => void) => () => void
   acknowledgeNotification: (id: string) => Promise<{ success: boolean; error?: string }>
+  capabilitiesRead: () => Promise<CapabilitiesReadResult>
+  capabilitiesToggle: (data: { id: string; enabled: boolean }) => Promise<SetupResult>
+}
+
+interface CapabilityInfo {
+  id: string
+  section: string
+  available: boolean
+}
+
+interface CapabilitiesReadResult {
+  capabilities: CapabilityInfo[]
+  disabled: string[]
 }
 
 interface Window {

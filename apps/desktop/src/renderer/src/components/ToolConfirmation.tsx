@@ -90,6 +90,9 @@ function OAuthConnectCard({
     }
   }, [])
 
+  // Auto-trigger OAuth flow on mount (browser opens immediately)
+  const autoTriggeredRef = useRef(false)
+
   const handleOAuthConnect = useCallback(async () => {
     setOauthState('connecting')
     setOauthError('')
@@ -117,6 +120,13 @@ function OAuthConnectCard({
       setOauthError('Unerwarteter Fehler')
     }
   }, [toolCallId, onConfirm])
+
+  // Auto-start OAuth on mount — no button click needed
+  useEffect(() => {
+    if (autoTriggeredRef.current) return
+    autoTriggeredRef.current = true
+    void handleOAuthConnect()
+  }, [handleOAuthConnect])
 
   const handleReject = useCallback(() => {
     onConfirm(toolCallId, 'reject')
