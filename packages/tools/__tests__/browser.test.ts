@@ -22,10 +22,7 @@ const mockTitle = vi.fn()
 const mockUrl = vi.fn()
 const mockPageClose = vi.fn()
 const mockPageIsClosed = vi.fn()
-const mockBrowserClose = vi.fn()
-const mockBrowserIsConnected = vi.fn()
 const mockNewPage = vi.fn()
-const mockLaunch = vi.fn()
 const mockAccessibilitySnapshot = vi.fn()
 const mockSelectOption = vi.fn()
 const mockType = vi.fn()
@@ -37,14 +34,9 @@ const mockLocatorFill = vi.fn()
 const mockContextCookies = vi.fn()
 const mockContextAddCookies = vi.fn()
 const mockContextClearCookies = vi.fn()
-
-function createMockContext(): Record<string, unknown> {
-  return {
-    cookies: mockContextCookies,
-    addCookies: mockContextAddCookies,
-    clearCookies: mockContextClearCookies,
-  }
-}
+const mockLaunchPersistentContext = vi.fn()
+const mockContextClose = vi.fn()
+const mockContextPages = vi.fn()
 
 function createMockPage(): Record<string, unknown> {
   return {
@@ -67,29 +59,29 @@ function createMockPage(): Record<string, unknown> {
   }
 }
 
-function createMockBrowser(): Record<string, unknown> {
+function createMockContext(): Record<string, unknown> {
   return {
+    cookies: mockContextCookies,
+    addCookies: mockContextAddCookies,
+    clearCookies: mockContextClearCookies,
     newPage: mockNewPage,
-    close: mockBrowserClose,
-    isConnected: mockBrowserIsConnected,
+    close: mockContextClose,
+    isConnected: vi.fn().mockReturnValue(true),
+    pages: mockContextPages,
   }
 }
 
 function setupDefaultMocks(): void {
   const mockPage = createMockPage()
-  const mockBrowser = createMockBrowser()
 
-  mockBrowserIsConnected.mockReturnValue(true)
   mockPageIsClosed.mockReturnValue(false)
   mockNewPage.mockResolvedValue(mockPage)
-  mockLaunch.mockResolvedValue(mockBrowser)
   mockTitle.mockResolvedValue('Example Page')
   mockUrl.mockReturnValue('https://example.com/')
   mockGoto.mockResolvedValue(null)
   mockFill.mockResolvedValue(undefined)
   mockClick.mockResolvedValue(undefined)
   mockPageClose.mockResolvedValue(undefined)
-  mockBrowserClose.mockResolvedValue(undefined)
   mockAccessibilitySnapshot.mockResolvedValue({ role: 'WebArea', name: '', children: [] })
   mockSelectOption.mockResolvedValue(['option1'])
   mockType.mockResolvedValue(undefined)
@@ -104,6 +96,11 @@ function setupDefaultMocks(): void {
 
   const screenshotBuffer = Buffer.from('fake-png-data')
   mockScreenshot.mockResolvedValue(screenshotBuffer)
+
+  // Context mocks
+  mockContextClose.mockResolvedValue(undefined)
+  mockContextPages.mockReturnValue([mockPage])
+  mockLaunchPersistentContext.mockResolvedValue(createMockContext())
 }
 
 // ---------------------------------------------------------------------------
@@ -113,10 +110,13 @@ function setupDefaultMocks(): void {
 const {
   browserTool,
   validateBrowserUrl,
+  validateDomain,
   parseArgs,
   closeBrowser,
   setPlaywrightLoader,
   _resetRateLimit,
+  setCredentialResolver,
+  getCurrentPageUrl,
 } = await import('../src/browser')
 
 // ---------------------------------------------------------------------------
@@ -153,7 +153,7 @@ describe('browser tool', () => {
     _resetRateLimit()
 
     setPlaywrightLoader(async () => ({
-      chromium: { launch: mockLaunch },
+      chromium: { launchPersistentContext: mockLaunchPersistentContext },
     }))
   })
 
@@ -246,6 +246,19 @@ describe('browser tool', () => {
     it('parses waitFor load args', () => {
       const result = parseArgs({ action: 'waitFor', waitType: 'load' })
       expect(result).toEqual({ action: 'waitFor', waitType: 'load', state: 'load' })
+    })
+
+    it('parses fillCredential args', () => {
+      const result = parseArgs({ action: 'fillCredential', selector: '#password' })
+      expect(result).toEqual({ action: 'fillCredential', selector: '#password' })
+    })
+
+    it('rejects fillCredential without selector', () => {
+      expect(() => parseArgs({ action: 'fillCredential' })).toThrow('selector')
+    })
+
+    it('parses healthCheck args', () => {
+      expect(parseArgs({ action: 'healthCheck' })).toEqual({ action: 'healthCheck' })
     })
 
     it('rejects non-object args', () => {
@@ -415,16 +428,19 @@ describe('browser tool', () => {
       })
     })
 
-    it('launches chromium headless on first call', async () => {
+    it('launches with persistent context', async () => {
       await browserTool.execute({
         action: 'openPage',
         url: 'https://example.com',
       })
 
-      expect(mockLaunch).toHaveBeenCalledWith({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      })
+      expect(mockLaunchPersistentContext).toHaveBeenCalledWith(
+        expect.stringContaining('.ki-assistent/browser-profile'),
+        {
+          headless: false,
+          args: ['--disable-blink-features=AutomationControlled'],
+        },
+      )
     })
 
     it('rejects file:// URL', async () => {
@@ -439,7 +455,7 @@ describe('browser tool', () => {
       ).rejects.toThrow('Blocked URL scheme')
     })
 
-    it('reuses browser instance across calls', async () => {
+    it('reuses context across calls', async () => {
       await browserTool.execute({
         action: 'openPage',
         url: 'https://example.com',
@@ -449,7 +465,7 @@ describe('browser tool', () => {
         url: 'https://example.com/page2',
       })
 
-      expect(mockLaunch).toHaveBeenCalledTimes(1)
+      expect(mockLaunchPersistentContext).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -564,19 +580,68 @@ describe('browser tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // snapshot (NEW)
+  // snapshot
   // -------------------------------------------------------------------------
 
   describe('snapshot', () => {
-    it('returns accessibility tree and URL', async () => {
+    it('returns sanitized accessibility tree with nonce envelope', async () => {
       mockAccessibilitySnapshot.mockResolvedValue({ role: 'WebArea', name: 'Page', children: [] })
 
       await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
       const result = await browserTool.execute({ action: 'snapshot' })
-      const parsed = JSON.parse(getTextContent(result)) as { snapshot: unknown; url: string }
+      const text = getTextContent(result)
 
-      expect(parsed.snapshot).toBeDefined()
-      expect(parsed.url).toBe('https://example.com/')
+      expect(text).toContain('--- BROWSER_CONTENT_START nonce=')
+      expect(text).toContain('--- BROWSER_CONTENT_END nonce=')
+    })
+
+    it('nonce in header matches nonce in footer', async () => {
+      mockAccessibilitySnapshot.mockResolvedValue({ role: 'WebArea', name: 'Test', children: [] })
+
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      const result = await browserTool.execute({ action: 'snapshot' })
+      const text = getTextContent(result)
+
+      const headerMatch = text.match(/BROWSER_CONTENT_START nonce=(\w+)/)
+      const footerMatch = text.match(/BROWSER_CONTENT_END nonce=(\w+)/)
+
+      expect(headerMatch).not.toBeNull()
+      expect(footerMatch).not.toBeNull()
+      expect(headerMatch![1]).toBe(footerMatch![1])
+    })
+
+    it('strips zero-width chars from node names', async () => {
+      mockAccessibilitySnapshot.mockResolvedValue({
+        role: 'WebArea',
+        name: 'Page\u200B\u200CTitle',
+        children: [],
+      })
+
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      const result = await browserTool.execute({ action: 'snapshot' })
+      const text = getTextContent(result)
+
+      expect(text).toContain('"PageTitle"')
+      expect(text).not.toContain('\u200B')
+      expect(text).not.toContain('\u200C')
+    })
+
+    it('removes nodes with excessive zero-width chars (attack indicator)', async () => {
+      mockAccessibilitySnapshot.mockResolvedValue({
+        role: 'WebArea',
+        name: 'Root',
+        children: [{
+          role: 'text',
+          name: 'evil\u200B\u200C\u200D\uFEFF',
+          children: [],
+        }],
+      })
+
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      const result = await browserTool.execute({ action: 'snapshot' })
+      const text = getTextContent(result)
+
+      expect(text).not.toContain('evil')
     })
 
     it('calls page.accessibility.snapshot()', async () => {
@@ -588,7 +653,7 @@ describe('browser tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // type (NEW)
+  // type
   // -------------------------------------------------------------------------
 
   describe('type', () => {
@@ -604,7 +669,7 @@ describe('browser tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // select (NEW)
+  // select
   // -------------------------------------------------------------------------
 
   describe('select', () => {
@@ -622,7 +687,7 @@ describe('browser tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // fill (NEW — batch form fill by label)
+  // fill (batch form fill by label)
   // -------------------------------------------------------------------------
 
   describe('fill', () => {
@@ -645,7 +710,7 @@ describe('browser tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // cookies (NEW)
+  // cookies
   // -------------------------------------------------------------------------
 
   describe('cookies', () => {
@@ -690,7 +755,7 @@ describe('browser tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // waitFor (NEW)
+  // waitFor
   // -------------------------------------------------------------------------
 
   describe('waitFor', () => {
@@ -731,7 +796,7 @@ describe('browser tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Rate limiting (NEW)
+  // Rate limiting
   // -------------------------------------------------------------------------
 
   describe('rate limiting', () => {
@@ -798,10 +863,10 @@ describe('browser tool', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Browser reuse
+  // Context reuse
   // -------------------------------------------------------------------------
 
-  describe('browser reuse', () => {
+  describe('context reuse', () => {
     it('reuses page instance across actions', async () => {
       await browserTool.execute({
         action: 'openPage',
@@ -813,6 +878,7 @@ describe('browser tool', () => {
         selector: '#btn',
       })
 
+      // 1 actual page (no probe on first context creation)
       expect(mockNewPage).toHaveBeenCalledTimes(1)
     })
 
@@ -830,25 +896,331 @@ describe('browser tool', () => {
         url: 'https://example.com/new',
       })
 
-      expect(mockNewPage).toHaveBeenCalledTimes(2)
+      // 1 probe + 1 page initially, then 1 new page (context still valid, no new probe)
+      expect(mockNewPage).toHaveBeenCalledTimes(3)
     })
 
-    it('creates new browser if previous was disconnected', async () => {
+    it('creates new context if previous context throws on newPage', async () => {
       await browserTool.execute({
         action: 'openPage',
         url: 'https://example.com',
       })
 
-      // Simulate browser disconnected
-      mockBrowserIsConnected.mockReturnValue(false)
+      // Simulate context dead — newPage throws (reconnect probe fails)
       mockPageIsClosed.mockReturnValue(true)
+      mockNewPage
+        .mockRejectedValueOnce(new Error('context closed'))
+        .mockResolvedValue(createMockPage())
+
+      // Need to re-setup after context recreation
+      mockLaunchPersistentContext.mockResolvedValue(createMockContext())
 
       await browserTool.execute({
         action: 'openPage',
         url: 'https://example.com/new',
       })
 
-      expect(mockLaunch).toHaveBeenCalledTimes(2)
+      expect(mockLaunchPersistentContext).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // openSession
+  // -------------------------------------------------------------------------
+
+  describe('openSession', () => {
+    it('opens a non-headless persistent browser context', async () => {
+      const result = await browserTool.execute({
+        action: 'openSession',
+        domain: 'github.com',
+      })
+
+      expect(mockLaunchPersistentContext).toHaveBeenCalledWith(
+        expect.stringContaining('browser-sessions/github.com'),
+        { headless: false, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
+      )
+
+      const parsed = JSON.parse(getTextContent(result)) as { sessionOpened: boolean; domain: string }
+      expect(parsed.sessionOpened).toBe(true)
+      expect(parsed.domain).toBe('github.com')
+    })
+
+    it('closes default context before opening session', async () => {
+      // First open a default page
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      expect(mockLaunchPersistentContext).toHaveBeenCalledTimes(1)
+
+      // Now open session — default context should be closed
+      await browserTool.execute({ action: 'openSession', domain: 'github.com' })
+      expect(mockContextClose).toHaveBeenCalled()
+    })
+
+    it('existing actions use persistent session page', async () => {
+      await browserTool.execute({ action: 'openSession', domain: 'github.com' })
+
+      // Screenshot should work using the persistent context page
+      await browserTool.execute({ action: 'screenshot' })
+      expect(mockScreenshot).toHaveBeenCalled()
+    })
+
+    it('closes previous session when opening a new one', async () => {
+      await browserTool.execute({ action: 'openSession', domain: 'github.com' })
+      await browserTool.execute({ action: 'openSession', domain: 'gitlab.com' })
+
+      expect(mockContextClose).toHaveBeenCalled()
+      expect(mockLaunchPersistentContext).toHaveBeenCalledTimes(2)
+    })
+
+    it('rejects invalid domain with path traversal', async () => {
+      await expect(
+        browserTool.execute({ action: 'openSession', domain: 'foo..bar' }),
+      ).rejects.toThrow('".."')
+    })
+
+    it('rejects domain with path separators', async () => {
+      await expect(
+        browserTool.execute({ action: 'openSession', domain: 'evil/path' }),
+      ).rejects.toThrow('path separators')
+    })
+
+    it('rejects domain with whitespace', async () => {
+      await expect(
+        browserTool.execute({ action: 'openSession', domain: 'evil domain.com' }),
+      ).rejects.toThrow('whitespace')
+    })
+
+    it('rejects empty domain', async () => {
+      await expect(
+        browserTool.execute({ action: 'openSession', domain: '' }),
+      ).rejects.toThrow('non-empty')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // closeSession
+  // -------------------------------------------------------------------------
+
+  describe('closeSession', () => {
+    it('closes persistent context and allows new default context', async () => {
+      await browserTool.execute({ action: 'openSession', domain: 'github.com' })
+      const result = await browserTool.execute({ action: 'closeSession', domain: 'github.com' })
+
+      expect(mockContextClose).toHaveBeenCalled()
+      const parsed = JSON.parse(getTextContent(result)) as { sessionClosed: boolean }
+      expect(parsed.sessionClosed).toBe(true)
+
+      // Next action should launch a new persistent context (default profile)
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      expect(mockLaunchPersistentContext).toHaveBeenCalledTimes(2)
+    })
+
+    it('throws when no session is active', async () => {
+      await expect(
+        browserTool.execute({ action: 'closeSession', domain: 'github.com' }),
+      ).rejects.toThrow('No active browser session')
+    })
+
+    it('throws when domain does not match active session', async () => {
+      await browserTool.execute({ action: 'openSession', domain: 'github.com' })
+
+      await expect(
+        browserTool.execute({ action: 'closeSession', domain: 'gitlab.com' }),
+      ).rejects.toThrow('Active session is for "github.com"')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // session timer
+  // -------------------------------------------------------------------------
+
+  describe('session timer', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('auto-closes session after 10 minutes', async () => {
+      await browserTool.execute({ action: 'openSession', domain: 'github.com' })
+
+      // Advance 10 minutes
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+
+      expect(mockContextClose).toHaveBeenCalled()
+
+      // Next action should launch new persistent context
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      expect(mockLaunchPersistentContext).toHaveBeenCalledTimes(2)
+    })
+
+    it('timer is cancelled by closeSession', async () => {
+      await browserTool.execute({ action: 'openSession', domain: 'github.com' })
+      await browserTool.execute({ action: 'closeSession', domain: 'github.com' })
+
+      // Advance past timeout — should not error or call close again
+      mockContextClose.mockClear()
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+
+      expect(mockContextClose).not.toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // fillCredential
+  // -------------------------------------------------------------------------
+
+  describe('fillCredential', () => {
+    it('calls resolver and fills credential', async () => {
+      const mockResolver = { resolve: vi.fn().mockResolvedValue('s3cret') }
+      setCredentialResolver(mockResolver)
+
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      const result = await browserTool.execute({ action: 'fillCredential', selector: '#password' })
+
+      expect(mockResolver.resolve).toHaveBeenCalledWith('https://example.com/')
+      expect(mockFill).toHaveBeenCalledWith('#password', 's3cret', { timeout: 30_000 })
+
+      const parsed = JSON.parse(getTextContent(result)) as Record<string, unknown>
+      expect(parsed).toEqual({ filled: true, selector: '#password' })
+
+      setCredentialResolver(null as unknown as import('../src/browser').CredentialResolver)
+    })
+
+    it('throws without resolver', async () => {
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+
+      await expect(
+        browserTool.execute({ action: 'fillCredential', selector: '#password' }),
+      ).rejects.toThrow('Kein CredentialResolver registriert')
+    })
+
+    it('does not leak credential value in result', async () => {
+      const mockResolver = { resolve: vi.fn().mockResolvedValue('super-secret-pw') }
+      setCredentialResolver(mockResolver)
+
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      const result = await browserTool.execute({ action: 'fillCredential', selector: '#pw' })
+      const text = getTextContent(result)
+      const parsed = JSON.parse(text) as Record<string, unknown>
+
+      expect(Object.keys(parsed)).toEqual(['filled', 'selector'])
+      expect(text).not.toContain('super-secret-pw')
+
+      setCredentialResolver(null as unknown as import('../src/browser').CredentialResolver)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // healthCheck
+  // -------------------------------------------------------------------------
+
+  describe('healthCheck', () => {
+    it('reports unhealthy when no context exists', async () => {
+      const result = await browserTool.execute({ action: 'healthCheck' })
+      const parsed = JSON.parse(getTextContent(result)) as { healthy: boolean; url: unknown; title: unknown }
+
+      expect(parsed.healthy).toBe(false)
+      expect(parsed.url).toBeNull()
+      expect(parsed.title).toBeNull()
+    })
+
+    it('reports healthy after openPage', async () => {
+      mockTitle.mockResolvedValue('Example Page')
+      mockUrl.mockReturnValue('https://example.com/')
+
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      const result = await browserTool.execute({ action: 'healthCheck' })
+      const parsed = JSON.parse(getTextContent(result)) as { healthy: boolean; url: string; title: string }
+
+      expect(parsed.healthy).toBe(true)
+      expect(parsed.url).toBe('https://example.com/')
+      expect(parsed.title).toBe('Example Page')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // getCurrentPageUrl
+  // -------------------------------------------------------------------------
+
+  describe('getCurrentPageUrl', () => {
+    it('returns null when no page is open', () => {
+      expect(getCurrentPageUrl()).toBeNull()
+    })
+
+    it('returns URL after openPage', async () => {
+      mockUrl.mockReturnValue('https://example.com/')
+      await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+      expect(getCurrentPageUrl()).toBe('https://example.com/')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // domain validation
+  // -------------------------------------------------------------------------
+
+  describe('validateDomain', () => {
+    it('accepts valid domains', () => {
+      expect(validateDomain('github.com')).toBe('github.com')
+      expect(validateDomain('accounts.google.com')).toBe('accounts.google.com')
+      expect(validateDomain('my-service.example.io')).toBe('my-service.example.io')
+    })
+
+    it('trims whitespace', () => {
+      expect(validateDomain('  github.com  ')).toBe('github.com')
+    })
+
+    it('rejects path separators', () => {
+      expect(() => validateDomain('evil/path')).toThrow('path separators')
+      expect(() => validateDomain('evil\\path')).toThrow('path separators')
+    })
+
+    it('rejects path traversal', () => {
+      expect(() => validateDomain('..')).toThrow('".."')
+      expect(() => validateDomain('foo..bar')).toThrow('".."')
+    })
+
+    it('rejects path traversal with separators', () => {
+      expect(() => validateDomain('../etc')).toThrow('path separators')
+    })
+
+    it('rejects whitespace in domain', () => {
+      expect(() => validateDomain('evil domain.com')).toThrow('whitespace')
+    })
+
+    it('rejects empty string', () => {
+      expect(() => validateDomain('')).toThrow('empty')
+      expect(() => validateDomain('   ')).toThrow('empty')
+    })
+
+    it('rejects invalid patterns', () => {
+      expect(() => validateDomain('noextension')).toThrow('Invalid domain')
+      expect(() => validateDomain('.leading-dot.com')).toThrow('Invalid domain')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // parseArgs — session actions
+  // -------------------------------------------------------------------------
+
+  describe('parseArgs — session actions', () => {
+    it('parses openSession args', () => {
+      const result = parseArgs({ action: 'openSession', domain: 'github.com' })
+      expect(result).toEqual({ action: 'openSession', domain: 'github.com' })
+    })
+
+    it('parses closeSession args', () => {
+      const result = parseArgs({ action: 'closeSession', domain: 'github.com' })
+      expect(result).toEqual({ action: 'closeSession', domain: 'github.com' })
+    })
+
+    it('rejects openSession without domain', () => {
+      expect(() => parseArgs({ action: 'openSession' })).toThrow('domain')
+    })
+
+    it('rejects closeSession without domain', () => {
+      expect(() => parseArgs({ action: 'closeSession' })).toThrow('domain')
     })
   })
 })
@@ -869,5 +1241,27 @@ describe('browser security', () => {
 
   it('has URL validation for waitFor', () => {
     expect(sourceCode).toContain('validateBrowserUrl')
+  })
+
+  it('has domain validation for sessions', () => {
+    expect(sourceCode).toContain('validateDomain')
+    expect(sourceCode).toContain('DOMAIN_PATTERN')
+  })
+
+  it('has session timeout', () => {
+    expect(sourceCode).toContain('SESSION_TIMEOUT_MS')
+  })
+
+  it('blocks path traversal in domain', () => {
+    expect(sourceCode).toContain('path separators')
+    expect(sourceCode).toContain('".."')
+  })
+
+  it('does not use page.evaluate for DOM mutation', () => {
+    expect(sourceCode).toContain('page.evaluate is intentionally not used')
+  })
+
+  it('has credential resolver security comment', () => {
+    expect(sourceCode).toContain('Credentials flow via fillCredential + CredentialResolver only')
   })
 })

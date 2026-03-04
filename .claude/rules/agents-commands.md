@@ -19,7 +19,7 @@ pnpm Monorepo mit Workspaces (`apps/*`, `packages/*`). TypeScript path aliases: 
 ```
 apps/
   desktop/          Electron (electron-vite + React + Tailwind + TS)
-    src/main/       Main Process: index.ts, gateway-manager.ts, agent.ts, tray.ts, oauth-server.ts, memory-reader.ts
+    src/main/       Main Process: index.ts, gateway-manager.ts, agent.ts, tray.ts, oauth-server.ts, memory-reader.ts, credential-vault.ts, credential-broker.ts
     src/renderer/   React UI (HashRouter): App.tsx, pages/, components/ (NotificationBanner), hooks/ (useNotifications)
     src/preload/    IPC-Bridge (contextBridge): Gateway-Proxy, Config, Integrations
   mobile/           React Native + Expo

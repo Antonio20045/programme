@@ -20,6 +20,15 @@
 - Zero high/critical in npm audit
 - audit-deps: Build-Output (`out/`, `release/`, `dist/`) wird vom Secret/Pattern-Scan excludet. Dev-Tool-Transitive-Deps (expo, electron-builder, eslint) sind als Warnings geloggt, blockieren nicht.
 
+## Credential Vault
+
+- Credentials in `{userData}/credentials.db` (SQLite, WAL, 0o600 permissions)
+- Passwörter verschlüsselt via `safeStorage.encryptString()` — OS-Keychain-backed
+- `safeStorage.decryptString()` nur in `CredentialVault.resolve()` — nirgendwo anders
+- Kein Passwort in IPC-Responses (außer `credential:generate-password` zur einmaligen Anzeige)
+- Credential-Injection in Browser: `CredentialBroker.resolveForUrl()` → User-Bestätigung via `dialog.showMessageBox()` vor jeder Entschlüsselung
+- Domain-Normalisierung via `new URL('https://'+domain).hostname`
+
 ## Electron
 
 - `will-navigate` blockiert, `setWindowOpenHandler` deny — keine externen URLs, keine neuen Fenster

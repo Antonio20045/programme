@@ -43,7 +43,7 @@ const TOOL_PERSONAS: ReadonlyMap<string, ToolPersona> = new Map<string, ToolPers
 
   // ── Server: Media & Info ──
   ['web-search', {
-    description: 'Ich kann im Internet nach aktuellen Informationen suchen.',
+    description: 'Ich kann im Internet nach aktuellen Informationen suchen und Webseiten-Texte abrufen. Verwende mich fuer Wissensfragen, Faktenrecherche und aktuelle Ereignisse. Nicht fuer E-Mails, Termine oder Desktop-Apps.',
   }],
   ['news-feed', {
     description: 'Ich kann aktuelle Nachrichten und Neuigkeiten finden.',
@@ -78,13 +78,13 @@ const TOOL_PERSONAS: ReadonlyMap<string, ToolPersona> = new Map<string, ToolPers
 
   // ── Server: Google Workspace ──
   ['gmail', {
-    description: 'Ich kann E-Mails lesen, schreiben, beantworten und verwalten.',
+    description: 'Ich verwalte die E-Mails des Users: Posteingang anzeigen, E-Mails suchen, schreiben und beantworten. Verwende mich IMMER wenn der User nach E-Mails, Posteingang oder Nachrichten fragt — direkt aufrufen, nie halluzinieren.',
     paramOverrides: {
       action: 'Was soll ich mit den E-Mails tun?',
     },
   }],
   ['calendar', {
-    description: 'Ich kann Termine anzeigen, erstellen, aendern und loeschen.',
+    description: 'Ich verwalte den Kalender des Users: Termine anzeigen, erstellen, aendern und loeschen. Verwende mich IMMER wenn der User nach Terminen, Kalender oder Tagesplan fragt — direkt aufrufen, nie halluzinieren.',
     paramOverrides: {
       action: 'Was soll ich mit dem Kalender tun?',
     },
@@ -117,7 +117,11 @@ const TOOL_PERSONAS: ReadonlyMap<string, ToolPersona> = new Map<string, ToolPers
 
   // ── Desktop: Static ──
   ['browser', {
-    description: 'Ich kann Webseiten oeffnen und Inhalte daraus lesen.',
+    description: 'Ich lade Webseiten im Hintergrund, lese deren Inhalte, mache Screenshots und interagiere mit Formularen. '
+      + 'Wenn der User sich manuell bei einem Dienst einloggen muss (OAuth, Cookie-basiert), verwende openSession(domain) '
+      + 'um ein sichtbares Browserfenster mit persistentem Profil zu oeffnen. Der User loggt sich ein, dann laufen alle '
+      + 'weiteren Actions in dieser eingeloggten Session. Verwende mich bei "oeffne [URL]" oder wenn Webseiten-Inhalte '
+      + 'gebraucht werden. Nicht fuer Desktop-Apps — dafuer gibt es app-launcher.',
   }],
   ['shell', {
     description: 'Ich kann Programme und Befehle auf deinem Computer ausfuehren.',
@@ -137,7 +141,7 @@ const TOOL_PERSONAS: ReadonlyMap<string, ToolPersona> = new Map<string, ToolPers
     description: 'Ich kann Aenderungen an Projekten verfolgen und verwalten.',
   }],
   ['app-launcher', {
-    description: 'Ich kann Programme auf deinem Computer oeffnen und verwalten.',
+    description: 'Ich starte native Desktop-Apps wie Spotify, Finder oder Terminal und verwalte laufende Programme. Verwende mich bei "oeffne [App-Name]" oder "starte [Programm]". Nicht fuer Webseiten — dafuer gibt es browser.',
   }],
   ['media-control', {
     description: 'Ich kann die Medienwiedergabe steuern — abspielen, pausieren, Lautstaerke aendern.',
@@ -210,6 +214,42 @@ export function buildToolDescriptionHints(availableToolNames: readonly string[])
     if (available.has(name)) {
       lines.push(`- ${name}: ${persona.description}`)
     }
+  }
+
+  // ── Routing rules (only when disambiguation-relevant tools are present) ──
+  const routingLines: string[] = []
+
+  if (available.has('app-launcher') || available.has('browser')) {
+    routingLines.push(
+      '- "oeffne Spotify/Finder/Terminal/[App-Name]" = app-launcher. "oeffne google.com/[URL]" = browser.',
+    )
+  }
+  if (available.has('gmail')) {
+    routingLines.push(
+      '- Jede Frage zu E-Mails, Posteingang oder Nachrichten = SOFORT gmail aufrufen.',
+    )
+  }
+  if (available.has('calendar')) {
+    routingLines.push(
+      '- Jede Frage zu Terminen, Kalender oder "was steht heute an" = SOFORT calendar aufrufen.',
+    )
+  }
+  if (available.has('web-search') || available.has('browser')) {
+    routingLines.push(
+      '- Fakten/Informationen suchen = web-search. Mit einer Webseite interagieren = browser.',
+    )
+    if (available.has('browser')) {
+      routingLines.push(
+        '- Wenn der User sich bei einem Webdienst einloggen muss = browser openSession. Fuer normales Surfen = browser openPage.',
+      )
+    }
+  }
+
+  if (routingLines.length > 0) {
+    lines.push('')
+    lines.push('## Werkzeugauswahl')
+    lines.push('WICHTIG: Wenn ein passendes Werkzeug verfuegbar ist, RUFE ES AUF. Erklaere nie dass du keinen Zugriff hast.')
+    lines.push(...routingLines)
   }
 
   return lines.join('\n')

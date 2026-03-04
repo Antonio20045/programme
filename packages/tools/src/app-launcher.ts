@@ -248,10 +248,9 @@ export function createAppLauncherTool(config: AppLauncherConfig, adapter: AppLau
   return {
     name: 'app-launcher',
     description:
-      'Launch and manage desktop applications. Actions: open(appName) launches an allowed app; ' +
-      'openFile(filePath) opens a file with its default app; openUrl(url) opens an HTTPS URL; ' +
-      'running() lists running processes; focus(appName) brings an allowed app to front. ' +
-      'Requires user confirmation.',
+      'Launch and manage native desktop applications (e.g. Spotify, Finder, Terminal). Not for web pages. ' +
+      'Actions: open(appName) launches an allowed app; openFile(filePath) opens a file with its default app; ' +
+      'openUrl(url) opens an HTTPS URL; running() lists running processes; focus(appName) brings an allowed app to front.',
     parameters: PARAMETERS,
     permissions: ['app:launch'],
     requiresConfirmation: true,

@@ -69,6 +69,9 @@ importers:
       '@ki-assistent/tools':
         specifier: workspace:*
         version: link:../../packages/tools
+      better-sqlite3:
+        specifier: ^11.10.0
+        version: 11.10.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -91,6 +94,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.0.0
         version: 4.1.18(vite@6.4.1(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
       '@types/qrcode':
         specifier: ^1.5.0
         version: 1.5.6

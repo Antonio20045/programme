@@ -183,6 +183,10 @@ interface ElectronApi {
   acknowledgeNotification: (id: string) => Promise<{ success: boolean; error?: string }>
   capabilitiesRead: () => Promise<CapabilitiesReadResult>
   capabilitiesToggle: (data: { id: string; enabled: boolean }) => Promise<SetupResult>
+  credentialList: () => Promise<Array<{ id: string; domain: string; username: string; label: string | null }>>
+  credentialStore: (data: { domain: string; username: string; password: string; label?: string }) => Promise<{ success: boolean; id?: string; error?: string }>
+  credentialGeneratePassword: (data?: { length?: number }) => Promise<{ password: string }>
+  credentialDelete: (data: { id: string }) => Promise<{ success: boolean; error?: string }>
 }
 
 interface CapabilityInfo {

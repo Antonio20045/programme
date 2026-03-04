@@ -10,6 +10,10 @@
  * Browser instance is reused across invocations.
  */
 
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { mkdirSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import type { AgentToolResult, ExtendedAgentTool, JSONSchema } from './types'
 
 // ---------------------------------------------------------------------------
@@ -31,12 +35,10 @@ interface PlaywrightBrowserContext {
   cookies(urls?: string | string[]): Promise<CookieData[]>
   addCookies(cookies: CookieData[]): Promise<void>
   clearCookies(): Promise<void>
-}
-
-interface PlaywrightBrowser {
+  pages(): PlaywrightPage[]
   newPage(): Promise<PlaywrightPage>
   close(): Promise<void>
-  isConnected(): boolean
+  isConnected?(): boolean
 }
 
 interface PlaywrightPage {
@@ -59,7 +61,10 @@ interface PlaywrightPage {
 }
 
 interface PlaywrightChromium {
-  launch(options?: { headless?: boolean; args?: string[] }): Promise<PlaywrightBrowser>
+  launchPersistentContext(
+    userDataDir: string,
+    options?: { headless?: boolean; args?: string[] },
+  ): Promise<PlaywrightBrowserContext>
 }
 
 interface PlaywrightModule {
@@ -127,6 +132,25 @@ interface WaitForArgs {
   readonly state?: string
 }
 
+interface OpenSessionArgs {
+  readonly action: 'openSession'
+  readonly domain: string
+}
+
+interface CloseSessionArgs {
+  readonly action: 'closeSession'
+  readonly domain: string
+}
+
+interface FillCredentialArgs {
+  readonly action: 'fillCredential'
+  readonly selector: string
+}
+
+interface HealthCheckArgs {
+  readonly action: 'healthCheck'
+}
+
 type BrowserArgs =
   | OpenPageArgs
   | ScreenshotArgs
@@ -138,6 +162,10 @@ type BrowserArgs =
   | FillArgs
   | CookiesArgs
   | WaitForArgs
+  | OpenSessionArgs
+  | CloseSessionArgs
+  | FillCredentialArgs
+  | HealthCheckArgs
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -147,6 +175,8 @@ const ACTION_TIMEOUT_MS = 30_000
 const MAX_SNAPSHOT_LENGTH = 50_000
 const MAX_ACTIONS_PER_MINUTE = 30
 const MAX_FILL_FIELDS = 20
+const SESSION_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
+const DOMAIN_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/
 
 // ---------------------------------------------------------------------------
 // Rate limiter
@@ -231,6 +261,34 @@ function validateBrowserUrl(raw: string): URL {
   }
 
   return parsed
+}
+
+// ---------------------------------------------------------------------------
+// Domain validation
+// ---------------------------------------------------------------------------
+
+function validateDomain(raw: string): string {
+  const domain = raw.trim()
+  if (domain === '') {
+    throw new Error('Domain must not be empty')
+  }
+  if (domain.includes('/') || domain.includes('\\')) {
+    throw new Error('Domain must not contain path separators')
+  }
+  if (domain.includes('..')) {
+    throw new Error('Domain must not contain ".."')
+  }
+  if (/\s/.test(domain)) {
+    throw new Error('Domain must not contain whitespace')
+  }
+  if (!DOMAIN_PATTERN.test(domain)) {
+    throw new Error(`Invalid domain: "${domain}"`)
+  }
+  return domain
+}
+
+function getSessionProfileDir(domain: string): string {
+  return join(homedir(), '.openclaw', 'browser-sessions', domain)
 }
 
 // ---------------------------------------------------------------------------
@@ -381,18 +439,65 @@ function parseArgs(args: unknown): BrowserArgs {
     return { action: 'waitFor', waitType: 'load', state }
   }
 
+  if (action === 'openSession') {
+    const domain = obj['domain']
+    if (typeof domain !== 'string' || domain.trim() === '') {
+      throw new Error('openSession requires a non-empty "domain" string')
+    }
+    return { action: 'openSession', domain: domain.trim() }
+  }
+
+  if (action === 'closeSession') {
+    const domain = obj['domain']
+    if (typeof domain !== 'string' || domain.trim() === '') {
+      throw new Error('closeSession requires a non-empty "domain" string')
+    }
+    return { action: 'closeSession', domain: domain.trim() }
+  }
+
+  if (action === 'fillCredential') {
+    const selector = obj['selector']
+    if (typeof selector !== 'string' || selector.trim() === '') {
+      throw new Error('fillCredential requires a non-empty "selector" string')
+    }
+    return { action: 'fillCredential', selector: selector.trim() }
+  }
+
+  if (action === 'healthCheck') {
+    return { action: 'healthCheck' }
+  }
+
   throw new Error(
-    'action must be "openPage", "screenshot", "fillForm", "clickElement", "snapshot", "type", "select", "fill", "cookies", or "waitFor"',
+    'action must be "openPage", "screenshot", "fillForm", "clickElement", "snapshot", "type", "select", "fill", "cookies", "waitFor", "openSession", "closeSession", "fillCredential", or "healthCheck"',
   )
 }
 
 // ---------------------------------------------------------------------------
-// Browser lifecycle (reused singleton)
+// CredentialResolver — secure credential injection
 // ---------------------------------------------------------------------------
 
-let browserInstance: PlaywrightBrowser | null = null
+export interface CredentialResolver {
+  resolve(currentUrl: string): Promise<string>
+}
+
+let credentialResolver: CredentialResolver | null = null
+
+export function setCredentialResolver(r: CredentialResolver): void {
+  credentialResolver = r
+}
+
+// ---------------------------------------------------------------------------
+// Browser lifecycle (persistent context singleton)
+// ---------------------------------------------------------------------------
+
+let contextInstance: PlaywrightBrowserContext | null = null
 let pageInstance: PlaywrightPage | null = null
 let playwrightLoader: (() => Promise<PlaywrightModule>) | null = null
+
+// Session state (domain-specific persistent context)
+let sessionPage: PlaywrightPage | null = null
+let sessionDomain: string | null = null
+let sessionTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Override for testing — inject a custom playwright loader. */
 function setPlaywrightLoader(loader: (() => Promise<PlaywrightModule>) | null): void {
@@ -418,38 +523,72 @@ async function loadPlaywright(): Promise<PlaywrightModule> {
   }
 }
 
-async function getBrowser(): Promise<PlaywrightBrowser> {
-  if (browserInstance !== null && browserInstance.isConnected()) {
-    return browserInstance
+async function getContext(): Promise<PlaywrightBrowserContext> {
+  if (contextInstance !== null) {
+    // Reconnect check: if newPage() throws, context is dead
+    try {
+      const probe = await contextInstance.newPage()
+      await probe.close()
+    } catch {
+      contextInstance = null
+    }
   }
-
-  const pw = await loadPlaywright()
-  browserInstance = await pw.chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  })
-  return browserInstance
+  if (contextInstance === null) {
+    const userDataDir =
+      process.env['KI_BROWSER_PROFILE'] ??
+      join(homedir(), '.ki-assistent', 'browser-profile')
+    mkdirSync(userDataDir, { recursive: true })
+    const pw = await loadPlaywright()
+    contextInstance = await pw.chromium.launchPersistentContext(userDataDir, {
+      headless: false,
+      args: ['--disable-blink-features=AutomationControlled'],
+    })
+  }
+  return contextInstance
 }
 
 async function getPage(): Promise<PlaywrightPage> {
+  // Domain session page takes priority
+  if (sessionDomain !== null && sessionPage !== null && !sessionPage.isClosed()) {
+    return sessionPage
+  }
+
   if (pageInstance !== null && !pageInstance.isClosed()) {
     return pageInstance
   }
 
-  const browser = await getBrowser()
-  pageInstance = await browser.newPage()
+  const ctx = await getContext()
+  pageInstance = await ctx.newPage()
   return pageInstance
+}
+
+/** Close persistent session — internal helper. */
+async function closeSessionInternal(): Promise<void> {
+  if (sessionTimer !== null) {
+    clearTimeout(sessionTimer)
+    sessionTimer = null
+  }
+  if (sessionPage !== null) {
+    try { await sessionPage.close() } catch { /* already closed */ }
+    sessionPage = null
+  }
+  if (contextInstance !== null) {
+    try { await contextInstance.close() } catch { /* already closed */ }
+    contextInstance = null
+  }
+  sessionDomain = null
 }
 
 /** Reset browser state — exported for testing. */
 async function closeBrowser(): Promise<void> {
+  await closeSessionInternal()
   if (pageInstance !== null) {
     try { await pageInstance.close() } catch { /* already closed */ }
     pageInstance = null
   }
-  if (browserInstance !== null) {
-    try { await browserInstance.close() } catch { /* already closed */ }
-    browserInstance = null
+  if (contextInstance !== null) {
+    try { await contextInstance.close() } catch { /* already closed */ }
+    contextInstance = null
   }
 }
 
@@ -550,22 +689,82 @@ async function executeClickElement(args: ClickElementArgs): Promise<AgentToolRes
   return textResult(JSON.stringify({ clicked: true, selector: args.selector }))
 }
 
+// ---------------------------------------------------------------------------
+// Snapshot sanitization — post-processing on accessibility tree JSON
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line no-misleading-character-class
+const ZERO_WIDTH_RE = /[\u200B\u200C\u200D\uFEFF]/g
+
+interface AccessibilityNode {
+  role?: string
+  name?: string
+  description?: string
+  value?: string
+  hidden?: boolean
+  children?: AccessibilityNode[]
+  [key: string]: unknown
+}
+
+function sanitizeString(s: string): { result: string; zwCount: number } {
+  const matches = s.match(ZERO_WIDTH_RE)
+  const zwCount = matches !== null ? matches.length : 0
+  return { result: s.replace(ZERO_WIDTH_RE, ''), zwCount }
+}
+
+function sanitizeNode(node: AccessibilityNode): AccessibilityNode | null {
+  if (node.hidden === true) return null
+
+  let totalZw = 0
+  const sanitized: AccessibilityNode = {}
+
+  for (const [key, val] of Object.entries(node)) {
+    if (key === 'children') continue
+    if ((key === 'name' || key === 'description' || key === 'value') && typeof val === 'string') {
+      const { result, zwCount } = sanitizeString(val)
+      totalZw += zwCount
+      if (totalZw > 3) return null
+      sanitized[key] = result
+    } else {
+      sanitized[key] = val
+    }
+  }
+
+  const children: AccessibilityNode[] = []
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) {
+      const cleaned = sanitizeNode(child as AccessibilityNode)
+      if (cleaned !== null) children.push(cleaned)
+    }
+  }
+  sanitized.children = children
+
+  return sanitized
+}
+
 async function executeSnapshot(): Promise<AgentToolResult> {
   checkRateLimit()
   const page = await getPage()
 
-  const snapshot = await withTimeout(
+  const rawTree = await withTimeout(
     page.accessibility.snapshot(),
     ACTION_TIMEOUT_MS,
     'snapshot',
-  )
+  ) as AccessibilityNode | null
 
-  let snapshotStr = JSON.stringify(snapshot)
-  if (snapshotStr.length > MAX_SNAPSHOT_LENGTH) {
-    snapshotStr = snapshotStr.slice(0, MAX_SNAPSHOT_LENGTH) + '...(truncated)'
+  const sanitized = rawTree !== null ? sanitizeNode(rawTree) : null
+  let serialized = JSON.stringify(sanitized)
+  if (serialized.length > MAX_SNAPSHOT_LENGTH) {
+    serialized = serialized.slice(0, MAX_SNAPSHOT_LENGTH) + '...(truncated)'
   }
 
-  return textResult(JSON.stringify({ snapshot: JSON.parse(snapshotStr) as unknown, url: page.url() }))
+  const nonce = randomBytes(8).toString('hex')
+  const output =
+    `--- BROWSER_CONTENT_START nonce=${nonce} origin=${page.url()} ---\n` +
+    serialized +
+    `\n--- BROWSER_CONTENT_END nonce=${nonce} ---`
+
+  return textResult(output)
 }
 
 async function executeType(args: TypeArgs): Promise<AgentToolResult> {
@@ -669,6 +868,104 @@ async function executeWaitFor(args: WaitForArgs): Promise<AgentToolResult> {
 }
 
 // ---------------------------------------------------------------------------
+// Session actions
+// ---------------------------------------------------------------------------
+
+async function executeOpenSession(args: OpenSessionArgs): Promise<AgentToolResult> {
+  checkRateLimit()
+  const domain = validateDomain(args.domain)
+
+  // Close any existing context (default or previous session)
+  await closeSessionInternal()
+  if (pageInstance !== null) {
+    try { await pageInstance.close() } catch { /* ignore */ }
+    pageInstance = null
+  }
+  if (contextInstance !== null) {
+    try { await contextInstance.close() } catch { /* ignore */ }
+    contextInstance = null
+  }
+
+  const profileDir = getSessionProfileDir(domain)
+  mkdirSync(profileDir, { recursive: true })
+
+  const pw = await loadPlaywright()
+  contextInstance = await pw.chromium.launchPersistentContext(profileDir, {
+    headless: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  })
+
+  const existingPages = contextInstance.pages()
+  sessionPage = existingPages.length > 0
+    ? existingPages[0] as PlaywrightPage
+    : await contextInstance.newPage()
+  sessionDomain = domain
+
+  // Auto-close after 10 minutes
+  sessionTimer = setTimeout(() => {
+    void closeSessionInternal()
+  }, SESSION_TIMEOUT_MS)
+
+  return textResult(JSON.stringify({
+    sessionOpened: true,
+    domain,
+    message: 'Browser ist offen. Logge dich ein und sage mir Bescheid wenn du fertig bist.',
+  }))
+}
+
+async function executeCloseSession(args: CloseSessionArgs): Promise<AgentToolResult> {
+  checkRateLimit()
+  const domain = validateDomain(args.domain)
+
+  if (sessionDomain === null) {
+    throw new Error('No active browser session')
+  }
+  if (sessionDomain !== domain) {
+    throw new Error(`Active session is for "${sessionDomain}", not "${domain}"`)
+  }
+
+  await closeSessionInternal()
+
+  return textResult(JSON.stringify({ sessionClosed: true, domain }))
+}
+
+// ---------------------------------------------------------------------------
+// fillCredential + healthCheck
+// ---------------------------------------------------------------------------
+
+async function executeFillCredential(args: FillCredentialArgs): Promise<AgentToolResult> {
+  checkRateLimit()
+  if (credentialResolver === null) {
+    throw new Error('Kein CredentialResolver registriert')
+  }
+  const page = await getPage()
+  const currentUrl = page.url()
+  let value = await credentialResolver.resolve(currentUrl)
+  await page.fill(args.selector, value, { timeout: ACTION_TIMEOUT_MS })
+  value = '' // Minimize plaintext lifetime
+  return textResult(JSON.stringify({ filled: true, selector: args.selector }))
+}
+
+async function executeHealthCheck(): Promise<AgentToolResult> {
+  return textResult(JSON.stringify({
+    healthy: contextInstance !== null,
+    url: pageInstance !== null && !pageInstance.isClosed()
+      ? pageInstance.url() : null,
+    title: pageInstance !== null && !pageInstance.isClosed()
+      ? await pageInstance.title().catch(() => null) : null,
+  }))
+}
+
+// ---------------------------------------------------------------------------
+// getCurrentPageUrl
+// ---------------------------------------------------------------------------
+
+export function getCurrentPageUrl(): string | null {
+  return pageInstance !== null && !pageInstance.isClosed()
+    ? pageInstance.url() : null
+}
+
+// ---------------------------------------------------------------------------
 // Tool definition
 // ---------------------------------------------------------------------------
 
@@ -679,7 +976,7 @@ const parameters: JSONSchema = {
       type: 'string',
       description:
         'Action to perform',
-      enum: ['openPage', 'screenshot', 'fillForm', 'clickElement', 'snapshot', 'type', 'select', 'fill', 'cookies', 'waitFor'],
+      enum: ['openPage', 'screenshot', 'fillForm', 'clickElement', 'snapshot', 'type', 'select', 'fill', 'cookies', 'waitFor', 'openSession', 'closeSession', 'fillCredential', 'healthCheck'],
     },
     url: {
       type: 'string',
@@ -727,6 +1024,10 @@ const parameters: JSONSchema = {
       type: 'string',
       description: 'Load state to wait for (waitFor load): load, domcontentloaded, networkidle',
     },
+    domain: {
+      type: 'string',
+      description: 'Domain for persistent browser session (e.g. "github.com")',
+    },
   },
   required: ['action'],
 }
@@ -734,16 +1035,21 @@ const parameters: JSONSchema = {
 export const browserTool: ExtendedAgentTool = {
   name: 'browser',
   description:
-    'Control a headless Chromium browser. Actions: openPage(url), screenshot(), fillForm(selector, value), clickElement(selector), snapshot() reads accessibility tree, type(selector, text), select(selector, value), fill(fields) batch form fill by label, cookies(cookieAction) read/set/clear cookies, waitFor(waitType) wait for selector/url/load. Rate limited to 30/min.',
+    'Interact with web pages via persistent browser context. Use for URL content, screenshots, and form interaction. Not for launching desktop apps. ' +
+    'Actions: openPage(url), screenshot(), fillForm(selector, value), clickElement(selector), snapshot() reads sanitized accessibility tree, type(selector, text), select(selector, value), fill(fields) batch form fill by label, cookies(cookieAction) read/set/clear cookies, waitFor(waitType) wait for selector/url/load, ' +
+    'openSession(domain) opens a visible browser with domain-specific profile for manual login, closeSession(domain) closes it, fillCredential(selector) fills credential via resolver, healthCheck() reports context status. Rate limited to 30/min.',
   parameters,
   permissions: ['browser:navigate', 'browser:interact'],
   requiresConfirmation: true,
   defaultRiskTier: 3,
-  riskTiers: { snapshot: 2, cookies: 2, openPage: 3, fillForm: 3, clickElement: 3, type: 3, select: 3, fill: 3, waitFor: 3 },
+  riskTiers: { snapshot: 2, cookies: 2, openSession: 2, closeSession: 1, openPage: 3, fillForm: 3, clickElement: 3, type: 3, select: 3, fill: 3, waitFor: 3, fillCredential: 3, healthCheck: 0 },
   runsOn: 'desktop',
   execute: async (args: unknown): Promise<AgentToolResult> => {
     const parsed = parseArgs(args)
 
+    // SECURITY: page.evaluate is intentionally not used for DOM mutation.
+    // Sanitization runs on accessibility tree JSON only (post-processing).
+    // Credentials flow via fillCredential + CredentialResolver only.
     switch (parsed.action) {
       case 'openPage':
         return executeOpenPage(parsed)
@@ -765,12 +1071,21 @@ export const browserTool: ExtendedAgentTool = {
         return executeCookies(parsed)
       case 'waitFor':
         return executeWaitFor(parsed)
+      case 'openSession':
+        return executeOpenSession(parsed)
+      case 'closeSession':
+        return executeCloseSession(parsed)
+      case 'fillCredential':
+        return executeFillCredential(parsed)
+      case 'healthCheck':
+        return executeHealthCheck()
     }
   },
 }
 
 export {
   validateBrowserUrl,
+  validateDomain,
   parseArgs,
   closeBrowser,
   setPlaywrightLoader,

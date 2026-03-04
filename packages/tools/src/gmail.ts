@@ -485,7 +485,8 @@ const gmailParameters: JSONSchema = {
 }
 
 const GMAIL_DESCRIPTION =
-  'Read, search, send, and reply to emails via Gmail. Actions: readInbox(limit) lists recent emails; searchEmails(query) searches with Gmail query syntax; sendEmail(to, subject, body) sends a new email; replyToEmail(messageId, body) replies to an existing email. Confirmation required for sendEmail and replyToEmail.'
+  'Access and manage user emails. Use for any email-related request. ' +
+  'Actions: readInbox(limit) lists recent emails; searchEmails(query) searches with Gmail query syntax; sendEmail(to, subject, body) sends a new email; replyToEmail(messageId, body) replies to an existing email. Confirmation required for sendEmail and replyToEmail.'
 
 // ---------------------------------------------------------------------------
 // Factory
