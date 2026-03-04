@@ -279,7 +279,7 @@ function determineResponseMode(message: string): ResponseMode {
 async function classify(
   message: string,
   userId: string,
-  pool: DbPool,
+  pool?: DbPool,
 ): Promise<ClassificationResult> {
   // 0. Defense-in-depth: truncate oversized messages
   const safeMessage =
@@ -299,8 +299,8 @@ async function classify(
     }
   }
 
-  // 2. Load active agents
-  const agents = await getActiveAgents(pool, userId)
+  // 2. Load active agents (skip when no DB pool — e.g. SQLite mode)
+  const agents = pool ? await getActiveAgents(pool, userId) : []
 
   // 3. Match agents
   const matchedAgentIds = matchAgents(safeMessage, agents)
@@ -327,8 +327,10 @@ async function classify(
     responseMode = 'action'
   }
 
-  // 9. Pattern tracking — fire-and-forget (use original message for tracking)
-  trackRequest(pool, userId, category, safeMessage).catch(() => {})
+  // 9. Pattern tracking — fire-and-forget (skip without pool)
+  if (pool) {
+    trackRequest(pool, userId, category, safeMessage).catch(() => {})
+  }
 
   return {
     complexity,

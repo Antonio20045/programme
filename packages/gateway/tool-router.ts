@@ -15,6 +15,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { WebSocketServer, WebSocket } from 'ws'
+import { transformError } from './src/persona/error-transformer.js'
 
 // ─── Types ───────────────────────────────────────────────────
 // Inlined from @ki-assistent/tools to avoid cross-package dependency.
@@ -452,7 +453,7 @@ export class DesktopAgentBridge {
           pending.resolve({
             content: [{
               type: 'text',
-              text: JSON.stringify({ error: true, reason: msg.error }),
+              text: JSON.stringify({ error: true, reason: transformError(msg.error) }),
             }],
           })
         }
@@ -479,7 +480,7 @@ export class DesktopAgentBridge {
       pending.resolve({
         content: [{
           type: 'text',
-          text: JSON.stringify({ error: true, reason: 'Desktop Agent disconnected' }),
+          text: JSON.stringify({ error: true, reason: transformError('Desktop Agent disconnected') }),
         }],
       })
     }

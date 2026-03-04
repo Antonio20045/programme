@@ -68,7 +68,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }): JSX.E
   const [publishableKey, setPublishableKey] = useState<string | null | undefined>(undefined)
 
   useEffect(() => {
-    window.api.getClerkPublishableKey().then(setPublishableKey)
+    window.api.getClerkPublishableKey()
+      .then(setPublishableKey)
+      .catch((err: unknown) => {
+        console.error('[AuthProvider] getClerkPublishableKey failed:', err)
+        setPublishableKey(null)
+      })
   }, [])
 
   // Still loading the key

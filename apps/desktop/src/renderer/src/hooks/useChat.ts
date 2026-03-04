@@ -26,10 +26,13 @@ interface OAuthTokens {
   readonly expiresAt: number
 }
 
+type ResponseMode = 'action' | 'answer' | 'conversation'
+
 interface UseChatReturn {
   readonly messages: readonly ChatMessage[]
   readonly isLoading: boolean
   readonly error: string | null
+  readonly responseMode: ResponseMode | null
   sendMessage: (text: string, files?: File[]) => void
   confirmTool: (
     toolCallId: string,
@@ -202,6 +205,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [responseMode, setResponseMode] = useState<ResponseMode | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
   const assistantBufferRef = useRef('')
   const assistantIdRef = useRef('')
@@ -372,6 +376,25 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
             )
           })
 
+          es.addEventListener('response_mode', (e: MessageEvent<string>) => {
+            try {
+              const parsed: unknown = JSON.parse(e.data)
+              if (
+                typeof parsed === 'object' &&
+                parsed !== null &&
+                'mode' in parsed &&
+                typeof (parsed as { mode: string }).mode === 'string'
+              ) {
+                const mode = (parsed as { mode: string }).mode
+                if (mode === 'action' || mode === 'answer' || mode === 'conversation') {
+                  setResponseMode(mode)
+                }
+              }
+            } catch {
+              // invalid payload — ignore
+            }
+          })
+
           es.addEventListener('tool_start', (e: MessageEvent<string>) => {
             let toolName = e.data
             let params: Record<string, unknown> = {}
@@ -478,6 +501,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
             es.close()
             eventSourceRef.current = null
             setIsLoading(false)
+            setResponseMode(null)
           })
 
           es.addEventListener('token_refreshed', (e: MessageEvent<string>) => {
@@ -493,6 +517,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
             es.close()
             eventSourceRef.current = null
             setIsLoading(false)
+            setResponseMode(null)
             const eventSource = e.target as EventSource | null
             if (eventSource?.readyState === EventSource.CLOSED) {
               setError('Verbindung zum Gateway verloren')
@@ -577,7 +602,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
     prevLoadingRef.current = isLoading
   }, [isLoading, sendMessage])
 
-  return { messages, isLoading, error, sendMessage, confirmTool }
+  return { messages, isLoading, error, responseMode, sendMessage, confirmTool }
 }
 
-export type { ChatMessage, UseChatReturn, UseChatOptions }
+export type { ChatMessage, ResponseMode, UseChatReturn, UseChatOptions }

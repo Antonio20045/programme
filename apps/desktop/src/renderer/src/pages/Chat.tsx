@@ -39,6 +39,19 @@ function TypingIndicator(): JSX.Element {
   )
 }
 
+function ActionIndicator(): JSX.Element {
+  return (
+    <div className="flex items-center gap-2 px-1 py-2">
+      <motion.div
+        className="h-2 w-2 rounded-full bg-accent"
+        animate={{ scale: [1, 1.3, 1] }}
+        transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <span className="text-sm text-muted-foreground">Arbeitet...</span>
+    </div>
+  )
+}
+
 const MessageBubble = memo(function MessageBubble({
   message,
   isStreaming,
@@ -119,7 +132,7 @@ const MessageBubble = memo(function MessageBubble({
 })
 
 export default function Chat({ activeSessionId, onSessionCreated }: ChatProps): JSX.Element {
-  const { messages, isLoading, error, sendMessage, confirmTool } = useChat({ activeSessionId, onSessionCreated })
+  const { messages, isLoading, error, responseMode, sendMessage, confirmTool } = useChat({ activeSessionId, onSessionCreated })
   const gatewayStatus = useGatewayStatus()
   const { mode } = useGatewayConfig()
   const agentStatus = useAgentStatus()
@@ -175,7 +188,7 @@ export default function Chat({ activeSessionId, onSessionCreated }: ChatProps): 
               ))}
             </AnimatePresence>
             {isLoading && (messages.length === 0 || messages[messages.length - 1]?.role === 'user') && (
-              <TypingIndicator />
+              responseMode === 'action' ? <ActionIndicator /> : <TypingIndicator />
             )}
             <div ref={messagesEndRef} />
           </div>
