@@ -64,6 +64,7 @@ import { sanitizeOutputText } from "../src/persona/output-sanitizer.js";
 import { sanitizePromptText } from "../src/persona/prompt-sanitizer.js";
 import { buildToolDescriptionHints } from "../src/persona/tool-descriptions.js";
 import { applyToolPersonas } from "../src/persona/tool-persona-overlay.js";
+import { routeTools } from "../src/semantic-router.js";
 import { createUserTools } from "../src/tool-factory.js";
 import { withToolRouting } from "../src/tool-routing-context.js";
 import { handleClerkWebhook } from "../src/webhooks/clerk.js";
@@ -1151,6 +1152,14 @@ export class InAppChannelAdapter {
             : await createUserTools(userId, getPool(), llmClient);
           const userTools = applyToolPersonas(rawUserTools);
 
+          // ── Semantic Router: filter to Top-K relevant tools ──
+          let routedTools: ExtendedAgentTool[];
+          try {
+            routedTools = await routeTools(text, userTools);
+          } catch {
+            routedTools = [...userTools];
+          }
+
           const disabledTools = getDisabledTools();
 
           // ── Classifier: Agent-Routing + Model Tier + Response Mode ──
@@ -1213,7 +1222,7 @@ export class InAppChannelAdapter {
           ].join("\n");
 
           // ── Tool-Beschreibungs-Hints nur fuer verfuegbare Tools ──
-          const registeredToolNames = userTools.map((t) => t.name);
+          const registeredToolNames = routedTools.map((t) => t.name);
           const toolNameSet = new Set(registeredToolNames);
           const toolHints = buildToolDescriptionHints(registeredToolNames);
 
@@ -1353,7 +1362,7 @@ export class InAppChannelAdapter {
                 : agentResultPrompt;
 
               // Tools WITHOUT delegate (LLM should only synthesize)
-              const synthesisTools = userTools.filter((t) => t.name !== "delegate");
+              const synthesisTools = routedTools.filter((t) => t.name !== "delegate");
 
               await withDisabledTools(disabledTools, () =>
                 withToolRouting({ sessionId, userId }, () =>
@@ -1382,7 +1391,7 @@ export class InAppChannelAdapter {
           // FLOW A: Normal sequential flow (existing code)
           await withDisabledTools(disabledTools, () =>
             withToolRouting({ sessionId, userId }, () =>
-              withUserTools(userTools, () =>
+              withUserTools(routedTools, () =>
                 this.messageHandler!({
                   sessionId,
                   text,

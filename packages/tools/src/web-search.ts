@@ -436,7 +436,8 @@ const parameters: JSONSchema = {
 export const webSearchTool: ExtendedAgentTool = {
   name: 'web-search',
   description:
-    'Search the web and fetch page content. Actions: search(query) returns titles, URLs, and snippets; fetchPage(url) returns page text. Only HTTPS URLs allowed.',
+    'Search the internet for current information and fetch web page text. Use for knowledge questions and research. ' +
+    'Actions: search(query) returns titles, URLs, and snippets; fetchPage(url) returns page text. Only HTTPS URLs allowed.',
   parameters,
   permissions: ['net:http'],
   requiresConfirmation: true,

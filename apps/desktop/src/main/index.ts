@@ -12,6 +12,9 @@ import { DesktopAgent } from './agent'
 import { readMemoryEntries, deleteMemoryEntry, readActivityLog } from './memory-reader'
 import { OAuthServer, exchangeAndStoreTokens, revokeTokens, getIntegrationStatus, readEncryptedToken, writeEncryptedToken } from './oauth-server'
 import type { TokenData } from './oauth-server'
+import CredentialVault from './credential-vault'
+import CredentialBroker from './credential-broker'
+import { setCredentialResolver } from '@ki-assistent/tools/browser'
 import { TrayManager } from './tray'
 import { initAutoUpdater, stopAutoUpdater } from './updater'
 import { encrypt, encodeMessage, fromBase64, toBase64, CAPABILITIES } from '@ki-assistent/shared'
@@ -31,6 +34,8 @@ let notificationStream: http.ClientRequest | null = null
 let notificationReconnectTimer: ReturnType<typeof setTimeout> | null = null
 let notificationReconnectDelay = 5_000
 let relayWs: WebSocket | null = null
+let credentialVault: CredentialVault | null = null
+let credentialBroker: CredentialBroker | null = null
 
 // ── SSE Stream Tokens (short-lived, single-use) ──────────────
 const SSE_TOKEN_TTL_MS = 60_000 // 60 seconds
@@ -2218,11 +2223,77 @@ ipcMain.handle('dialog:open-file', async () => {
   return files.length > 0 ? files : null
 })
 
+// ── Credential Vault IPC ──────────────────────────────────────
+
+ipcMain.handle('credential:list', () => {
+  return credentialVault?.listAll() ?? []
+})
+
+ipcMain.handle('credential:store', (_event, payload: unknown) => {
+  if (!credentialVault) return { success: false, error: 'Vault nicht initialisiert' }
+  if (typeof payload !== 'object' || payload === null) return { success: false, error: 'Ungültige Daten' }
+
+  const data = payload as Record<string, unknown>
+  if (typeof data['domain'] !== 'string' || data['domain'].trim() === '') return { success: false, error: 'Domain fehlt' }
+  if (typeof data['username'] !== 'string' || data['username'].trim() === '') return { success: false, error: 'Username fehlt' }
+  if (typeof data['password'] !== 'string') return { success: false, error: 'Passwort fehlt' }
+
+  // Length limits — prevent memory abuse via oversized inputs
+  if ((data['domain'] as string).length > 253) return { success: false, error: 'Domain zu lang (max 253)' }
+  if ((data['username'] as string).length > 256) return { success: false, error: 'Username zu lang (max 256)' }
+  if ((data['password'] as string).length > 10_000) return { success: false, error: 'Passwort zu lang (max 10000)' }
+  if (typeof data['label'] === 'string' && data['label'].length > 500) return { success: false, error: 'Label zu lang (max 500)' }
+
+  if (!safeStorage.isEncryptionAvailable()) {
+    return { success: false, error: 'Verschlüsselung nicht verfügbar' }
+  }
+
+  const id = credentialVault.store(
+    data['domain'] as string,
+    data['username'] as string,
+    data['password'] as string,
+    typeof data['label'] === 'string' ? data['label'] : undefined,
+  )
+  return { success: true, id }
+})
+
+ipcMain.handle('credential:generate-password', (_event, payload: unknown) => {
+  if (!credentialVault) return { password: '', error: 'Vault nicht initialisiert' }
+  const length = typeof payload === 'object' && payload !== null && typeof (payload as Record<string, unknown>)['length'] === 'number'
+    ? (payload as Record<string, unknown>)['length'] as number
+    : undefined
+  try {
+    return { password: credentialVault.generateSecurePassword(length) }
+  } catch {
+    return { password: '', error: 'Passwort-Generierung fehlgeschlagen' }
+  }
+})
+
+ipcMain.handle('credential:delete', (_event, payload: unknown) => {
+  if (!credentialVault) return { success: false, error: 'Vault nicht initialisiert' }
+  if (typeof payload !== 'object' || payload === null) return { success: false, error: 'Ungültige Daten' }
+
+  const data = payload as Record<string, unknown>
+  if (typeof data['id'] !== 'string') return { success: false, error: 'ID fehlt' }
+
+  credentialVault.delete(data['id'] as string)
+  return { success: true }
+})
+
 app.whenReady().then(() => {
   createWindow()
   setupTray()
 
   setupGateway(!checkFirstRun())
+
+  credentialVault = new CredentialVault()
+  credentialBroker = new CredentialBroker(credentialVault, mainWindow)
+  setCredentialResolver({
+    resolve: async (currentUrl: string): Promise<string> => {
+      if (!credentialBroker) throw new Error('CredentialBroker nicht initialisiert')
+      return credentialBroker.resolveForUrl(currentUrl)
+    },
+  })
 
   if (app.isPackaged) {
     initAutoUpdater(mainWindow!)
@@ -2240,6 +2311,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', (e) => {
   stopAutoUpdater()
+  credentialBroker?.destroy()
   disconnectNotificationStream()
   if (relayWs) {
     relayWs.close()

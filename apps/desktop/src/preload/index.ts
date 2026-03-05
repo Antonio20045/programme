@@ -201,4 +201,20 @@ contextBridge.exposeInMainWorld('api', {
   capabilitiesToggle: (data: { id: string; enabled: boolean }): Promise<{ success: boolean; error?: string }> => {
     return ipcRenderer.invoke('capabilities:toggle', data)
   },
+
+  credentialList: (): Promise<Array<{ id: string; domain: string; username: string; label: string | null }>> => {
+    return ipcRenderer.invoke('credential:list')
+  },
+
+  credentialStore: (data: { domain: string; username: string; password: string; label?: string }): Promise<{ success: boolean; id?: string; error?: string }> => {
+    return ipcRenderer.invoke('credential:store', data)
+  },
+
+  credentialGeneratePassword: (data?: { length?: number }): Promise<{ password: string }> => {
+    return ipcRenderer.invoke('credential:generate-password', data)
+  },
+
+  credentialDelete: (data: { id: string }): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('credential:delete', data)
+  },
 })

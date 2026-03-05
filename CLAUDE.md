@@ -75,6 +75,6 @@ Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
 
 ## Aktueller Stand
 
-Phase: 25 — Provider-neutrale E-Mail-Erkennung + Response-Mode Frontend abgeschlossen
+Phase: 26 — Credential Vault + Broker + IPC-Verdrahtung abgeschlossen
 Nächster Schritt: E2E-Tests (Sub-Agent Full-Flow: Factory → Cron → Execution → Retention → Lifecycle), Gateway-Integration (agent-cron init, delegate routing)
-Letzter Commit: feat: provider-neutral email detection + response-mode frontend integration
+Letzter Commit: feat: credential vault + broker with safeStorage encryption and IPC wiring

@@ -395,7 +395,8 @@ const parameters: JSONSchema = {
 }
 
 const CALENDAR_DESCRIPTION =
-  'Manage Google Calendar events. Actions: listEvents(timeMin, timeMax, calendarId?), createEvent(title, start, end, description?, attendees?), updateEvent(eventId, updates), deleteEvent(eventId).'
+  'Access and manage user calendar events. Use for any calendar/schedule-related request. ' +
+  'Actions: listEvents(timeMin, timeMax, calendarId?), createEvent(title, start, end, description?, attendees?), updateEvent(eventId, updates), deleteEvent(eventId).'
 
 // ---------------------------------------------------------------------------
 // Factory
