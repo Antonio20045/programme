@@ -482,17 +482,9 @@ export class DesktopAgent {
       return
     }
 
-    // Security: Tools that require confirmation must not auto-execute in server mode
-    // without user approval. Send a confirmation request back to the server.
-    if (tool.requiresConfirmation) {
-      this.ws?.send(JSON.stringify({
-        type: 'tool_confirmation_required',
-        requestId: request.requestId,
-        toolName: request.toolName,
-        params: request.params,
-      }))
-      return
-    }
+    // Confirmation is handled centrally by the Gateway's ConfirmationManager
+    // BEFORE routing the tool_request to the Desktop Agent. The agent only
+    // receives requests that the user has already confirmed.
 
     try {
       const result = await tool.execute(request.params)

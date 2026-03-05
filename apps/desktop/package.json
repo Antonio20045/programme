@@ -26,6 +26,9 @@
     "qrcode": "^1.5.0",
     "tailwind-merge": "^3.5.0"
   },
+  "optionalDependencies": {
+    "playwright": "^1.52.0"
+  },
   "devDependencies": {
     "@clerk/clerk-react": "^5.60.2",
     "@tailwindcss/vite": "^4.0.0",
