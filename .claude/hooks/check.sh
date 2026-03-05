@@ -58,4 +58,17 @@ if [ -z "$FILE" ]; then
   fi
 fi
 
+# Contract check (nur im Stop-Hook)
+if [ -z "$FILE" ]; then
+  for CONTRACT in tasks/contracts/*.contract.md; do
+    [ -f "$CONTRACT" ] || continue
+    UNCHECKED=$(grep -c '^\- \[ \]' "$CONTRACT" 2>/dev/null || echo "0")
+    if [ "$UNCHECKED" -gt 0 ]; then
+      echo "Contract nicht erfüllt: $(basename "$CONTRACT") — $UNCHECKED offene Kriterien" >&2
+      echo "Erfülle alle Kriterien oder lösche den Contract (User: 'Contract abbrechen')." >&2
+      exit 2
+    fi
+  done
+fi
+
 exit 0
