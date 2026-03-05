@@ -28,7 +28,12 @@ function AppContent(): JSX.Element {
   const reducedMotion = useReducedMotion()
 
   useEffect(() => {
-    window.api.getSetupRequired().then(setSetupRequired)
+    window.api.getSetupRequired()
+      .then(setSetupRequired)
+      .catch((err: unknown) => {
+        console.error('[App] getSetupRequired failed:', err)
+        setSetupRequired(true)
+      })
   }, [])
 
   const {

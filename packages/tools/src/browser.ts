@@ -406,10 +406,16 @@ async function loadPlaywright(): Promise<PlaywrightModule> {
   // Variable-based path prevents TS2307 — playwright is a runtime dependency
   // installed on the desktop, not a compile-time package dependency.
   const moduleName = 'playwright'
-  const mod: PlaywrightModule = await (
-    import(/* webpackIgnore: true */ moduleName) as Promise<PlaywrightModule>
-  )
-  return mod
+  try {
+    const mod: PlaywrightModule = await (
+      import(/* webpackIgnore: true */ moduleName) as Promise<PlaywrightModule>
+    )
+    return mod
+  } catch {
+    throw new Error(
+      'Browser-Automatisierung nicht verfuegbar. Das Paket "playwright" ist nicht installiert.',
+    )
+  }
 }
 
 async function getBrowser(): Promise<PlaywrightBrowser> {
