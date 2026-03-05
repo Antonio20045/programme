@@ -2,6 +2,12 @@
 
 Electron + React + TypeScript Monorepo. pnpm Workspaces.
 
+## Nach Compaction / Session-Start
+1. Lies tasks/todo.md — wo stehst du im aktuellen Task?
+2. Lies die relevanten Quelldateien NEU — verlass dich NICHT auf Compaction-Zusammenfassungen
+3. KEINE Annahmen über Dateiinhalte — lies die Dateien
+4. HANDOFF-*.md hat Priorität falls vorhanden
+
 ## Absolute Regeln
 
 1. FORK: NUR Gateway-Dateien ändern: config.ts, channels/in-app.ts, channels/in-app-sqlite.ts, tool-router.ts, extensions/in-app-channel/index.ts. Alles andere = OpenClaw-Core = VERBOTEN.
@@ -15,56 +21,8 @@ Electron + React + TypeScript Monorepo. pnpm Workspaces.
 
 pnpm typecheck | pnpm lint | pnpm test | pnpm build | pnpm dev | pnpm audit-deps
 
-## Workflow Orchestration
-
-### 1. Plan Mode Default
-- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
-- If something goes sideways, STOP and re-plan immediately - don't keep pushing
-- Use plan mode for verification steps, not just building
-- Write detailed specs upfront to reduce ambiguity
-
-### 2. Subagent Strategy
-- Use subagents liberally to keep main context window clean
-- Offload research, exploration, and parallel analysis to subagents
-- For complex problems, throw more compute at it via subagents
-- One tack per subagent for focused execution
-
-### 3. Self-Improvement Loop
-- After ANY correction from the user: update `tasks/lessons.md` with the pattern
-- Write rules for yourself that prevent the same mistake
-- Ruthlessly iterate on these lessons until mistake rate drops
-- Review lessons at session start for relevant project
-
-### 4. Verification Before Done
-- Never mark a task complete without proving it works
-- Diff behavior between main and your changes when relevant
-- Ask yourself: "Would a staff engineer approve this?"
-- Run tests, check logs, demonstrate correctness
-
-### 5. Demand Elegance (Balanced)
-- For non-trivial changes: pause and ask "is there a more elegant way?"
-- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
-- Skip this for simple, obvious fixes - don't over-engineer
-- Challenge your own work before presenting it
-
-### 6. Autonomous Bug Fixing
-- When given a bug report: just fix it. Don't ask for hand-holding
-- Point at logs, errors, failing tests - then resolve them
-- Zero context switching required from the user
-- Go fix failing CI tests without being told how
-
-## Task Management
-1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
-2. **Verify Plan**: Check in before starting implementation
-3. **Track Progress**: Mark items complete as you go
-4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review section to `tasks/todo.md`
-6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
-
-## Core Principles
-- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
-- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
-- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+## Workflow & Prinzipien
+Bei nicht-trivialen Tasks (3+ Schritte): Lies .claude/rules/workflow.md
 
 ## Referenzen (bei Bedarf lesen)
 
@@ -72,9 +30,10 @@ Architektur: docs/architecture.md | Struktur: docs/structure.md | OpenClaw: docs
 Security: .claude/rules/security.md | Fork: .claude/rules/fork-rules.md
 Tools: .claude/rules/tool-interface.md | Channel: .claude/rules/channel-adapter.md
 Message-Flow: .claude/rules/message-flow.md | DB: .claude/rules/database.md
+Workflow: .claude/rules/workflow.md | Contracts: .claude/rules/task-contracts.md
 
 ## Aktueller Stand
 
-Phase: 26 — Credential Vault + Broker + IPC-Verdrahtung abgeschlossen
+Phase: 27 — CLAUDE.md Refactoring + Workflow Rules + Task Contracts + Commands
 Nächster Schritt: E2E-Tests (Sub-Agent Full-Flow: Factory → Cron → Execution → Retention → Lifecycle), Gateway-Integration (agent-cron init, delegate routing)
-Letzter Commit: feat: credential vault + broker with safeStorage encryption and IPC wiring
+Letzter Commit: refactor: extract workflow rules, add task contracts and research/consolidate commands

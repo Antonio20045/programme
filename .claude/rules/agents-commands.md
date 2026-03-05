@@ -11,6 +11,8 @@ In `.claude/agents/`: code-reviewer, security-auditor (OWASP+Electron+LLM-aware)
 - `/phase-complete [nr] | [nächster-schritt]` — Phase abschließen mit allen Checks
 - `/learn` — Patterns aus aktueller Session extrahieren und in docs/learnings.md speichern
 - `/agentshield` — AgentShield Security-Scan auf Claude Code Konfiguration
+- `/research [fragestellung]` — Recherche in isoliertem Subagent, Ergebnis als Decision-Doc
+- `/consolidate` — Rules/Skills konsolidieren: Widersprüche, Redundanzen, Context-Budget prüfen
 
 ## Projektstruktur
 
@@ -36,5 +38,6 @@ packages/
   shared/           Types, Encryption (X25519+XSalsa20), Constants
 
 scripts/            sign-tools.ts, audit-deps.ts, generate-tray-icons.ts
-.claude/            agents/, commands/, hooks/, settings.json
+tasks/              todo.md, contracts/ (Task Contracts)
+.claude/            agents/, commands/, hooks/, rules/, settings.json
 ```
