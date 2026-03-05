@@ -619,7 +619,7 @@ function createConnectGoogleTool(): ExtendedAgentTool {
   return {
     name: "connect-google",
     description:
-      "Verbindet das Google-Konto des Users (Gmail + Kalender). Rufe dieses Tool auf wenn der User nach Emails oder Terminen fragt und Google noch nicht verbunden ist.",
+      "Connects the user's Google account (Gmail + Calendar). Call this tool when the user asks about emails or calendar events and Google is not connected yet.",
     parameters: { type: "object" as const, properties: {}, required: [] },
     permissions: ["oauth:google"],
     requiresConfirmation: true,
@@ -628,7 +628,7 @@ function createConnectGoogleTool(): ExtendedAgentTool {
       content: [
         {
           type: "text" as const,
-          text: "Google-Konto erfolgreich verbunden! Du kannst mich jetzt nach deinen Emails und Terminen fragen.",
+          text: "The user's Google account is now connected. Tell them their account is connected and that you can access their emails and calendar from the next message onwards. Do NOT call any other tools. End your response here.",
         },
       ],
     }),
@@ -699,6 +699,10 @@ export class InAppChannelAdapter {
   setConfirmationManager(manager: ConfirmationManager): void {
     this.confirmationManager = manager;
     manager.setEmitter(this.emitSSE.bind(this));
+  }
+
+  getAgentBridge(): DesktopAgentBridge | null {
+    return this.agentBridge;
   }
 
   setAgentBridge(bridge: DesktopAgentBridge): void {
@@ -1156,7 +1160,8 @@ export class InAppChannelAdapter {
           let routedTools: ExtendedAgentTool[];
           try {
             routedTools = await routeTools(text, userTools);
-          } catch {
+          } catch (err) {
+            console.error("[in-app] routeTools failed:", err);
             routedTools = [...userTools];
           }
 
@@ -1168,8 +1173,8 @@ export class InAppChannelAdapter {
             classification = isUsingSQLite()
               ? await classify(text, userId)
               : await classify(text, userId, getPool());
-          } catch {
-            // Classifier failure must not block the message
+          } catch (err) {
+            console.error("[in-app] classify failed:", err);
           }
 
           // ── Model Routing ──
@@ -1210,37 +1215,69 @@ export class InAppChannelAdapter {
           // ── Persona ──
           const personaPrompt = [
             "## Identity",
-            "You are a personal assistant. You help the user with everything in their life — you take things off their plate so they can focus on what matters.",
+            "You are a personal assistant. You help the user with everything in their life — calendar, email, research, files, reminders. Always reply in the language the user writes to you in.",
             "",
-            "## How you behave",
-            "- Act, don't explain. When you can do something, do it. Don't list options or give tutorials.",
-            "- Minimize user effort. Every interaction should require as few steps from the user as possible. If something needs to happen first (like connecting a service), handle it yourself.",
-            "- Be warm, natural, and concise. Match the user's language and tone.",
-            "- Never expose how you work internally. The user doesn't need to know about your infrastructure, tools, systems, or technical details. You're their assistant, not a tech product.",
-            "- Never say 'OpenClaw' or any internal system names in your responses. Never use technical terms like API, Token, OAuth, Plugin, Webhook, SDK, Endpoint, Runtime, Backend, Frontend, Config, Schema, Provider, or Middleware — use simple, human-friendly words instead.",
-            "- When something goes wrong, say what happened simply and what you're doing about it. No error codes, no technical jargon.",
+            "## Core Rules (priority top to bottom)",
+            "",
+            "### Rule 1: Honesty above all",
+            "- NEVER claim something worked before you received a success confirmation from the tool.",
+            "- If you cannot do something, say so immediately and clearly. Suggest an alternative if possible.",
+            "- Do not invent capabilities you do not have.",
+            '  WRONG: "I installed a Chrome extension."',
+            '  RIGHT: "I can\'t do that — but I can open the website for you."',
+            "",
+            "### Rule 2: One tool, one purpose",
+            "- Only call a tool when you know what it does and why it is the right choice now.",
+            "- Do NOT call multiple tools in sequence hoping something works.",
+            "- If you are unsure which tool fits: ask the user briefly instead of guessing.",
+            "",
+            "### Rule 3: No jargon",
+            "- NEVER use these terms: API, Token, OAuth, Plugin, Webhook, SDK, Endpoint, Runtime, Backend, Frontend, Config, Schema, Provider, Middleware, Session, Tool, Function Call, System Prompt, LLM, Gateway, OpenClaw.",
+            "- When you need to describe a technical process, use simple everyday language.",
+            '  WRONG: "The Gmail tools are not available in this session window."',
+            '  RIGHT: "I don\'t have access to your emails yet. Want me to connect your Google account?"',
+            '  WRONG: "The OAuth flow needs to be completed."',
+            '  RIGHT: "You still need to sign in with Google."',
+            "",
+            "### Rule 4: Brief and direct",
+            "- Reply as briefly as possible. Max 2-3 sentences for simple answers.",
+            "- No option lists, no bullet points, no tutorials — unless the user explicitly asks.",
+            "- When completing a task: only state what you did and what the result is.",
+            "",
+            "### Rule 5: Error handling",
+            "- If a tool fails: retry ONCE.",
+            "- If it fails again: tell the user briefly what went wrong (no technical details) and what they can do.",
+            "- Do NOT improvise with other tools when the chosen tool fails.",
+            "",
+            "## Tool Decision Tree",
+            "",
+            "Follow this logic BEFORE calling any tool:",
+            "",
+            "1. Did the user ask about emails, inbox, or calendar events?",
+            "   → Do you have `gmail` or `calendar` in your tool list? → YES: Call it directly.",
+            "   → Do you only have `connect-google`? → Ask the user which provider they use. Only call `connect-google` AFTER their answer. IMPORTANT: After connecting, email and calendar are only available FROM THE NEXT MESSAGE. Do NOT try to call gmail or calendar — they do not exist yet.",
+            "   → Do you have neither `gmail`/`calendar` nor `connect-google`? → Say honestly: \"I can't access emails/calendar right now.\"",
+            "",
+            '2. Did the user ask to open an app ("open Spotify")? → Use `app-launcher`.',
+            '3. Did the user ask for a website ("open google.com")? → Use `browser`.',
+            "4. Did the user ask a knowledge or research question? → Use `web-search`.",
+            "5. Did the user ask about files? → Use `filesystem`.",
+            "6. No tool fits? → Answer from your knowledge or say you cannot do it.",
+            "",
+            "## Forbidden Patterns",
+            "1. NEVER call a tool that is not in your current tool list.",
+            "2. NEVER claim something is done before the result is in.",
+            "3. NEVER pass technical error messages to the user.",
+            "4. NEVER blindly chain multiple tools without a plan.",
+            "5. NEVER invent capabilities that do not exist.",
+            '6. NEVER mention "OpenClaw" or other internal system names.',
           ].join("\n");
 
           // ── Tool-Beschreibungs-Hints nur fuer verfuegbare Tools ──
           const registeredToolNames = routedTools.map((t) => t.name);
-          const toolNameSet = new Set(registeredToolNames);
           const toolHints = buildToolDescriptionHints(registeredToolNames);
 
-          // Provider-neutrale Anweisung: erst fragen welches Konto
-          const hasEmailTool = toolNameSet.has("gmail") || toolNameSet.has("outlook");
-          const connectTools = registeredToolNames.filter((n) => n.startsWith("connect-"));
-          const supportedNames = connectTools.map((n) =>
-            n === "connect-google" ? "Gmail" : n.replace("connect-", ""),
-          );
-          const connectHint =
-            !hasEmailTool && connectTools.length > 0
-              ? "\n\nWenn der User nach E-Mails oder Terminen fragt und noch kein Konto verbunden ist: " +
-                "Frag welches E-Mail-Konto er nutzt (z.B. Gmail, Outlook, Yahoo). " +
-                `Du kannst aktuell nur ${supportedNames.join(", ")} verbinden. ` +
-                "Wenn er etwas anderes nutzt, sag ihm ehrlich was geht und was nicht."
-              : "";
-
-          const personaWithHints = `${personaPrompt}\n\n${toolHints}${connectHint}`;
+          const personaWithHints = `${personaPrompt}\n\n${toolHints}`;
 
           // ── Agent-Liste im System-Prompt (nur PostgreSQL) ──
           let extraSystemPrompt: string | undefined = personaWithHints;
@@ -1249,10 +1286,10 @@ export class InAppChannelAdapter {
             if (delegatableAgents.length > 0) {
               const lines = delegatableAgents.map((a) => {
                 const suffix =
-                  a.status === "dormant" ? " (pausiert, wird bei Bedarf reaktiviert)" : "";
+                  a.status === "dormant" ? " (paused, reactivated when needed)" : "";
                 return `- ${a.name} (ID: ${a.id}): ${a.description}${suffix}`;
               });
-              const agentListPrompt = `## Verfügbare Sub-Agents\n${lines.join("\n")}\nNutze das 'delegate'-Tool um Aufgaben an Sub-Agents zu delegieren.`;
+              const agentListPrompt = `## Available Sub-Agents\n${lines.join("\n")}\nUse the 'delegate' tool to assign tasks to sub-agents.`;
               extraSystemPrompt = extraSystemPrompt
                 ? `${extraSystemPrompt}\n\n${agentListPrompt}`
                 : agentListPrompt;
@@ -1263,10 +1300,10 @@ export class InAppChannelAdapter {
           if (classification?.responseMode === "action") {
             const actionInstruction = [
               "## Response Mode: Action",
-              "Der User hat dir eine Aufgabe gegeben. Starte sofort mit Tool-Calls.",
-              "Kein einleitender Text, keine Erklärung was du vorhast, keine Rückfragen",
-              "außer es fehlt eine kritische Information die du nicht selbst herausfinden kannst.",
-              "Wenn du fertig bist, fasse das Ergebnis in maximal 2 Sätzen zusammen.",
+              "The user gave you a task. Start with tool calls immediately.",
+              "No introductory text, no explanation of your plan, no follow-up questions",
+              "unless a critical piece of information is missing that you cannot figure out yourself.",
+              "When done, summarize the result in at most 2 sentences.",
             ].join(" ");
             extraSystemPrompt = extraSystemPrompt
               ? `${extraSystemPrompt}\n\n${actionInstruction}`
@@ -1274,8 +1311,8 @@ export class InAppChannelAdapter {
           } else if (classification?.responseMode === "answer") {
             const answerInstruction = [
               "## Response Mode: Answer",
-              "Der User will eine kurze, direkte Antwort. Maximal 2-3 Sätze.",
-              "Keine Optionslisten, keine Rückfragen, keine Erklärungen die nicht gefragt wurden.",
+              "The user wants a short, direct answer. Max 2-3 sentences.",
+              "No option lists, no follow-up questions, no explanations that were not asked for.",
             ].join(" ");
             extraSystemPrompt = extraSystemPrompt
               ? `${extraSystemPrompt}\n\n${answerInstruction}`
@@ -1415,7 +1452,8 @@ export class InAppChannelAdapter {
           }
 
           this.responseModeContexts.delete(sessionId);
-        } catch {
+        } catch (err) {
+          console.error("[in-app] handlePostMessage failed:", err);
           this.responseModeContexts.delete(sessionId);
           // Never forward internal error details to the client.
           this.sse.emit(sessionId, {
