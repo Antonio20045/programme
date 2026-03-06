@@ -8,7 +8,7 @@
  * No external dependencies. 60-second interval. UTC-based matching.
  */
 
-import { getAgent, getScheduledAgents, getAllUserIds } from './agent-registry'
+import { getAgent, getScheduledAgents, getAllUserIds, updateTrustMetrics, checkAndApplyPromotion, deriveTrustOutcome } from './agent-registry'
 import { executeAgent } from './agent-executor'
 import type { LlmClient, AgentResult } from './agent-executor'
 import { checkBudget, recordUsage } from './budget-controller'
@@ -17,6 +17,7 @@ import { cleanupExpired as cleanupExpiredProposals } from './pending-approvals'
 import { handlePostExecution } from './agent-lifecycle'
 import { runLifecycleCheck, runMemoryCleanup } from './agent-lifecycle'
 import { resetExpired as resetExpiredBudgets } from './budget-controller'
+import { trackAgentStarted, trackAgentCompleted, trackAgentFailed, trackBudgetExceeded, trackTrustChanged, cleanupOldEvents } from './agent-telemetry'
 import type { DbPool } from './types'
 
 // ---------------------------------------------------------------------------
@@ -245,10 +246,14 @@ async function executeAgentJob(agentId: string, userId: string): Promise<void> {
 
     // 2. Check budget
     const budget = await checkBudget(deps.pool, agentId, userId)
-    if (!budget.allowed) return
+    if (!budget.allowed) {
+      trackBudgetExceeded(deps.pool, userId, agentId)
+      return
+    }
 
     // 3. Execute agent — use cronTask if available, fallback to description
     const task = agent.cronTask ?? agent.description
+    trackAgentStarted(deps.pool, userId, agentId, task)
     const result = await executeAgent(
       { userId, agentId, task, timeout: agent.timeoutMs },
       deps.pool,
@@ -262,14 +267,35 @@ async function executeAgentJob(agentId: string, userId: string): Promise<void> {
       toolCalls: result.toolCalls,
     })
 
-    // 5. Store proposals if needs-approval
+    // 5. Trust metrics
+    const trustOutcome = deriveTrustOutcome(result.status)
+    if (trustOutcome) {
+      try {
+        await updateTrustMetrics(deps.pool, userId, agentId, trustOutcome)
+        const trustChange = await checkAndApplyPromotion(deps.pool, userId, agentId)
+        if (trustChange.result !== 'unchanged') {
+          trackTrustChanged(deps.pool, userId, agentId, trustChange.result, trustChange.from, trustChange.to)
+        }
+      } catch {
+        // Trust-metric errors must not crash the cron job
+      }
+    }
+
+    // 6. Telemetry
+    if (result.status === 'success' || result.status === 'partial') {
+      trackAgentCompleted(deps.pool, userId, agentId, result.toolCalls, result.usage.inputTokens, result.usage.outputTokens)
+    } else if (result.status === 'failure') {
+      trackAgentFailed(deps.pool, userId, agentId, result.reason ?? 'unknown')
+    }
+
+    // 7. Store proposals if needs-approval
     if (result.status === 'needs-approval' && result.pendingActions.length > 0) {
       for (const action of result.pendingActions) {
         storeProposal(action, agentId)
       }
     }
 
-    // 6. Handle retention (ephemeral delete, seasonal dormant)
+    // 8. Handle retention (ephemeral delete, seasonal dormant)
     const postResult = await handlePostExecution(
       deps.pool, userId, agentId, agent.name, agent.retention, result.status,
     )
@@ -277,7 +303,7 @@ async function executeAgentJob(agentId: string, userId: string): Promise<void> {
       unregisterAgentCronJob(agentId)
     }
 
-    // 7. Notify user
+    // 9. Notify user
     await deps.onResult(userId, agentId, result)
   } catch {
     // Silently fail — cron jobs must not crash the ticker
@@ -308,7 +334,10 @@ async function executeLifecycleJob(): Promise<void> {
     // 3. Budget cleanup
     await resetExpiredBudgets(deps.pool)
 
-    // 4. Pending approvals cleanup
+    // 4. Telemetry cleanup
+    await cleanupOldEvents(deps.pool, 90)
+
+    // 5. Pending approvals cleanup
     cleanupExpiredProposals()
   } catch {
     // Silently fail — lifecycle errors must not crash the ticker

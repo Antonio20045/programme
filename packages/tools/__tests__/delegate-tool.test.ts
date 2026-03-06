@@ -20,9 +20,15 @@ const sourceCode = readFileSync(SOURCE_PATH, 'utf-8')
 // ---------------------------------------------------------------------------
 
 const mockGetAgent = vi.fn()
+const mockUpdateTrustMetrics = vi.fn()
+const mockCheckAndApplyPromotion = vi.fn()
+const mockDeriveTrustOutcome = vi.fn()
 
 vi.mock('../src/agent-registry', () => ({
   getAgent: (...args: unknown[]) => mockGetAgent(...args),
+  updateTrustMetrics: (...args: unknown[]) => mockUpdateTrustMetrics(...args),
+  checkAndApplyPromotion: (...args: unknown[]) => mockCheckAndApplyPromotion(...args),
+  deriveTrustOutcome: (...args: unknown[]) => mockDeriveTrustOutcome(...args),
 }))
 
 // ---------------------------------------------------------------------------
@@ -48,6 +54,18 @@ vi.mock('../src/agent-lifecycle', () => ({
 }))
 
 // ---------------------------------------------------------------------------
+// Mocks — budget-controller
+// ---------------------------------------------------------------------------
+
+const mockCheckBudget = vi.fn()
+const mockRecordUsage = vi.fn()
+
+vi.mock('../src/budget-controller', () => ({
+  checkBudget: (...args: unknown[]) => mockCheckBudget(...args),
+  recordUsage: (...args: unknown[]) => mockRecordUsage(...args),
+}))
+
+// ---------------------------------------------------------------------------
 // Mocks — agent-cron
 // ---------------------------------------------------------------------------
 
@@ -55,6 +73,24 @@ const mockUnregisterAgentCronJob = vi.fn()
 
 vi.mock('../src/agent-cron', () => ({
   unregisterAgentCronJob: (...args: unknown[]) => mockUnregisterAgentCronJob(...args),
+}))
+
+// ---------------------------------------------------------------------------
+// Mocks — agent-telemetry
+// ---------------------------------------------------------------------------
+
+const mockTrackAgentStarted = vi.fn()
+const mockTrackAgentCompleted = vi.fn()
+const mockTrackAgentFailed = vi.fn()
+const mockTrackBudgetExceeded = vi.fn()
+const mockTrackTrustChanged = vi.fn()
+
+vi.mock('../src/agent-telemetry', () => ({
+  trackAgentStarted: (...args: unknown[]) => mockTrackAgentStarted(...args),
+  trackAgentCompleted: (...args: unknown[]) => mockTrackAgentCompleted(...args),
+  trackAgentFailed: (...args: unknown[]) => mockTrackAgentFailed(...args),
+  trackBudgetExceeded: (...args: unknown[]) => mockTrackBudgetExceeded(...args),
+  trackTrustChanged: (...args: unknown[]) => mockTrackTrustChanged(...args),
 }))
 
 // ---------------------------------------------------------------------------
@@ -136,6 +172,11 @@ beforeEach(() => {
   mockExecuteAgent.mockResolvedValue(makeSuccessResult())
   mockHandlePostExecution.mockResolvedValue({ action: 'none' })
   mockReactivateAgent.mockResolvedValue(undefined)
+  mockCheckBudget.mockResolvedValue({ allowed: true, today: { inputTokens: 0, outputTokens: 0, toolCalls: 0 }, limits: {}, remaining: {} })
+  mockRecordUsage.mockResolvedValue(undefined)
+  mockDeriveTrustOutcome.mockReturnValue({ success: true, overridden: false })
+  mockUpdateTrustMetrics.mockResolvedValue({ totalTasks: 1, successfulTasks: 1, userOverrides: 0, promotedAt: null })
+  mockCheckAndApplyPromotion.mockResolvedValue({ result: 'unchanged' })
 })
 
 // ---------------------------------------------------------------------------
@@ -503,5 +544,131 @@ describe('Delegation', () => {
     const data = parseResultContent(result)
 
     expect(data['retentionNote']).toBe('Einmal-Agent wurde entfernt.')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Budget integration tests
+// ---------------------------------------------------------------------------
+
+describe('Budget integration', () => {
+  it('returns failure when budget exceeded — does not call executeAgent', async () => {
+    mockCheckBudget.mockResolvedValue({ allowed: false })
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    const result = await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+    const data = parseResultContent(result)
+
+    expect(data['status']).toBe('failure')
+    expect(data['reason']).toBe('budget-exceeded')
+    expect(mockExecuteAgent).not.toHaveBeenCalled()
+    expect(mockTrackBudgetExceeded).toHaveBeenCalledWith(mockPool, USER_ID, AGENT_ID)
+  })
+
+  it('records usage with correct values after execution', async () => {
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+
+    expect(mockRecordUsage).toHaveBeenCalledWith(mockPool, AGENT_ID, USER_ID, {
+      inputTokens: 500,
+      outputTokens: 200,
+      toolCalls: 2,
+    })
+  })
+
+  it('recordUsage error does not break delegation', async () => {
+    mockRecordUsage.mockRejectedValue(new Error('DB write failed'))
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    const result = await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+    const data = parseResultContent(result)
+
+    expect(data['status']).toBe('success')
+  })
+
+  it('checkBudget error does not block delegation', async () => {
+    mockCheckBudget.mockRejectedValue(new Error('DB read failed'))
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    const result = await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+    const data = parseResultContent(result)
+
+    expect(data['status']).toBe('success')
+    expect(mockExecuteAgent).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Trust metrics integration tests
+// ---------------------------------------------------------------------------
+
+describe('Trust metrics integration', () => {
+  it('updates trust metrics on success', async () => {
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+
+    expect(mockDeriveTrustOutcome).toHaveBeenCalledWith('success')
+    expect(mockUpdateTrustMetrics).toHaveBeenCalledWith(
+      mockPool, USER_ID, AGENT_ID, { success: true, overridden: false },
+    )
+    expect(mockCheckAndApplyPromotion).toHaveBeenCalledWith(mockPool, USER_ID, AGENT_ID)
+  })
+
+  it('updates trust metrics on failure', async () => {
+    mockDeriveTrustOutcome.mockReturnValue({ success: false, overridden: false })
+    mockExecuteAgent.mockResolvedValue({
+      status: 'failure',
+      output: 'Error',
+      toolCalls: 0,
+      pendingActions: [],
+      usage: { inputTokens: 0, outputTokens: 0 },
+      reason: 'llm-error',
+    })
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+
+    expect(mockDeriveTrustOutcome).toHaveBeenCalledWith('failure')
+    expect(mockUpdateTrustMetrics).toHaveBeenCalledWith(
+      mockPool, USER_ID, AGENT_ID, { success: false, overridden: false },
+    )
+  })
+
+  it('skips trust metrics for needs-approval', async () => {
+    mockDeriveTrustOutcome.mockReturnValue(null)
+    mockExecuteAgent.mockResolvedValue({
+      status: 'needs-approval',
+      output: 'Needs approval',
+      toolCalls: 1,
+      pendingActions: [{ id: 'a1', toolName: 'gmail', params: {}, riskTier: 3 as const, description: 'send' }],
+      usage: { inputTokens: 100, outputTokens: 50 },
+      reason: 'tier 3',
+    })
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+
+    expect(mockDeriveTrustOutcome).toHaveBeenCalledWith('needs-approval')
+    expect(mockUpdateTrustMetrics).not.toHaveBeenCalled()
+  })
+
+  it('includes trustChange in success result when promoted', async () => {
+    mockCheckAndApplyPromotion.mockResolvedValue({ result: 'promoted', from: 'intern', to: 'junior' })
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    const result = await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+    const data = parseResultContent(result)
+
+    expect(data['trustChange']).toEqual({ result: 'promoted', from: 'intern', to: 'junior' })
+  })
+
+  it('trust metric errors do not break delegation', async () => {
+    mockUpdateTrustMetrics.mockRejectedValue(new Error('DB write failed'))
+
+    const tool = createDelegateTool(USER_ID, mockPool, mockLlmClient)
+    const result = await tool.execute({ agentId: AGENT_ID, task: 'do something' })
+    const data = parseResultContent(result)
+
+    expect(data['status']).toBe('success')
   })
 })

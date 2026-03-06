@@ -17,6 +17,18 @@ import os from 'node:os'
 import { WebSocketServer, WebSocket } from 'ws'
 import { transformError } from './src/persona/error-transformer.js'
 
+// ─── ExtendedAgentTool (inlined for plugin adapter) ──────────
+
+interface ExtendedAgentToolLike {
+  readonly name: string
+  readonly description: string
+  readonly parameters: JSONSchema
+  readonly permissions: readonly string[]
+  readonly requiresConfirmation: boolean
+  readonly runsOn: 'server' | 'desktop'
+  readonly execute: (args: Record<string, unknown>) => Promise<AgentToolResult>
+}
+
 // ─── Types ───────────────────────────────────────────────────
 // Inlined from @ki-assistent/tools to avoid cross-package dependency.
 
@@ -598,4 +610,52 @@ export function createConfirmableTools(
       },
     }
   })
+}
+
+// ─── Plugin Tool Adapter ─────────────────────────────────────
+
+/**
+ * Adapt ExtendedAgentTool[] to AnyAgentTool[] for OpenClaw plugin registration.
+ *
+ * Bridges our tool interface to pi-agent-core's AgentTool interface:
+ * - Adds `label` (required by AgentTool, derived from name)
+ * - Wraps `execute` to route desktop tools via bridge, server tools directly
+ * - Adds `details: undefined` to result (pi-agent-core expects it)
+ * - Casts JSON Schema parameters (structurally compatible with TypeBox TSchema)
+ */
+export function adaptToolsForPlugin(
+  tools: readonly ExtendedAgentToolLike[],
+  bridge?: DesktopAgentBridge | null,
+): Record<string, unknown>[] {
+  return tools.map((tool) => ({
+    name: tool.name,
+    label: tool.name,
+    description: tool.description,
+    // Our JSON Schema is structurally compatible with TypeBox TSchema
+    parameters: tool.parameters as unknown as Record<string, unknown>,
+
+    execute: async (
+      toolCallId: string,
+      params: Record<string, unknown>,
+    ): Promise<{ content: readonly (TextContent | ImageContent)[]; details: undefined }> => {
+      let result: AgentToolResult
+
+      if (tool.runsOn === 'desktop') {
+        if (bridge?.isConnected()) {
+          result = await bridge.routeToolCall(toolCallId, tool.name, params)
+        } else {
+          result = {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({ error: true, reason: 'Desktop Agent nicht verbunden' }),
+            }],
+          }
+        }
+      } else {
+        result = await tool.execute(params)
+      }
+
+      return { content: result.content, details: undefined }
+    },
+  }))
 }
