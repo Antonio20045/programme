@@ -6,8 +6,7 @@ exports.default = async function (context) {
   const projectDir = context.packager.projectDir
   const src = path.join(projectDir, 'gateway-bundle', 'node_modules')
   if (!fs.existsSync(src)) {
-    console.log('[after-pack] gateway-bundle/node_modules not found, skipping')
-    return
+    throw new Error('[after-pack] gateway-bundle/node_modules not found — run prepare-gateway.sh first')
   }
 
   // Determine Resources dir based on platform

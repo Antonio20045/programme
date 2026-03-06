@@ -8,6 +8,10 @@ DEPLOY_DIR="$REPO_ROOT/apps/desktop/gateway-bundle"
 echo "[prepare-gateway] Building gateway TypeScript..."
 if [ ! -f "$GATEWAY_DIR/dist/entry.js" ]; then
   pnpm -C packages/gateway exec tsdown --no-clean
+  # Runtime-relevant post-build steps (canvas/dts skipped — not needed for Electron)
+  OPENCLAW_A2UI_SKIP_MISSING=1 node --import tsx packages/gateway/scripts/copy-hook-metadata.ts
+  node --import tsx packages/gateway/scripts/write-build-info.ts
+  node --import tsx packages/gateway/scripts/write-cli-compat.ts
 else
   echo "[prepare-gateway] dist/entry.js already exists, skipping build"
 fi
@@ -22,7 +26,7 @@ echo "[prepare-gateway] Copying custom files..."
 # Only in-app-channel extension (other channels not needed)
 rm -rf "$DEPLOY_DIR/extensions"
 mkdir -p "$DEPLOY_DIR/extensions/in-app-channel"
-cp -r "$GATEWAY_DIR/extensions/in-app-channel/"* "$DEPLOY_DIR/extensions/in-app-channel/"
+rsync -a --exclude='node_modules' "$GATEWAY_DIR/extensions/in-app-channel/" "$DEPLOY_DIR/extensions/in-app-channel/"
 
 # Custom channel adapter (loaded by in-app-channel via jiti)
 mkdir -p "$DEPLOY_DIR/channels"

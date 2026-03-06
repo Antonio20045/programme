@@ -15,7 +15,7 @@ asar: true
 asarUnpack:
   - assets/tray/**/*
 
-npmRebuild: false
+npmRebuild: true
 afterPack: scripts/after-pack.js
 
 extraResources:
@@ -35,7 +35,7 @@ extraResources:
 mac:
   target:
     - target: zip
-      arch: x64
+      arch: [x64, arm64]
   hardenedRuntime: true
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.inherit.plist
