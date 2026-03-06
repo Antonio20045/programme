@@ -11,8 +11,8 @@
   "main": "out/main/index.js",
   "scripts": {
     "predev": "pnpm -C ../../packages/gateway exec tsdown --no-clean",
-    "dev": "ELECTRON_RUN_AS_NODE= electron-vite dev",
-    "build": "ELECTRON_RUN_AS_NODE= electron-vite build",
+    "dev": "cross-env ELECTRON_RUN_AS_NODE= electron-vite dev",
+    "build": "cross-env ELECTRON_RUN_AS_NODE= electron-vite build",
     "build:installer": "electron-builder --config electron-builder.yml",
     "build:installer:mac": "electron-builder --config electron-builder.yml --mac",
     "build:installer:win": "electron-builder --config electron-builder.yml --win",
@@ -43,6 +43,7 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "cross-env": "^10.1.0",
     "electron": "^35.0.0",
     "electron-builder": "^26.0.0",
     "electron-vite": "^5.0.0",
