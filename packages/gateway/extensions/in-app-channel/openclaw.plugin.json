@@ -1,0 +1,10 @@
+{
+  "id": "in-app-channel",
+  "name": "In-App Channel",
+  "description": "REST API bridge for the Electron desktop app (HTTP/SSE).",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

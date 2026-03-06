@@ -10,8 +10,5 @@ out/
 test-results/
 release/
 
-# OpenClaw Fork — eigenes Git-Repo, separat verwaltet
-packages/gateway/
-
 # Gateway bundle for packaged Electron app
 apps/desktop/gateway-bundle/

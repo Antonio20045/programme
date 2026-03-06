@@ -1,0 +1,15 @@
+{
+  "name": "@openclaw/in-app-channel",
+  "version": "0.1.0",
+  "description": "REST API bridge for the Electron desktop app (HTTP/SSE)",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
