@@ -7,9 +7,7 @@ DEPLOY_DIR="$REPO_ROOT/apps/desktop/gateway-bundle"
 
 echo "[prepare-gateway] Building gateway TypeScript..."
 if [ ! -f "$GATEWAY_DIR/dist/entry.js" ]; then
-  cd "$GATEWAY_DIR"
-  pnpm tsdown
-  cd "$REPO_ROOT"
+  pnpm --filter=openclaw exec tsdown
 else
   echo "[prepare-gateway] dist/entry.js already exists, skipping build"
 fi
