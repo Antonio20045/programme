@@ -2,6 +2,8 @@ appId: com.ki-assistent.desktop
 productName: KI-Assistent
 copyright: Copyright © 2025 KI-Assistent
 
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+
 directories:
   buildResources: resources
   output: release
