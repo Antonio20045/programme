@@ -46,6 +46,10 @@ jobs:
 
       - name: Build app (electron-vite)
         run: pnpm build:desktop
+        env:
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          DEFAULT_GATEWAY_URL: ${{ secrets.DEFAULT_GATEWAY_URL }}
 
       - name: Build installer
         working-directory: apps/desktop
