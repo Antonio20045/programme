@@ -15,11 +15,13 @@ interface UseSessionsReturn {
   createSession: () => void
   deleteSession: (id: string) => void
   refreshSessions: () => void
+  updateSessionTitle: (sessionId: string, title: string) => void
   readonly messages: readonly ChatMessage[]
 }
 
 interface SessionResponse {
   readonly id: string
+  readonly title?: string
   readonly lastMessageAt: string
 }
 
@@ -29,21 +31,6 @@ interface MessageResponse {
   readonly content: string
   readonly toolName?: string
   readonly toolResult?: string
-}
-
-function isSessionArray(data: unknown): data is SessionResponse[] {
-  return (
-    Array.isArray(data) &&
-    data.every(
-      (item: unknown) =>
-        typeof item === 'object' &&
-        item !== null &&
-        'id' in item &&
-        typeof (item as SessionResponse).id === 'string' &&
-        'lastMessageAt' in item &&
-        typeof (item as SessionResponse).lastMessageAt === 'string',
-    )
-  )
 }
 
 function isMessageArray(data: unknown): data is MessageResponse[] {
@@ -61,11 +48,18 @@ function isMessageArray(data: unknown): data is MessageResponse[] {
   )
 }
 
-function deriveTitle(messages: readonly MessageResponse[]): string {
-  const firstUserMsg = messages.find((m) => m.role === 'user')
-  if (!firstUserMsg) return 'Neuer Chat'
-  const text = firstUserMsg.content.trim()
-  return text.length > 50 ? `${text.slice(0, 50)}...` : text
+function isSessionArray(data: unknown): data is SessionResponse[] {
+  return (
+    Array.isArray(data) &&
+    data.every(
+      (item: unknown) =>
+        typeof item === 'object' &&
+        item !== null &&
+        'id' in item &&
+        typeof (item as SessionResponse).id === 'string' &&
+        'lastMessageAt' in item,
+    )
+  )
 }
 
 export function useSessions(): UseSessionsReturn {
@@ -82,28 +76,16 @@ export function useSessions(): UseSessionsReturn {
         const data: unknown = res.data
         if (!isSessionArray(data)) throw new Error('Ungültige Session-Daten')
 
-        // Fetch titles for each session by loading first messages
-        const titlePromises = data.map((s) =>
-          window.api.gatewayFetch({ method: 'GET', path: `/api/sessions/${encodeURIComponent(s.id)}/messages` })
-            .then((r) => {
-              if (!r.ok) return [] as MessageResponse[]
-              return r.data as unknown
-            })
-            .then((msgs): Session => {
-              const validMsgs = isMessageArray(msgs) ? msgs : []
-              return {
-                id: s.id,
-                title: deriveTitle(validMsgs),
-                lastMessageAt: s.lastMessageAt,
-              }
-            }),
-        )
+        const mapped: Session[] = data.map((s) => ({
+          id: s.id,
+          title: s.title ?? 'Neuer Chat',
+          lastMessageAt: typeof s.lastMessageAt === 'number'
+            ? new Date(s.lastMessageAt).toISOString()
+            : String(s.lastMessageAt),
+        }))
 
-        return Promise.all(titlePromises)
-      })
-      .then((sessionsWithTitles) => {
         // Sort by lastMessageAt descending (newest first)
-        const sorted = [...sessionsWithTitles].sort(
+        const sorted = mapped.sort(
           (a, b) =>
             new Date(b.lastMessageAt).getTime() -
             new Date(a.lastMessageAt).getTime(),
@@ -148,6 +130,15 @@ export function useSessions(): UseSessionsReturn {
     setMessages([])
   }, [])
 
+  const updateSessionTitle = useCallback(
+    (sessionId: string, title: string) => {
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, title } : s)),
+      )
+    },
+    [],
+  )
+
   const deleteSession = useCallback(
     (id: string) => {
       window.api.gatewayFetch({ method: 'DELETE', path: `/api/sessions/${encodeURIComponent(id)}` })
@@ -174,6 +165,7 @@ export function useSessions(): UseSessionsReturn {
     createSession,
     deleteSession,
     refreshSessions,
+    updateSessionTitle,
     messages,
   }
 }

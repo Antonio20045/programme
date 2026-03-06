@@ -20,6 +20,7 @@ import { typingDotVariants, typingDotTransition, messageVariants, messageTransit
 interface ChatProps {
   readonly activeSessionId: string | null
   readonly onSessionCreated: (sessionId: string) => void
+  readonly onTitleUpdate: (sessionId: string, title: string) => void
 }
 
 function TypingIndicator(): JSX.Element {
@@ -131,8 +132,8 @@ const MessageBubble = memo(function MessageBubble({
   )
 })
 
-export default function Chat({ activeSessionId, onSessionCreated }: ChatProps): JSX.Element {
-  const { messages, isLoading, error, responseMode, sendMessage, confirmTool } = useChat({ activeSessionId, onSessionCreated })
+export default function Chat({ activeSessionId, onSessionCreated, onTitleUpdate }: ChatProps): JSX.Element {
+  const { messages, isLoading, error, responseMode, sendMessage, confirmTool } = useChat({ activeSessionId, onSessionCreated, onTitleUpdate })
   const gatewayStatus = useGatewayStatus()
   const { mode } = useGatewayConfig()
   const agentStatus = useAgentStatus()

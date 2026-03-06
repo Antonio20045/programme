@@ -103,35 +103,24 @@ describe('useSessions', () => {
     expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions' })
   })
 
-  it('refreshSessions parses session list and fetches titles', async () => {
+  it('refreshSessions parses session list with titles from API', async () => {
     const sessionsData = [
-      { id: 'sess-1', lastMessageAt: '2026-02-16T10:00:00Z' },
-      { id: 'sess-2', lastMessageAt: '2026-02-16T11:00:00Z' },
-    ]
-
-    const messages1 = [
-      { id: 'msg-1', role: 'user', content: 'Hallo Welt' },
-      { id: 'msg-2', role: 'assistant', content: 'Hi!' },
-    ]
-
-    const messages2 = [
-      { id: 'msg-3', role: 'user', content: 'Zweiter Chat' },
+      { id: 'sess-1', title: 'Hallo Welt', lastMessageAt: '2026-02-16T10:00:00Z' },
+      { id: 'sess-2', title: 'Zweiter Chat', lastMessageAt: '2026-02-16T11:00:00Z' },
     ]
 
     mockGatewayFetch
       .mockResolvedValueOnce(createGatewayResult(sessionsData))
-      .mockResolvedValueOnce(createGatewayResult(messages1))
-      .mockResolvedValueOnce(createGatewayResult(messages2))
 
     const { refreshSessions } = callHook()
     refreshSessions()
 
     await vi.waitFor(() => {
-      expect(mockGatewayFetch).toHaveBeenCalledTimes(3)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(1)
     })
 
-    expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions/sess-1/messages' })
-    expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions/sess-2/messages' })
+    // No additional message fetches — titles come from API
+    expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions' })
   })
 
   it('refreshSessions sets isLoading during fetch', () => {
@@ -298,46 +287,35 @@ describe('useSessions', () => {
     expect(mockGatewayFetch).toHaveBeenCalledWith({ method: 'GET', path: '/api/sessions' })
   })
 
-  it('title is derived from first user message content', async () => {
+  it('title comes from API response', async () => {
     const sessionsData = [
-      { id: 'sess-1', lastMessageAt: '2026-02-16T10:00:00Z' },
-    ]
-
-    const longMessage = 'A'.repeat(60)
-    const messagesData = [
-      { id: 'msg-1', role: 'user', content: longMessage },
+      { id: 'sess-1', title: 'LLM-generierter Titel', lastMessageAt: '2026-02-16T10:00:00Z' },
     ]
 
     mockGatewayFetch
       .mockResolvedValueOnce(createGatewayResult(sessionsData))
-      .mockResolvedValueOnce(createGatewayResult(messagesData))
 
     const { refreshSessions } = callHook()
     refreshSessions()
 
     await vi.waitFor(() => {
-      expect(mockGatewayFetch).toHaveBeenCalledTimes(2)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(1)
     })
   })
 
-  it('title defaults to "Neuer Chat" when no user messages exist', async () => {
+  it('title defaults to "Neuer Chat" when API returns no title', async () => {
     const sessionsData = [
       { id: 'sess-1', lastMessageAt: '2026-02-16T10:00:00Z' },
     ]
 
-    const messagesData = [
-      { id: 'msg-1', role: 'assistant', content: 'Hallo!' },
-    ]
-
     mockGatewayFetch
       .mockResolvedValueOnce(createGatewayResult(sessionsData))
-      .mockResolvedValueOnce(createGatewayResult(messagesData))
 
     const { refreshSessions } = callHook()
     refreshSessions()
 
     await vi.waitFor(() => {
-      expect(mockGatewayFetch).toHaveBeenCalledTimes(2)
+      expect(mockGatewayFetch).toHaveBeenCalledTimes(1)
     })
   })
 

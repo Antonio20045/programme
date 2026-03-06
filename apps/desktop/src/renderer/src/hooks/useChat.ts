@@ -18,6 +18,7 @@ interface ChatMessage {
 interface UseChatOptions {
   readonly activeSessionId?: string | null
   readonly onSessionCreated?: (sessionId: string) => void
+  readonly onTitleUpdate?: (sessionId: string, title: string) => void
 }
 
 interface OAuthTokens {
@@ -201,6 +202,7 @@ function buildToolPreview(
 export function useChat(options?: UseChatOptions): UseChatReturn {
   const activeSessionId = options?.activeSessionId ?? null
   const onSessionCreated = options?.onSessionCreated
+  const onTitleUpdate = options?.onTitleUpdate
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -263,20 +265,22 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
   }, [activeSessionId])
 
   const sendMessage = useCallback(
-    (text: string, files?: File[]) => {
+    (text: string, files?: File[], skipUserMessage?: boolean) => {
       const trimmed = text.trim()
       if (trimmed.length === 0 || isLoading) return
 
       setError(null)
       setIsLoading(true)
 
-      // Add user message
-      const userMsg: ChatMessage = {
-        id: `user-${Date.now().toString(36)}`,
-        role: 'user',
-        content: trimmed,
+      // Add user message (skip on auto-retry to avoid duplicates)
+      if (!skipUserMessage) {
+        const userMsg: ChatMessage = {
+          id: `user-${Date.now().toString(36)}`,
+          role: 'user',
+          content: trimmed,
+        }
+        setMessages((prev) => [...prev, userMsg])
       }
-      setMessages((prev) => [...prev, userMsg])
 
       // Close any existing EventSource
       eventSourceRef.current?.close()
@@ -498,10 +502,39 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
             } catch {
               // done event may not carry text — that's ok
             }
-            es.close()
-            eventSourceRef.current = null
+            // Keep ES open briefly for async session_title event, then close
             setIsLoading(false)
             setResponseMode(null)
+            // Auto-close after 15s if no session_title arrives
+            const titleTimeout = setTimeout(() => {
+              es.close()
+              eventSourceRef.current = null
+            }, 15_000)
+            // Store timeout ID on the ES instance for cleanup
+            ;(es as unknown as Record<string, unknown>)['_titleTimeout'] = titleTimeout
+          })
+
+          es.addEventListener('session_title', (e: MessageEvent<string>) => {
+            try {
+              const parsed: unknown = JSON.parse(e.data)
+              if (
+                typeof parsed === 'object' &&
+                parsed !== null &&
+                'sessionId' in parsed &&
+                'title' in parsed &&
+                typeof (parsed as { title: string }).title === 'string'
+              ) {
+                const { sessionId: sid, title } = parsed as { sessionId: string; title: string }
+                onTitleUpdate?.(sid, title)
+              }
+            } catch {
+              // invalid payload — ignore
+            }
+            // Close ES after receiving title
+            const timeout = (es as unknown as Record<string, unknown>)['_titleTimeout'] as ReturnType<typeof setTimeout> | undefined
+            if (timeout !== undefined) clearTimeout(timeout)
+            es.close()
+            eventSourceRef.current = null
           })
 
           es.addEventListener('token_refreshed', (e: MessageEvent<string>) => {
@@ -533,7 +566,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
           setError(message)
         })
     },
-    [isLoading, onSessionCreated],
+    [isLoading, onSessionCreated, onTitleUpdate],
   )
 
   const confirmTool = useCallback(
@@ -597,7 +630,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
       const retryText = pendingRetryRef.current
       pendingRetryRef.current = null
       // Short delay so Gateway can process the new OAuth tokens
-      setTimeout(() => { sendMessage(retryText) }, 500)
+      setTimeout(() => { sendMessage(retryText, undefined, true) }, 500)
     }
     prevLoadingRef.current = isLoading
   }, [isLoading, sendMessage])
