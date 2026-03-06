@@ -26,7 +26,7 @@ echo "[prepare-gateway] Copying custom files..."
 # Only in-app-channel extension (other channels not needed)
 rm -rf "$DEPLOY_DIR/extensions"
 mkdir -p "$DEPLOY_DIR/extensions/in-app-channel"
-rsync -a --exclude='node_modules' "$GATEWAY_DIR/extensions/in-app-channel/" "$DEPLOY_DIR/extensions/in-app-channel/"
+find "$GATEWAY_DIR/extensions/in-app-channel" -maxdepth 1 -type f -exec cp {} "$DEPLOY_DIR/extensions/in-app-channel/" \;
 
 # Custom channel adapter (loaded by in-app-channel via jiti)
 mkdir -p "$DEPLOY_DIR/channels"
