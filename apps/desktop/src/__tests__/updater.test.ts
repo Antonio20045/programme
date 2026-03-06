@@ -155,6 +155,21 @@ describe('updater', () => {
 
       expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1)
     })
+
+    it('does not crash when checkForUpdates rejects (e.g. private repo without GH_TOKEN)', async () => {
+      mocks.autoUpdater.checkForUpdates.mockRejectedValueOnce(new Error('404 Not Found'))
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const win = createMockWindow()
+
+      initAutoUpdater(win as unknown as import('electron').BrowserWindow)
+      vi.advanceTimersByTime(10_000)
+
+      // Flush the rejection handler
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(spy).toHaveBeenCalledWith('[updater] Check failed:', '404 Not Found')
+      spy.mockRestore()
+    })
   })
 
   // -----------------------------------------------------------------------

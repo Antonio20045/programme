@@ -7,6 +7,12 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000 // 4 hours
 let checkInterval: ReturnType<typeof setInterval> | null = null
 let initialTimeout: ReturnType<typeof setTimeout> | null = null
 
+function safeCheckForUpdates(): void {
+  autoUpdater.checkForUpdates().catch((err: Error) => {
+    console.error('[updater] Check failed:', err.message)
+  })
+}
+
 export function initAutoUpdater(mainWindow: BrowserWindow): void {
   if (!app.isPackaged) return
 
@@ -58,11 +64,11 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   })
 
   initialTimeout = setTimeout(() => {
-    void autoUpdater.checkForUpdates()
+    safeCheckForUpdates()
   }, CHECK_DELAY_MS)
 
   checkInterval = setInterval(() => {
-    void autoUpdater.checkForUpdates()
+    safeCheckForUpdates()
   }, CHECK_INTERVAL_MS)
 }
 
