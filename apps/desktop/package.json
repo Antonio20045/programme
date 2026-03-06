@@ -2,6 +2,12 @@
   "name": "@ki-assistent/desktop",
   "version": "0.1.0",
   "private": true,
+  "description": "KI-Assistent Desktop App",
+  "author": {
+    "name": "Antonio20045",
+    "email": "antonio.fotiadis.francisco@gmail.com"
+  },
+  "homepage": "https://github.com/Antonio20045/programme",
   "main": "out/main/index.js",
   "scripts": {
     "predev": "pnpm -C ../../packages/gateway exec tsdown --no-clean",

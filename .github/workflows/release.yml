@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare gateway bundle
+        run: bash scripts/prepare-gateway.sh
+
       - name: Build app (electron-vite)
         run: pnpm build:desktop
 

@@ -53,6 +53,7 @@ nsis:
   allowToChangeInstallationDirectory: true
 
 linux:
+  category: Utility
   target:
     - target: deb
       arch: x64
