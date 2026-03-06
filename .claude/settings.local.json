@@ -89,7 +89,17 @@
       "Bash(md5 /Users/efstathia/Downloads/videos/programme/packages/gateway/src/model-router.ts | head -1 && wc -l /Users/efstathia/Downloads/videos/programme/packages/gateway/src/model-router.ts)",
       "Bash(sh -n /Users/efstathia/Downloads/videos/programme/docker/entrypoint.sh && echo \"Syntax OK\")",
       "Bash(brew install bash 2>&1 | tail -5)",
-      "Bash(pnpm audit --audit-level=high --json 2>/dev/null | jq '.advisories | to_entries | map\\(select\\(.value.severity == \"high\" or .value.severity == \"critical\"\\)\\) | map\\(select\\(.value.findings | any\\(.paths | any\\(startswith\\(\"packages__gateway\"\\) | not\\)\\)\\)\\) | map\\({module: .value.module_name, severity: .value.severity, paths: [.value.findings[].paths[] | select\\(startswith\\(\"packages__gateway\"\\) | not\\)]}\\) | map\\(select\\(.paths | length > 0\\)\\)' 2>/dev/null | head -80)"
+      "Bash(pnpm audit --audit-level=high --json 2>/dev/null | jq '.advisories | to_entries | map\\(select\\(.value.severity == \"high\" or .value.severity == \"critical\"\\)\\) | map\\(select\\(.value.findings | any\\(.paths | any\\(startswith\\(\"packages__gateway\"\\) | not\\)\\)\\)\\) | map\\({module: .value.module_name, severity: .value.severity, paths: [.value.findings[].paths[] | select\\(startswith\\(\"packages__gateway\"\\) | not\\)]}\\) | map\\(select\\(.paths | length > 0\\)\\)' 2>/dev/null | head -80)",
+      "Bash(for tool in calculator translator news-feed image-gen web-search weather summarizer datetime json-tools crypto-tools data-transform code-runner url-tools knowledge diagram archive http-client google-contacts google-tasks google-drive google-docs google-sheets youtube whatsapp browser shell system-info clipboard screenshot git-tools app-launcher media-control; do\n  echo \"=== $tool ===\"\n  grep -A 1 \"name:\\\\s*['\\\\\"]\" /Users/efstathia/Downloads/videos/programme/packages/tools/src/$tool.ts 2>/dev/null | grep \"name:\" | head -1 || echo \"NOT FOUND\"\ndone)",
+      "Bash(pstree -p 5819 2>/dev/null || ps -o pid,ppid,command -p 5819,5648 2>/dev/null)",
+      "Bash(ps -o pid,ppid,command | grep -E \"5819|openclaw|gateway\" | grep -v grep)",
+      "Bash(cd /Users/efstathia/Downloads/videos/programme && node --input-type=module -e \"\nimport { createJiti } from 'jiti';\nconst j = createJiti\\(new URL\\('file:///Users/efstathia/Downloads/videos/programme/packages/gateway/openclaw.mjs'\\).href, {\n  interopDefault: true,\n  extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.json'],\n}\\);\ntry {\n  const mod = j\\('packages/gateway/extensions/in-app-channel/index.ts'\\);\n  console.log\\('Extension loaded successfully'\\);\n  console.log\\('default export type:', typeof mod.default\\);\n} catch\\(e\\) {\n  console.log\\('Error:', e.message\\);\n}\n\" 2>&1 | head -20)",
+      "Bash(ps -p 28618,28648,28666,28673 -o pid,command | head -10)",
+      "Bash(kill 28618 2>&1; sleep 2 && pgrep -f \"electron-vite\" | head -3)",
+      "Bash(pgrep -f \"electron-vite\" | head -3)",
+      "Bash(pgrep -f \"electron\" | head -20 && pgrep -f \"ki-assistent\" | head -20)",
+      "Bash(ps -p 32153,32226,32231,32232 -o pid,command | head -10)",
+      "Bash(sleep 8 && pgrep -f \"Electron\" | head -5)"
     ]
   },
   "enabledMcpjsonServers": [

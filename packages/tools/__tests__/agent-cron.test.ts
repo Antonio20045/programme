@@ -17,11 +17,17 @@ const SOURCE_CODE = readFileSync(SOURCE_PATH, 'utf-8')
 const mockGetAgent = vi.fn()
 const mockGetScheduledAgents = vi.fn()
 const mockGetAllUserIds = vi.fn()
+const mockUpdateTrustMetrics = vi.fn()
+const mockCheckAndApplyPromotion = vi.fn()
+const mockDeriveTrustOutcome = vi.fn()
 
 vi.mock('../src/agent-registry', () => ({
   getAgent: (...args: unknown[]) => mockGetAgent(...args),
   getScheduledAgents: (...args: unknown[]) => mockGetScheduledAgents(...args),
   getAllUserIds: (...args: unknown[]) => mockGetAllUserIds(...args),
+  updateTrustMetrics: (...args: unknown[]) => mockUpdateTrustMetrics(...args),
+  checkAndApplyPromotion: (...args: unknown[]) => mockCheckAndApplyPromotion(...args),
+  deriveTrustOutcome: (...args: unknown[]) => mockDeriveTrustOutcome(...args),
 }))
 
 // ---------------------------------------------------------------------------
@@ -72,6 +78,26 @@ vi.mock('../src/agent-lifecycle', () => ({
   handlePostExecution: (...args: unknown[]) => mockHandlePostExecution(...args),
   runLifecycleCheck: (...args: unknown[]) => mockRunLifecycleCheck(...args),
   runMemoryCleanup: (...args: unknown[]) => mockRunMemoryCleanup(...args),
+}))
+
+// ---------------------------------------------------------------------------
+// Mocks — agent-telemetry
+// ---------------------------------------------------------------------------
+
+const mockTrackAgentStarted = vi.fn()
+const mockTrackAgentCompleted = vi.fn()
+const mockTrackAgentFailed = vi.fn()
+const mockTrackBudgetExceeded = vi.fn()
+const mockTrackTrustChanged = vi.fn()
+const mockCleanupOldEvents = vi.fn()
+
+vi.mock('../src/agent-telemetry', () => ({
+  trackAgentStarted: (...args: unknown[]) => mockTrackAgentStarted(...args),
+  trackAgentCompleted: (...args: unknown[]) => mockTrackAgentCompleted(...args),
+  trackAgentFailed: (...args: unknown[]) => mockTrackAgentFailed(...args),
+  trackBudgetExceeded: (...args: unknown[]) => mockTrackBudgetExceeded(...args),
+  trackTrustChanged: (...args: unknown[]) => mockTrackTrustChanged(...args),
+  cleanupOldEvents: (...args: unknown[]) => mockCleanupOldEvents(...args),
 }))
 
 // ---------------------------------------------------------------------------
@@ -163,6 +189,10 @@ beforeEach(() => {
   mockRecordUsage.mockResolvedValue(undefined)
   mockResetExpired.mockResolvedValue(0)
   mockHandlePostExecution.mockResolvedValue({ action: 'none' })
+  mockDeriveTrustOutcome.mockReturnValue({ success: true, overridden: false })
+  mockUpdateTrustMetrics.mockResolvedValue({ totalTasks: 1, successfulTasks: 1, userOverrides: 0, promotedAt: null })
+  mockCheckAndApplyPromotion.mockResolvedValue({ result: 'unchanged' })
+  mockCleanupOldEvents.mockResolvedValue(0)
   mockRunLifecycleCheck.mockResolvedValue({ dormant: [], archived: [], deleted: [], notifications: [] })
   mockRunMemoryCleanup.mockResolvedValue(0)
 })
@@ -406,6 +436,63 @@ describe('tick — agent execution', () => {
     await tick()
 
     expect(_testOnly.getJobs().has('agent-1')).toBe(false)
+  })
+
+  it('updates trust metrics after successful agent job', async () => {
+    initAgentCron({ pool: mockPool, llmClient: mockLlmClient, onResult: mockOnResult })
+
+    const now = new Date('2026-03-02T09:00:00Z')
+    vi.setSystemTime(now)
+    registerAgentCronJob('agent-1', 'user-42', '0 9 * * *')
+
+    await tick()
+
+    expect(mockDeriveTrustOutcome).toHaveBeenCalledWith('success')
+    expect(mockUpdateTrustMetrics).toHaveBeenCalledWith(
+      mockPool, 'user-42', 'agent-1', { success: true, overridden: false },
+    )
+    expect(mockCheckAndApplyPromotion).toHaveBeenCalledWith(mockPool, 'user-42', 'agent-1')
+  })
+
+  it('skips trust metrics for needs-approval', async () => {
+    initAgentCron({ pool: mockPool, llmClient: mockLlmClient, onResult: mockOnResult })
+    mockDeriveTrustOutcome.mockReturnValue(null)
+    mockExecuteAgent.mockResolvedValue(makeSuccessResult({ status: 'needs-approval' }))
+
+    const now = new Date('2026-03-02T09:00:00Z')
+    vi.setSystemTime(now)
+    registerAgentCronJob('agent-1', 'user-42', '0 9 * * *')
+
+    await tick()
+
+    expect(mockUpdateTrustMetrics).not.toHaveBeenCalled()
+  })
+
+  it('does not crash when trust update fails', async () => {
+    initAgentCron({ pool: mockPool, llmClient: mockLlmClient, onResult: mockOnResult })
+    mockUpdateTrustMetrics.mockRejectedValue(new Error('DB error'))
+
+    const now = new Date('2026-03-02T09:00:00Z')
+    vi.setSystemTime(now)
+    registerAgentCronJob('agent-1', 'user-42', '0 9 * * *')
+
+    await tick()
+
+    // Should still complete: onResult must have been called
+    expect(mockOnResult).toHaveBeenCalledTimes(1)
+  })
+
+  it('tracks budget exceeded via telemetry', async () => {
+    initAgentCron({ pool: mockPool, llmClient: mockLlmClient, onResult: mockOnResult })
+    mockCheckBudget.mockResolvedValue({ allowed: false })
+
+    const now = new Date('2026-03-02T09:00:00Z')
+    vi.setSystemTime(now)
+    registerAgentCronJob('agent-1', 'user-42', '0 9 * * *')
+
+    await tick()
+
+    expect(mockTrackBudgetExceeded).toHaveBeenCalledWith(mockPool, 'user-42', 'agent-1')
   })
 
   it('stores proposals for needs-approval results', async () => {

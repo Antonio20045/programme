@@ -437,7 +437,7 @@ describe('browser tool', () => {
       expect(mockLaunchPersistentContext).toHaveBeenCalledWith(
         expect.stringContaining('.ki-assistent/browser-profile'),
         {
-          headless: false,
+          headless: true,
           args: ['--disable-blink-features=AutomationControlled'],
         },
       )
@@ -1263,5 +1263,47 @@ describe('browser security', () => {
 
   it('has credential resolver security comment', () => {
     expect(sourceCode).toContain('Credentials flow via fillCredential + CredentialResolver only')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Headless configuration
+// ---------------------------------------------------------------------------
+
+describe('headless configuration', () => {
+  beforeEach(async () => {
+    await closeBrowser()
+    _resetRateLimit()
+    setupDefaultMocks()
+  })
+
+  afterEach(async () => {
+    await closeBrowser()
+  })
+
+  it('openPage launches with headless: true', async () => {
+    setPlaywrightLoader(async () => ({
+      chromium: { launchPersistentContext: mockLaunchPersistentContext },
+    }))
+
+    await browserTool.execute({ action: 'openPage', url: 'https://example.com' })
+
+    expect(mockLaunchPersistentContext).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ headless: true }),
+    )
+  })
+
+  it('openSession launches with headless: false', async () => {
+    setPlaywrightLoader(async () => ({
+      chromium: { launchPersistentContext: mockLaunchPersistentContext },
+    }))
+
+    await browserTool.execute({ action: 'openSession', domain: 'github.com' })
+
+    expect(mockLaunchPersistentContext).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ headless: false }),
+    )
   })
 })

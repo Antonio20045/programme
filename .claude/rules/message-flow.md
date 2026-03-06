@@ -7,13 +7,22 @@ User → POST /api/message (JSON oder FormData mit Dateien) → Gateway → LLM 
 - `token` — Text-Chunks
 - `tool_start` — JSON: toolName + params
 - `tool_result` — JSON: toolName + result
+- `session_title` — JSON: `{ sessionId, title }` — LLM-generierter Chat-Titel, asynchron nach erstem Austausch
 - `done`
 - `error`
 - `notification` — Proaktive Sub-Agent Notification (separater SSE-Stream auf `/api/notifications`)
 
 ## Client-Seite
 
-useChat verwaltet Messages-State, postet via `gateway:fetch` Proxy (JSON) oder direkten `fetch` (FormData), öffnet EventSource nach POST (URL via `getStreamUrl` IPC), baut Assistant-Nachricht aus token-Events, zeigt Tool-Ausführungen als ToolExecution-Komponente. Session-ID wird via Ref persistiert.
+useChat verwaltet Messages-State, postet via `gateway:fetch` Proxy (JSON) oder direkten `fetch` (FormData), öffnet EventSource nach POST (URL via `getStreamUrl` IPC), baut Assistant-Nachricht aus token-Events, zeigt Tool-Ausführungen als ToolExecution-Komponente. Session-ID wird via Ref persistiert. EventSource bleibt nach `done` max 15s offen für asynchrone `session_title`-Events, schließt danach automatisch.
+
+## Session-Titel-Generierung
+
+Nach dem ersten Austausch (1 User + 1 Assistant Message) generiert das Gateway asynchron einen Chat-Titel:
+1. `deliverResponse()` prüft Message-Count (== 2) → fire-and-forget `generateSessionTitle()`
+2. Cheap LLM-Call (Haiku-Tier) mit User- + Assistant-Text (je max 200 Zeichen)
+3. Titel wird durch `sanitizeOutputText()` gefiltert, in DB gespeichert (user-scoped), via `session_title` SSE-Event gepusht
+4. Client `useChat` empfängt Event → `onTitleUpdate` Callback → `useSessions.updateSessionTitle()` aktualisiert Sidebar live
 
 Tools mit Bestätigungspflicht: SSE Event → Client zeigt Vorschau → User bestätigt → erst dann ausführen.
 

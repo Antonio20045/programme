@@ -30,7 +30,9 @@ import {
   registerLifecycleCron,
 } from "../../tools/src/agent-cron.js";
 import { executeAgent } from "../../tools/src/agent-executor.js";
-import { getAgent, getDelegatableAgents } from "../../tools/src/agent-registry.js";
+import { getAgent, getDelegatableAgents, updateTrustMetrics, checkAndApplyPromotion, deriveTrustOutcome } from "../../tools/src/agent-registry.js";
+import { checkBudget, recordUsage } from "../../tools/src/budget-controller.js";
+import { trackAgentStarted, trackAgentCompleted, trackAgentFailed, trackBudgetExceeded, trackTrustChanged } from "../../tools/src/agent-telemetry.js";
 import { createCalendarTool } from "../../tools/src/calendar.js";
 import { createGmailTool } from "../../tools/src/gmail.js";
 import { getAllTools } from "../../tools/src/index.js";
@@ -55,6 +57,8 @@ import {
   deleteSession,
   insertMessage,
   listMessages,
+  updateSessionTitle,
+  countMessages,
 } from "../src/database/sessions.js";
 import { authenticateRequest, type RequestContext } from "../src/database/user-context.js";
 import { createLlmClient } from "../src/llm-client-adapter.js";
@@ -181,6 +185,7 @@ export type SSEEventType =
   | "token_refreshed"
   | "notification"
   | "response_mode"
+  | "session_title"
   | "done"
   | "error";
 
@@ -244,6 +249,7 @@ const ALLOWED_SSE_TYPES = new Set<SSEEventType>([
   "token_refreshed",
   "notification",
   "response_mode",
+  "session_title",
   "done",
   "error",
 ]);
@@ -822,6 +828,10 @@ export class InAppChannelAdapter {
       const store = getSQLiteStore();
       const msg = store.insertMessage(sessionId, "assistant", text);
       this.sse.emit(sessionId, { type: "done", data: { messageId: msg.id, text: sanitizedText } });
+      // Generate title async after first exchange (2 messages = 1 user + 1 assistant)
+      if (store.countMessages(sessionId) === 2) {
+        void this.generateSessionTitle(sessionId, text);
+      }
       return msg.id;
     }
     const messageId = randomUUID();
@@ -831,7 +841,90 @@ export class InAppChannelAdapter {
       // Fehler nicht propagieren — SSE darf nicht blockiert werden
     });
     this.sse.emit(sessionId, { type: "done", data: { messageId, text: sanitizedText } });
+    // Generate title async after first exchange
+    void countMessages(pool, sessionId).then((count) => {
+      if (count === 2) {
+        void this.generateSessionTitle(sessionId, text);
+      }
+    }).catch(() => { /* non-blocking */ });
     return messageId;
+  }
+
+  /**
+   * Generate a short chat title via a cheap LLM call, update DB, and push via SSE.
+   * Fire-and-forget — errors are logged, never block the response.
+   */
+  private async generateSessionTitle(sessionId: string, assistantText: string): Promise<void> {
+    try {
+      // Read the first user message and userId from the session
+      let userText: string | undefined;
+      let userId: string | undefined;
+      if (isUsingSQLite()) {
+        const store = getSQLiteStore();
+        userText = store.getFirstUserMessage(sessionId) ?? undefined;
+        userId = store.getSessionUserId(sessionId) ?? undefined;
+      } else {
+        const pool = getPool();
+        const { rows } = await pool.query(
+          "SELECT content FROM messages WHERE session_id = $1 AND role = 'user' ORDER BY created_at ASC LIMIT 1",
+          [sessionId],
+        );
+        userText = rows[0] ? String(rows[0]["content"]) : undefined;
+        // PostgreSQL: look up userId from session
+        const { rows: sessionRows } = await pool.query(
+          "SELECT user_id FROM sessions WHERE id = $1",
+          [sessionId],
+        );
+        userId = sessionRows[0] ? String(sessionRows[0]["user_id"]) : undefined;
+      }
+
+      if (!userText || !userId) return;
+
+      const llmClient = createLlmClient();
+      const { provider, model } = resolveModelForAgent("haiku");
+      const resolvedProvider = provider === "google" && !process.env["GEMINI_API_KEY"]
+        ? "anthropic"
+        : provider;
+      const resolvedModel = provider === "google" && !process.env["GEMINI_API_KEY"]
+        ? "claude-haiku-4-5"
+        : model;
+
+      const response = await llmClient.chat({
+        provider: resolvedProvider,
+        model: resolvedModel,
+        system: "Generate a very short chat title (max 5 words). Reply with ONLY the title, no quotes, no punctuation at the end. Use the same language as the user message.",
+        messages: [
+          { role: "user", content: `User: ${userText.slice(0, 200)}\nAssistant: ${assistantText.slice(0, 200)}` },
+        ],
+        tools: [],
+        max_tokens: 30,
+      });
+
+      const titleBlock = response.content.find((b) => b.type === "text");
+      const rawTitle = titleBlock && "text" in titleBlock
+        ? titleBlock.text.trim().slice(0, 100)
+        : null;
+
+      if (!rawTitle) return;
+
+      // Sanitize title (remove internal system names, technical terms)
+      const title = sanitizeOutputText(rawTitle);
+
+      // Update DB (user-scoped)
+      if (isUsingSQLite()) {
+        getSQLiteStore().updateSessionTitle(sessionId, userId, title);
+      } else {
+        await updateSessionTitle(getPool(), sessionId, userId, title);
+      }
+
+      // Push to client via SSE
+      this.sse.emit(sessionId, {
+        type: "session_title",
+        data: { sessionId, title },
+      });
+    } catch (err) {
+      console.warn("[in-app] title generation failed:", err instanceof Error ? err.message : String(err));
+    }
   }
 
   /**
@@ -1230,6 +1323,8 @@ export class InAppChannelAdapter {
             "- Only call a tool when you know what it does and why it is the right choice now.",
             "- Do NOT call multiple tools in sequence hoping something works.",
             "- If you are unsure which tool fits: ask the user briefly instead of guessing.",
+            "  WRONG: connect-google → web_fetch → browser (trying tools at random)",
+            '  RIGHT: "Would you like me to connect your Google account so I can access your emails?"',
             "",
             "### Rule 3: No jargon",
             "- NEVER use these terms: API, Token, OAuth, Plugin, Webhook, SDK, Endpoint, Runtime, Backend, Frontend, Config, Schema, Provider, Middleware, Session, Tool, Function Call, System Prompt, LLM, Gateway, OpenClaw.",
@@ -1238,6 +1333,8 @@ export class InAppChannelAdapter {
             '  RIGHT: "I don\'t have access to your emails yet. Want me to connect your Google account?"',
             '  WRONG: "The OAuth flow needs to be completed."',
             '  RIGHT: "You still need to sign in with Google."',
+            '  WRONG: "I don\'t have access to this tool."',
+            '  RIGHT: "I can\'t do that right now. I need access to your account first."',
             "",
             "### Rule 4: Brief and direct",
             "- Reply as briefly as possible. Max 2-3 sentences for simple answers.",
@@ -1247,6 +1344,8 @@ export class InAppChannelAdapter {
             "### Rule 5: Error handling",
             "- If a tool fails: retry ONCE.",
             "- If it fails again: tell the user briefly what went wrong (no technical details) and what they can do.",
+            "  WRONG: (silently try another tool)",
+            '  RIGHT: "That didn\'t work. Would you like to try again later?"',
             "- Do NOT improvise with other tools when the chosen tool fails.",
             "",
             "## Tool Decision Tree",
@@ -1255,7 +1354,7 @@ export class InAppChannelAdapter {
             "",
             "1. Did the user ask about emails, inbox, or calendar events?",
             "   → Do you have `gmail` or `calendar` in your tool list? → YES: Call it directly.",
-            "   → Do you only have `connect-google`? → Ask the user which provider they use. Only call `connect-google` AFTER their answer. IMPORTANT: After connecting, email and calendar are only available FROM THE NEXT MESSAGE. Do NOT try to call gmail or calendar — they do not exist yet.",
+            "   → Do you only have `connect-google`? → Ask the user which provider they use. Only call `connect-google` AFTER their answer. Explain they need to sign in with Google. IMPORTANT: After connecting, email and calendar are only available FROM THE NEXT MESSAGE. Do NOT try to call gmail or calendar — they do not exist yet.",
             "   → Do you have neither `gmail`/`calendar` nor `connect-google`? → Say honestly: \"I can't access emails/calendar right now.\"",
             "",
             '2. Did the user ask to open an app ("open Spotify")? → Use `app-launcher`.',
@@ -1345,11 +1444,38 @@ export class InAppChannelAdapter {
               classification.matchedAgents.length >= 2 &&
               llmClient
             ) {
+              // Preflight: filter agents by status and budget
+              const pool = getPool();
+              const eligibleAgents: Array<{ agentId: string; timeout: number }> = [];
+              for (const agentId of classification.matchedAgents) {
+                try {
+                  const agentDef = await getAgent(pool, userId, agentId);
+                  if (!agentDef || agentDef.status !== "active") continue;
+                  const budget = await checkBudget(pool, agentId, userId);
+                  if (!budget.allowed) {
+                    void trackBudgetExceeded(pool, userId, agentId);
+                    continue;
+                  }
+                  eligibleAgents.push({ agentId, timeout: agentDef.timeoutMs ?? 60_000 });
+                } catch {
+                  // Skip agents that fail preflight
+                }
+              }
+
+              // If no agents eligible, fall through to FLOW A
+              if (eligibleAgents.length === 0) {
+                // Fall through — handled by FLOW A below
+              } else {
+              // Track starts
+              for (const ea of eligibleAgents) {
+                trackAgentStarted(pool, userId, ea.agentId, text);
+              }
+
               const agentResults = await Promise.allSettled(
-                classification.matchedAgents.map((agentId) =>
+                eligibleAgents.map((ea) =>
                   executeAgent(
-                    { userId, agentId, task: text, timeout: 60_000 },
-                    getPool(),
+                    { userId, agentId: ea.agentId, task: text, timeout: ea.timeout },
+                    pool,
                     llmClient,
                   ),
                 ),
@@ -1359,23 +1485,51 @@ export class InAppChannelAdapter {
               const summaryParts: string[] = [];
               for (let i = 0; i < agentResults.length; i++) {
                 const r = agentResults[i];
-                const aid = classification.matchedAgents[i];
-                if (r.status === "fulfilled") {
+                const aid = eligibleAgents[i]!.agentId;
+                if (r!.status === "fulfilled") {
+                  // Post-execution: usage, trust, telemetry (fire-and-forget)
+                  const val = r!.value;
+                  void recordUsage(pool, aid, userId, {
+                    inputTokens: val.usage.inputTokens,
+                    outputTokens: val.usage.outputTokens,
+                    toolCalls: val.toolCalls,
+                  }).catch(() => {});
+
+                  const trustOutcome = deriveTrustOutcome(val.status);
+                  if (trustOutcome) {
+                    void (async () => {
+                      try {
+                        await updateTrustMetrics(pool, userId, aid, trustOutcome);
+                        const tc = await checkAndApplyPromotion(pool, userId, aid);
+                        if (tc.result !== "unchanged") {
+                          trackTrustChanged(pool, userId, aid, tc.result, tc.from, tc.to);
+                        }
+                      } catch { /* non-critical */ }
+                    })();
+                  }
+
+                  if (val.status === "success" || val.status === "partial") {
+                    trackAgentCompleted(pool, userId, aid, val.toolCalls, val.usage.inputTokens, val.usage.outputTokens);
+                  } else if (val.status === "failure") {
+                    trackAgentFailed(pool, userId, aid, val.reason ?? "unknown");
+                  }
+
                   // Sanitize output: collapse excessive newlines, cap length.
                   // Primary prompt-injection defense is the LLM-level instruction below.
-                  const sanitizedOutput = r.value.output
+                  const sanitizedOutput = val.output
                     .replace(/\n{3,}/g, "\n\n")
                     .slice(0, 10_000); // Cap individual agent output
                   summaryParts.push(
                     `<agent-result id="${aid}">\n${sanitizedOutput}\n</agent-result>`,
                   );
                   // needs-approval → pending store
-                  if (r.value.status === "needs-approval") {
-                    for (const action of r.value.pendingActions) {
+                  if (val.status === "needs-approval") {
+                    for (const action of val.pendingActions) {
                       storeProposal(action, aid);
                     }
                   }
                 } else {
+                  trackAgentFailed(pool, userId, aid, "execution-rejected");
                   summaryParts.push(
                     `<agent-result id="${aid}">\nFehler bei der Ausführung\n</agent-result>`,
                   );
@@ -1419,9 +1573,10 @@ export class InAppChannelAdapter {
               );
 
               // Pattern-check fire-and-forget
-              void checkForPattern(getPool(), userId, classification.category).catch(() => {});
+              void checkForPattern(pool, userId, classification.category).catch(() => {});
               this.responseModeContexts.delete(sessionId);
               return; // Skip normal flow
+              } // end else (eligible agents)
             }
           }
 

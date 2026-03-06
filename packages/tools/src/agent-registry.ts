@@ -642,6 +642,31 @@ async function checkAndApplyPromotion(
 }
 
 // ---------------------------------------------------------------------------
+// deriveTrustOutcome — maps AgentResult.status to TrustOutcome
+// ---------------------------------------------------------------------------
+
+type AgentResultStatus = 'success' | 'partial' | 'failure' | 'needs-approval'
+
+/**
+ * Maps an agent execution result status to a TrustOutcome for trust-metric updates.
+ *
+ * - success/partial → { success: true, overridden: false }
+ * - failure         → { success: false, overridden: false }
+ * - needs-approval  → null (deferred to approval flow)
+ */
+function deriveTrustOutcome(status: AgentResultStatus): TrustOutcome | null {
+  switch (status) {
+    case 'success':
+    case 'partial':
+      return { success: true, overridden: false }
+    case 'failure':
+      return { success: false, overridden: false }
+    case 'needs-approval':
+      return null
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -659,6 +684,7 @@ export {
   deleteAgent,
   updateTrustMetrics,
   checkAndApplyPromotion,
+  deriveTrustOutcome,
   generateAgentId,
   toKebabCase,
   VALID_RETENTIONS,
@@ -676,4 +702,5 @@ export type {
   AgentStatus,
   TrustLevel,
   Retention,
+  AgentResultStatus,
 }

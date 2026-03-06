@@ -126,6 +126,11 @@ export function withUserTools<T>(
   return userToolContext.run(tools, fn)
 }
 
+/** Read per-request user tools from AsyncLocalStorage (for plugin integration). */
+export function getCurrentUserTools(): readonly ExtendedAgentTool[] | undefined {
+  return userToolContext.getStore()
+}
+
 /**
  * Run a function with certain tools disabled (filtered out of createOpenClawCodingTools).
  * Used by the gateway to enforce capability toggles from user settings.

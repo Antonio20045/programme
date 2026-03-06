@@ -43,6 +43,7 @@ function AppContent(): JSX.Element {
     createSession,
     deleteSession,
     refreshSessions,
+    updateSessionTitle,
   } = useSessions()
 
   const handleSessionCreated = useCallback(
@@ -143,6 +144,7 @@ function AppContent(): JSX.Element {
                   <Chat
                     activeSessionId={activeSessionId}
                     onSessionCreated={handleSessionCreated}
+                    onTitleUpdate={updateSessionTitle}
                   />
                 }
               />

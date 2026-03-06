@@ -302,7 +302,7 @@ describe('useChat', () => {
     expect(messagesSlot).toBeDefined()
   })
 
-  it('closes EventSource on done event', async () => {
+  it('keeps EventSource open after done event for async events', async () => {
     mockGatewayFetch.mockResolvedValue(
       createGatewayResult({ messageId: 'msg-1', sessionId: 'sess-1' }),
     )
@@ -317,7 +317,8 @@ describe('useChat', () => {
     const es = MockEventSource.instances[0]!
     es.emit('done')
 
-    expect(es.readyState).toBe(MockEventSource.CLOSED)
+    // ES stays open for async events (e.g. session_title)
+    expect(es.readyState).toBe(0)
   })
 
   it('sets error on fetch failure', async () => {

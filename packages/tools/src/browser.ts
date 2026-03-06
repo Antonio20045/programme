@@ -540,7 +540,7 @@ async function getContext(): Promise<PlaywrightBrowserContext> {
     mkdirSync(userDataDir, { recursive: true })
     const pw = await loadPlaywright()
     contextInstance = await pw.chromium.launchPersistentContext(userDataDir, {
-      headless: false,
+      headless: true,
       args: ['--disable-blink-features=AutomationControlled'],
     })
   }

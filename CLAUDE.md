@@ -34,6 +34,6 @@ Workflow: .claude/rules/workflow.md | Contracts: .claude/rules/task-contracts.md
 
 ## Aktueller Stand
 
-Phase: 27 — abgeschlossen
-Nächster Schritt: Manuelles Testen der System-Prompt-Änderungen (verschiedene Sprachen, connect-google Flow)
-Letzter Commit: feat: migrate system prompt to English + fix connect-google routing
+Phase: 28 — abgeschlossen
+Nächster Schritt: Manuelles Testen der LLM-Titel-Generierung (neuer Chat starten, prüfen ob Titel in Sidebar live aktualisiert wird)
+Letzter Commit: feat: async LLM-generated chat titles with live SSE push

@@ -7,12 +7,14 @@
  * No eval. No unauthorized network access.
  */
 
-import { getAgent } from './agent-registry'
+import { getAgent, updateTrustMetrics, checkAndApplyPromotion, deriveTrustOutcome } from './agent-registry'
 import { executeAgent } from './agent-executor'
 import type { LlmClient, AgentTask } from './agent-executor'
+import { checkBudget, recordUsage } from './budget-controller'
 import { handlePostExecution } from './agent-lifecycle'
 import { reactivateAgent } from './agent-lifecycle'
 import { unregisterAgentCronJob } from './agent-cron'
+import { trackAgentStarted, trackAgentCompleted, trackAgentFailed, trackBudgetExceeded, trackTrustChanged } from './agent-telemetry'
 import type { AgentToolResult, DbPool, ExtendedAgentTool, JSONSchema } from './types'
 
 // ---------------------------------------------------------------------------
@@ -181,7 +183,23 @@ function createDelegateTool(
           })
         }
 
-        // 4. Build AgentTask
+        // 4. Budget check
+        try {
+          const budget = await checkBudget(pool, parsed.agentId, userId)
+          if (!budget.allowed) {
+            trackBudgetExceeded(pool, userId, parsed.agentId)
+            return textResult({
+              status: 'failure',
+              agentId: parsed.agentId,
+              error: 'Agent has exceeded its daily budget.',
+              reason: 'budget-exceeded',
+            })
+          }
+        } catch {
+          // Budget check failure should not block delegation
+        }
+
+        // 5. Build AgentTask
         const agentTask: AgentTask = {
           userId,
           agentId: parsed.agentId,
@@ -190,10 +208,45 @@ function createDelegateTool(
           timeout: agentDef.timeoutMs,
         }
 
-        // 5. Execute
+        // 6. Execute
+        trackAgentStarted(pool, userId, parsed.agentId, parsed.task)
         const result = await executeAgent(agentTask, pool, llmClient)
 
-        // 6. Post-execution retention handling
+        // 7. Record usage (for all result statuses)
+        try {
+          await recordUsage(pool, parsed.agentId, userId, {
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            toolCalls: result.toolCalls,
+          })
+        } catch {
+          // Usage recording failure should not break delegation
+        }
+
+        // 8. Trust metrics
+        let trustChangeData: Record<string, unknown> | undefined
+        try {
+          const trustOutcome = deriveTrustOutcome(result.status)
+          if (trustOutcome) {
+            await updateTrustMetrics(pool, userId, parsed.agentId, trustOutcome)
+            const trustChange = await checkAndApplyPromotion(pool, userId, parsed.agentId)
+            if (trustChange.result !== 'unchanged') {
+              trustChangeData = { result: trustChange.result, from: trustChange.from, to: trustChange.to }
+              trackTrustChanged(pool, userId, parsed.agentId, trustChange.result, trustChange.from, trustChange.to)
+            }
+          }
+        } catch {
+          // Trust-metric errors should not break delegation
+        }
+
+        // 9. Telemetry
+        if (result.status === 'success' || result.status === 'partial') {
+          trackAgentCompleted(pool, userId, parsed.agentId, result.toolCalls, result.usage.inputTokens, result.usage.outputTokens)
+        } else if (result.status === 'failure') {
+          trackAgentFailed(pool, userId, parsed.agentId, result.reason ?? 'unknown')
+        }
+
+        // 10. Post-execution retention handling
         let postMessage: string | undefined
         if (result.status === 'success') {
           const postResult = await handlePostExecution(
@@ -205,7 +258,7 @@ function createDelegateTool(
           postMessage = postResult.message
         }
 
-        // 7. Map result
+        // 11. Map result
         switch (result.status) {
           case 'success': {
             const successData: Record<string, unknown> = {
@@ -217,6 +270,9 @@ function createDelegateTool(
             }
             if (postMessage) {
               successData['retentionNote'] = postMessage
+            }
+            if (trustChangeData) {
+              successData['trustChange'] = trustChangeData
             }
             return textResult(successData)
           }
