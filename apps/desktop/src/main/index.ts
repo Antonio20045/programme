@@ -19,6 +19,14 @@ import { TrayManager } from './tray'
 import { initAutoUpdater, stopAutoUpdater } from './updater'
 import { encrypt, encodeMessage, fromBase64, toBase64, CAPABILITIES } from '@ki-assistent/shared'
 
+// Global crash guards — log and swallow to prevent process exit
+process.on('uncaughtException', (err) => {
+  console.error('[main] Uncaught exception:', err.message)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] Unhandled rejection:', reason instanceof Error ? reason.message : String(reason))
+})
+
 // Fix: Run Chromium network service in-process to prevent out-of-process crash
 // (Electron 35 + macOS 13 — network_service_instance_impl.cc crash)
 app.commandLine.appendSwitch('enable-features', 'NetworkServiceInProcess2')
@@ -308,8 +316,12 @@ function readDecryptedKeys(): Record<string, string> {
       const provider = file.replace('.enc', '')
       const envVar = PROVIDER_ENV_MAP[provider] // eslint-disable-line security/detect-object-injection
       if (!envVar) continue
-      const encrypted = fs.readFileSync(path.join(credDir, file)) // eslint-disable-line security/detect-non-literal-fs-filename
-      env[envVar] = safeStorage.decryptString(encrypted)
+      try {
+        const encrypted = fs.readFileSync(path.join(credDir, file)) // eslint-disable-line security/detect-non-literal-fs-filename
+        env[envVar] = safeStorage.decryptString(encrypted)
+      } catch {
+        console.error(`[main] Failed to decrypt credential: ${provider}`)
+      }
     }
   } catch {
     // No credentials directory → return empty env
@@ -608,7 +620,7 @@ function setupGateway(autoStart = true): void {
       win.webContents.send('gateway:status', status)
     }
     if (status === 'online') {
-      void syncAllTokensToGateway()
+      syncAllTokensToGateway().catch(() => {})
       connectNotificationStream()
     } else {
       disconnectNotificationStream()
@@ -1097,7 +1109,7 @@ ipcMain.handle('auth:clerk-browser-signin', async (_event, payload: unknown) => 
     server.on('listening', () => {
       const address = server?.address()
       const port = typeof address === 'object' && address !== null ? address.port : 0
-      void shell.openExternal(`http://127.0.0.1:${String(port)}/`)
+      shell.openExternal(`http://127.0.0.1:${String(port)}/`).catch(() => {})
     })
     server.on('error', (err: NodeJS.ErrnoException) => {
       if (settled) return
@@ -1535,10 +1547,10 @@ ipcMain.handle('integrations:connect', async (_event, payload: unknown) => {
   try {
     server.start()
     const authUrl = server.buildAuthUrl(service)
-    void shell.openExternal(authUrl)
+    shell.openExternal(authUrl).catch(() => {})
     const code = await server.waitForCallback()
     await exchangeAndStoreTokens(code, service)
-    void syncTokenToGateway(service)
+    syncTokenToGateway(service).catch(() => {})
     return { success: true }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Verbindung fehlgeschlagen' }
@@ -1561,7 +1573,7 @@ ipcMain.handle('integrations:disconnect', async (_event, payload: unknown) => {
 
   try {
     await revokeTokens(service)
-    void unsyncTokenFromGateway(service)
+    unsyncTokenFromGateway(service).catch(() => {})
     return { success: true }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Trennen fehlgeschlagen' }
@@ -1598,7 +1610,7 @@ ipcMain.handle('auth:start-oauth', async (_event, payload: unknown) => {
   try {
     server.start()
     const authUrl = server.buildCombinedAuthUrl(['gmail', 'calendar'])
-    void shell.openExternal(authUrl)
+    shell.openExternal(authUrl).catch(() => {})
     const code = await server.waitForCallback()
 
     // Exchange code — combined scopes, store under 'gmail' key
@@ -1612,7 +1624,7 @@ ipcMain.handle('auth:start-oauth', async (_event, payload: unknown) => {
     writeEncryptedToken('calendar', gmailToken)
 
     // Sync to gateway
-    void syncTokenToGateway('gmail')
+    syncTokenToGateway('gmail').catch(() => {})
 
     const expiresAt = gmailToken.obtained_at + gmailToken.expires_in * 1000
     return {
@@ -2248,7 +2260,7 @@ ipcMain.handle('shell:open-external', (_event, url: unknown) => {
   try {
     const parsed = new URL(url)
     if (parsed.protocol === 'https:') {
-      void shell.openExternal(url)
+      shell.openExternal(url).catch(() => {})
     }
   } catch {
     // Invalid URL — ignore silently
@@ -2352,14 +2364,18 @@ app.whenReady().then(() => {
 
   setupGateway(!checkFirstRun())
 
-  credentialVault = new CredentialVault()
-  credentialBroker = new CredentialBroker(credentialVault, mainWindow)
-  setCredentialResolver({
-    resolve: async (currentUrl: string): Promise<string> => {
-      if (!credentialBroker) throw new Error('CredentialBroker nicht initialisiert')
-      return credentialBroker.resolveForUrl(currentUrl)
-    },
-  })
+  try {
+    credentialVault = new CredentialVault()
+    credentialBroker = new CredentialBroker(credentialVault, mainWindow)
+    setCredentialResolver({
+      resolve: async (currentUrl: string): Promise<string> => {
+        if (!credentialBroker) throw new Error('CredentialBroker nicht initialisiert')
+        return credentialBroker.resolveForUrl(currentUrl)
+      },
+    })
+  } catch (err) {
+    console.error('[main] CredentialVault init failed (better-sqlite3 native addon?):', err instanceof Error ? err.message : String(err))
+  }
 
   if (app.isPackaged) {
     initAutoUpdater(mainWindow!)
@@ -2373,6 +2389,8 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+}).catch((err: unknown) => {
+  console.error('[main] app.whenReady failed:', err instanceof Error ? err.message : String(err))
 })
 
 app.on('before-quit', (e) => {

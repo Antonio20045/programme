@@ -8,17 +8,26 @@ let checkInterval: ReturnType<typeof setInterval> | null = null
 let initialTimeout: ReturnType<typeof setTimeout> | null = null
 
 function safeCheckForUpdates(): void {
-  autoUpdater.checkForUpdates().catch((err: Error) => {
-    console.error('[updater] Check failed:', err.message)
-  })
+  try {
+    autoUpdater.checkForUpdates().catch((err: Error) => {
+      console.error('[updater] Check failed:', err.message)
+    })
+  } catch (err) {
+    console.error('[updater] Check threw:', err instanceof Error ? err.message : String(err))
+  }
 }
 
 export function initAutoUpdater(mainWindow: BrowserWindow): void {
   if (!app.isPackaged) return
 
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
-  autoUpdater.logger = null
+  try {
+    autoUpdater.autoDownload = true
+    autoUpdater.autoInstallOnAppQuit = true
+    autoUpdater.logger = null
+  } catch (err) {
+    console.error('[updater] Config failed:', err instanceof Error ? err.message : String(err))
+    return
+  }
 
   autoUpdater.on('update-available', (info) => {
     const win = mainWindow
