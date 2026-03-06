@@ -63,4 +63,4 @@ publish:
   provider: github
   private: true
   owner: Antonio20045
-  repo: ki-assistent
+  repo: programme
