@@ -50,6 +50,7 @@ jobs:
           CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           DEFAULT_GATEWAY_URL: ${{ secrets.DEFAULT_GATEWAY_URL }}
+          GH_TOKEN_UPDATER: ${{ secrets.GH_TOKEN_UPDATER }}
 
       - name: Build installer
         working-directory: apps/desktop

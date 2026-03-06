@@ -24,6 +24,11 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
     autoUpdater.logger = null
+
+    const ghToken = process.env.GH_TOKEN_UPDATER
+    if (ghToken) {
+      autoUpdater.requestHeaders = { Authorization: `token ${ghToken}` }
+    }
   } catch (err) {
     console.error('[updater] Config failed:', err instanceof Error ? err.message : String(err))
     return

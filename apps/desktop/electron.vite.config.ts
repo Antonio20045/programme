@@ -24,11 +24,12 @@ export default defineConfig({
   main: {
     plugins: [],
     define: {
-      'process.env.CLERK_PUBLISHABLE_KEY': JSON.stringify(env['CLERK_PUBLISHABLE_KEY'] ?? ''),
-      'process.env.DEFAULT_GATEWAY_URL': JSON.stringify(env['DEFAULT_GATEWAY_URL'] ?? ''),
-      'process.env.GOOGLE_OAUTH_CLIENT_ID': JSON.stringify(env['GOOGLE_OAUTH_CLIENT_ID'] ?? ''),
-      'process.env.GOOGLE_OAUTH_CLIENT_SECRET': JSON.stringify(env['GOOGLE_OAUTH_CLIENT_SECRET'] ?? ''),
-      'process.env.CLERK_SECRET_KEY': JSON.stringify(env['CLERK_SECRET_KEY'] ?? ''),
+      'process.env.CLERK_PUBLISHABLE_KEY': JSON.stringify(process.env.CLERK_PUBLISHABLE_KEY || env['CLERK_PUBLISHABLE_KEY'] || ''),
+      'process.env.DEFAULT_GATEWAY_URL': JSON.stringify(process.env.DEFAULT_GATEWAY_URL || env['DEFAULT_GATEWAY_URL'] || ''),
+      'process.env.GOOGLE_OAUTH_CLIENT_ID': JSON.stringify(process.env.GOOGLE_OAUTH_CLIENT_ID || env['GOOGLE_OAUTH_CLIENT_ID'] || ''),
+      'process.env.GOOGLE_OAUTH_CLIENT_SECRET': JSON.stringify(process.env.GOOGLE_OAUTH_CLIENT_SECRET || env['GOOGLE_OAUTH_CLIENT_SECRET'] || ''),
+      'process.env.CLERK_SECRET_KEY': JSON.stringify(process.env.CLERK_SECRET_KEY || env['CLERK_SECRET_KEY'] || ''),
+      'process.env.GH_TOKEN_UPDATER': JSON.stringify(process.env.GH_TOKEN_UPDATER || env['GH_TOKEN_UPDATER'] || ''),
     },
     resolve: {
       alias: [
