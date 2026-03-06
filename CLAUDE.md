@@ -2,6 +2,9 @@
 
 Electron + React + TypeScript Monorepo. pnpm Workspaces.
 
+## Workflow & Prinzipien
+Bei nicht-trivialen Tasks (3+ Schritte): Lies und befolge .claude/rules/workflow.md
+
 ## Nach Compaction / Session-Start
 1. Lies tasks/todo.md — wo stehst du im aktuellen Task?
 2. Lies die relevanten Quelldateien NEU — verlass dich NICHT auf Compaction-Zusammenfassungen
@@ -21,9 +24,6 @@ Electron + React + TypeScript Monorepo. pnpm Workspaces.
 
 pnpm typecheck | pnpm lint | pnpm test | pnpm build | pnpm dev | pnpm audit-deps
 
-## Workflow & Prinzipien
-Bei nicht-trivialen Tasks (3+ Schritte): Lies .claude/rules/workflow.md
-
 ## Referenzen (bei Bedarf lesen)
 
 Architektur: docs/architecture.md | Struktur: docs/structure.md | OpenClaw: docs/openclaw-analyse.md
@@ -34,6 +34,6 @@ Workflow: .claude/rules/workflow.md | Contracts: .claude/rules/task-contracts.md
 
 ## Aktueller Stand
 
-Phase: 27 — CLAUDE.md Refactoring + Workflow Rules + Task Contracts + Commands
-Nächster Schritt: E2E-Tests (Sub-Agent Full-Flow: Factory → Cron → Execution → Retention → Lifecycle), Gateway-Integration (agent-cron init, delegate routing)
-Letzter Commit: refactor: extract workflow rules, add task contracts and research/consolidate commands
+Phase: 27 — abgeschlossen
+Nächster Schritt: Manuelles Testen der System-Prompt-Änderungen (verschiedene Sprachen, connect-google Flow)
+Letzter Commit: feat: migrate system prompt to English + fix connect-google routing

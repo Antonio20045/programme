@@ -1,5 +1,5 @@
 /**
- * Human-readable tool descriptions in first-person German.
+ * Human-readable tool descriptions for the LLM system prompt.
  *
  * Maps every tool name to a persona-friendly description that hides
  * technical internals from the LLM. Unknown tools get a generic fallback.
@@ -17,173 +17,173 @@ export interface ToolPersona {
 const TOOL_PERSONAS: ReadonlyMap<string, ToolPersona> = new Map<string, ToolPersona>([
   // ── Server: Utility ──
   ['calculator', {
-    description: 'Ich kann rechnen, Einheiten umrechnen und mathematische Ausdruecke loesen.',
+    description: 'I can calculate, convert units, and solve math expressions.',
   }],
   ['translator', {
-    description: 'Ich kann Texte in verschiedene Sprachen uebersetzen.',
+    description: 'I can translate text into different languages.',
   }],
   ['datetime', {
-    description: 'Ich kann Datum und Uhrzeit abfragen, Zeitzonen umrechnen und Zeitdifferenzen berechnen.',
+    description: 'I can check date and time, convert time zones, and calculate time differences.',
   }],
   ['json-tools', {
-    description: 'Ich kann strukturierte Daten lesen, umwandeln und formatieren.',
+    description: 'I can read, transform, and format structured data.',
   }],
   ['crypto-tools', {
-    description: 'Ich kann Texte verschluesseln, entschluesseln und Pruefsummen berechnen.',
+    description: 'I can encrypt, decrypt, and compute checksums.',
   }],
   ['data-transform', {
-    description: 'Ich kann Daten zwischen verschiedenen Formaten umwandeln und verarbeiten.',
+    description: 'I can convert and process data between different formats.',
   }],
   ['code-runner', {
-    description: 'Ich kann kleine Programme ausfuehren und Berechnungen durchfuehren.',
+    description: 'I can run small programs and perform calculations.',
   }],
   ['url-tools', {
-    description: 'Ich kann Webseiten-Adressen analysieren, kuerzen und ueberpruefen.',
+    description: 'I can analyze, shorten, and verify web addresses.',
   }],
 
   // ── Server: Media & Info ──
   ['web-search', {
-    description: 'Ich kann im Internet nach aktuellen Informationen suchen und Webseiten-Texte abrufen. Verwende mich fuer Wissensfragen, Faktenrecherche und aktuelle Ereignisse. Nicht fuer E-Mails, Termine oder Desktop-Apps.',
+    description: 'I can search the internet for current information and fetch web page content. Use me for knowledge questions, fact-checking, and current events. Not for emails, calendar, or desktop apps.',
   }],
   ['news-feed', {
-    description: 'Ich kann aktuelle Nachrichten und Neuigkeiten finden.',
+    description: 'I can find current news and headlines.',
   }],
   ['weather', {
-    description: 'Ich kann das aktuelle Wetter und Vorhersagen abrufen.',
+    description: 'I can check the current weather and forecasts.',
   }],
   ['image-gen', {
-    description: 'Ich kann Bilder nach deiner Beschreibung erstellen.',
+    description: 'I can create images based on your description.',
   }],
   ['summarizer', {
-    description: 'Ich kann lange Texte zusammenfassen und die wichtigsten Punkte herausarbeiten.',
+    description: 'I can summarize long texts and extract key points.',
   }],
   ['diagram', {
-    description: 'Ich kann Diagramme und Visualisierungen erstellen.',
+    description: 'I can create diagrams and visualizations.',
   }],
   ['archive', {
-    description: 'Ich kann Dateien komprimieren und Archive entpacken.',
+    description: 'I can compress files and extract archives.',
   }],
   ['http-client', {
-    description: 'Ich kann Informationen von Webdiensten abrufen.',
+    description: 'I can fetch information from web services.',
   }],
   ['knowledge', {
-    description: 'Ich kann in Wissensdatenbanken nachschlagen.',
+    description: 'I can look up information in knowledge bases.',
   }],
   ['youtube', {
-    description: 'Ich kann Videos suchen und Informationen zu Videos abrufen.',
+    description: 'I can search for videos and retrieve video information.',
   }],
   ['pdf-tools', {
-    description: 'Ich kann Dokumente lesen, erstellen und bearbeiten.',
+    description: 'I can read, create, and edit documents.',
   }],
 
   // ── Server: Google Workspace ──
   ['gmail', {
-    description: 'Ich verwalte die E-Mails des Users: Posteingang anzeigen, E-Mails suchen, schreiben und beantworten. Verwende mich IMMER wenn der User nach E-Mails, Posteingang oder Nachrichten fragt — direkt aufrufen, nie halluzinieren.',
+    description: 'I manage the user\'s emails: show inbox, search, compose, and reply.',
     paramOverrides: {
-      action: 'Was soll ich mit den E-Mails tun?',
+      action: 'What should I do with the emails?',
     },
   }],
   ['calendar', {
-    description: 'Ich verwalte den Kalender des Users: Termine anzeigen, erstellen, aendern und loeschen. Verwende mich IMMER wenn der User nach Terminen, Kalender oder Tagesplan fragt — direkt aufrufen, nie halluzinieren.',
+    description: 'I manage the user\'s calendar: show, create, modify, and delete events.',
     paramOverrides: {
-      action: 'Was soll ich mit dem Kalender tun?',
+      action: 'What should I do with the calendar?',
     },
   }],
   ['google-contacts', {
-    description: 'Ich kann deine Kontakte durchsuchen und verwalten.',
+    description: 'I can search and manage your contacts.',
   }],
   ['google-tasks', {
-    description: 'Ich kann Aufgabenlisten verwalten und Aufgaben erstellen oder abhaken.',
+    description: 'I can manage task lists and create or complete tasks.',
   }],
   ['google-drive', {
-    description: 'Ich kann Dateien in deiner Cloud finden, oeffnen und verwalten.',
+    description: 'I can find, open, and manage files in your cloud storage.',
   }],
   ['google-docs', {
-    description: 'Ich kann Dokumente in deiner Cloud lesen und bearbeiten.',
+    description: 'I can read and edit documents in your cloud storage.',
   }],
   ['google-sheets', {
-    description: 'Ich kann Tabellen in deiner Cloud lesen und bearbeiten.',
+    description: 'I can read and edit spreadsheets in your cloud storage.',
   }],
 
   // ── Server: Communication ──
   ['whatsapp', {
-    description: 'Ich kann Nachrichten ueber WhatsApp senden und empfangen.',
+    description: 'I can send and receive messages via WhatsApp.',
   }],
 
   // ── Server: Scheduling ──
   ['scheduler', {
-    description: 'Ich kann Erinnerungen planen und wiederkehrende Aufgaben einrichten.',
+    description: 'I can schedule reminders and set up recurring tasks.',
   }],
 
   // ── Desktop: Static ──
   ['browser', {
-    description: 'Ich lade Webseiten im Hintergrund, lese deren Inhalte, mache Screenshots und interagiere mit Formularen. '
-      + 'Wenn der User sich manuell bei einem Dienst einloggen muss (OAuth, Cookie-basiert), verwende openSession(domain) '
-      + 'um ein sichtbares Browserfenster mit persistentem Profil zu oeffnen. Der User loggt sich ein, dann laufen alle '
-      + 'weiteren Actions in dieser eingeloggten Session. Verwende mich bei "oeffne [URL]" oder wenn Webseiten-Inhalte '
-      + 'gebraucht werden. Nicht fuer Desktop-Apps — dafuer gibt es app-launcher.',
+    description: 'I load web pages in the background, read their content, take screenshots, and interact with forms. '
+      + 'When the user needs to manually sign in to a service (cookie-based login), use openSession(domain) '
+      + 'to open a visible browser window with a persistent profile. The user signs in, then all further actions '
+      + 'run in that authenticated session. Use me for "open [URL]" or when web page content is needed. '
+      + 'Not for desktop apps — use app-launcher for those.',
   }],
   ['shell', {
-    description: 'Ich kann Programme und Befehle auf deinem Computer ausfuehren.',
+    description: 'I can run programs and commands on your computer.',
   }],
   ['system-info', {
-    description: 'Ich kann Informationen ueber deinen Computer abrufen.',
+    description: 'I can retrieve information about your computer.',
   }],
 
   // ── Desktop: Factory ──
   ['clipboard', {
-    description: 'Ich kann die Zwischenablage lesen und beschreiben.',
+    description: 'I can read and write the clipboard.',
   }],
   ['screenshot', {
-    description: 'Ich kann Bildschirmfotos erstellen.',
+    description: 'I can take screenshots.',
   }],
   ['git-tools', {
-    description: 'Ich kann Aenderungen an Projekten verfolgen und verwalten.',
+    description: 'I can track and manage changes in projects.',
   }],
   ['app-launcher', {
-    description: 'Ich starte native Desktop-Apps wie Spotify, Finder oder Terminal und verwalte laufende Programme. Verwende mich bei "oeffne [App-Name]" oder "starte [Programm]". Nicht fuer Webseiten — dafuer gibt es browser.',
+    description: 'I launch native desktop apps like Spotify, Finder, or Terminal and manage running programs. Use me for "open [app name]" or "start [program]". Not for websites — use browser for those.',
   }],
   ['media-control', {
-    description: 'Ich kann die Medienwiedergabe steuern — abspielen, pausieren, Lautstaerke aendern.',
+    description: 'I can control media playback — play, pause, change volume.',
   }],
 
   // ── Desktop: Config-dependent ──
   ['image-tools', {
-    description: 'Ich kann Bilder bearbeiten, zuschneiden und konvertieren.',
+    description: 'I can edit, crop, and convert images.',
   }],
   ['ocr', {
-    description: 'Ich kann Text aus Bildern und Dokumenten erkennen.',
+    description: 'I can recognize text in images and documents.',
   }],
 
   // ── File-based ──
   ['filesystem', {
-    description: 'Ich kann Dateien und Ordner auf deinem Computer lesen, erstellen und verwalten.',
+    description: 'I can read, create, and manage files and folders on your computer.',
   }],
   ['notes', {
-    description: 'Ich kann Notizen erstellen, durchsuchen und verwalten.',
+    description: 'I can create, search, and manage notes.',
   }],
   ['reminders', {
-    description: 'Ich kann Erinnerungen erstellen und verwalten.',
+    description: 'I can create and manage reminders.',
   }],
 
   // ── Sub-Agent Tools ──
   ['delegate', {
-    description: 'Ich kann Aufgaben an spezialisierte Helfer weitergeben.',
+    description: 'I can delegate tasks to specialized helpers.',
   }],
   ['create-agent', {
-    description: 'Ich kann neue spezialisierte Helfer fuer wiederkehrende Aufgaben erstellen.',
+    description: 'I can create new specialized helpers for recurring tasks.',
   }],
 
   // ── Connect Placeholder ──
   ['connect-google', {
-    description: 'Ich verbinde dein Google-Konto, damit ich deine E-Mails und Termine lesen kann.',
+    description: 'Connects the user\'s Google account. Only call when the user EXPLICITLY says they use Gmail or Google. NEVER call on your own.',
   }],
 ])
 
 // ─── Public API ──────────────────────────────────────────────
 
 const GENERIC_PERSONA: ToolPersona = {
-  description: 'Ich kann dir bei dieser Aufgabe helfen.',
+  description: 'I can help you with this task.',
 }
 
 /**
@@ -206,8 +206,8 @@ export function getToolPersona(name: string): ToolPersona {
 export function buildToolDescriptionHints(availableToolNames: readonly string[]): string {
   const available = new Set(availableToolNames)
   const lines: string[] = [
-    '## Werkzeuge',
-    'Wenn du ueber deine Faehigkeiten sprichst, beschreibe sie so:',
+    '## Tools',
+    'When talking about your capabilities, describe them like this:',
   ]
 
   for (const [name, persona] of TOOL_PERSONAS) {
@@ -221,34 +221,39 @@ export function buildToolDescriptionHints(availableToolNames: readonly string[])
 
   if (available.has('app-launcher') || available.has('browser')) {
     routingLines.push(
-      '- "oeffne Spotify/Finder/Terminal/[App-Name]" = app-launcher. "oeffne google.com/[URL]" = browser.',
+      '- "open Spotify/Finder/Terminal/[app name]" = app-launcher. "open google.com/[URL]" = browser.',
     )
   }
   if (available.has('gmail')) {
     routingLines.push(
-      '- Jede Frage zu E-Mails, Posteingang oder Nachrichten = SOFORT gmail aufrufen.',
+      '- Emails, inbox, or messages = use gmail.',
     )
   }
   if (available.has('calendar')) {
     routingLines.push(
-      '- Jede Frage zu Terminen, Kalender oder "was steht heute an" = SOFORT calendar aufrufen.',
+      '- Events, calendar, or "what\'s on today" = use calendar.',
+    )
+  }
+  if (!available.has('gmail') && !available.has('calendar') && available.has('connect-google')) {
+    routingLines.push(
+      '- Emails, inbox, or calendar without a connected account = Ask the user which provider they use, THEN call connect-google.',
     )
   }
   if (available.has('web-search') || available.has('browser')) {
     routingLines.push(
-      '- Fakten/Informationen suchen = web-search. Mit einer Webseite interagieren = browser.',
+      '- Looking up facts/information = web-search. Interacting with a web page = browser.',
     )
     if (available.has('browser')) {
       routingLines.push(
-        '- Wenn der User sich bei einem Webdienst einloggen muss = browser openSession. Fuer normales Surfen = browser openPage.',
+        '- User needs to sign in to a web service = browser openSession. Normal browsing = browser openPage.',
       )
     }
   }
 
   if (routingLines.length > 0) {
     lines.push('')
-    lines.push('## Werkzeugauswahl')
-    lines.push('WICHTIG: Wenn ein passendes Werkzeug verfuegbar ist, RUFE ES AUF. Erklaere nie dass du keinen Zugriff hast.')
+    lines.push('## Tool Selection')
+    lines.push('Check FIRST if the tool is in your list BEFORE calling it.')
     lines.push(...routingLines)
   }
 
