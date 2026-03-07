@@ -61,9 +61,12 @@ if [ -d "$DEPLOY_DIR/node_modules/.pnpm" ]; then
   cd "$REPO_ROOT"
 fi
 
-# Dereference ALL symlinks — create a flat copy of node_modules where
-# every symlink is replaced by the real file/directory. On CI all targets
-# still exist, so cp -RLf resolves them. Without this, the packaged app
+# After pruning, some symlinks point to deleted packages — remove those first
+echo "[prepare-gateway] Removing broken symlinks..."
+find "$DEPLOY_DIR/node_modules" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+
+# Dereference ALL remaining symlinks — create a flat copy where every symlink
+# is replaced by the real file/directory. Without this, the packaged app
 # contains symlinks pointing to CI paths that don't exist on the user's machine.
 echo "[prepare-gateway] Dereferencing all symlinks in node_modules..."
 cp -RLf "$DEPLOY_DIR/node_modules" "$DEPLOY_DIR/node_modules_real"
