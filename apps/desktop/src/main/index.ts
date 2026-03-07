@@ -191,7 +191,7 @@ const ENV_API_KEYS = [
  */
 function checkFirstRun(): boolean {
   // Service mode: Clerk handles auth, API keys are on the server
-  if ((process.env.CLERK_PUBLISHABLE_KEY ?? '').length > 0) return false
+  if (getGatewayMode() === 'server' && (process.env.CLERK_PUBLISHABLE_KEY ?? '').length > 0) return false
 
   const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json')
 
@@ -880,6 +880,8 @@ ipcMain.handle('auth:set-clerk-token', (_event, payload: unknown) => {
 })
 
 ipcMain.handle('auth:get-clerk-publishable-key', () => {
+  // Clerk auth is only needed in server mode — skip in local mode
+  if (getGatewayMode() === 'local') return null
   const key = process.env.CLERK_PUBLISHABLE_KEY ?? ''
   return key.length > 0 ? key : null
 })
