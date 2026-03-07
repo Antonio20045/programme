@@ -64,6 +64,36 @@ function ClerkAuthSync({ children }: { children: React.ReactNode }): JSX.Element
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+const CLERK_INIT_TIMEOUT_MS = 8_000
+
+/**
+ * Guard that falls back to local mode if Clerk fails to initialize
+ * (e.g. network error, invalid key, CSP block).
+ */
+function ClerkAuthGuard({ children }: { children: React.ReactNode }): JSX.Element {
+  const { isLoaded } = useAuth()
+  const [timedOut, setTimedOut] = useState(false)
+
+  useEffect(() => {
+    if (isLoaded) return
+    const timer = setTimeout(() => {
+      console.warn('[AuthProvider] Clerk init timed out — falling back to local mode')
+      setTimedOut(true)
+    }, CLERK_INIT_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [isLoaded])
+
+  if (timedOut && !isLoaded) {
+    return (
+      <AuthContext.Provider value={{ isSignedIn: true, isLoaded: true, clerkEnabled: false }}>
+        {children}
+      </AuthContext.Provider>
+    )
+  }
+
+  return <ClerkAuthSync>{children}</ClerkAuthSync>
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }): JSX.Element {
   const [publishableKey, setPublishableKey] = useState<string | null | undefined>(undefined)
 
@@ -97,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): JSX.E
   // Clerk is configured
   return (
     <ClerkProvider publishableKey={publishableKey}>
-      <ClerkAuthSync>{children}</ClerkAuthSync>
+      <ClerkAuthGuard>{children}</ClerkAuthGuard>
     </ClerkProvider>
   )
 }

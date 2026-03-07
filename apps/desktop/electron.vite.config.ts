@@ -25,7 +25,9 @@ export default defineConfig({
     plugins: [],
     define: {
       'process.env.CLERK_PUBLISHABLE_KEY': JSON.stringify(process.env.CLERK_PUBLISHABLE_KEY || env['CLERK_PUBLISHABLE_KEY'] || ''),
-      'process.env.DEFAULT_GATEWAY_URL': JSON.stringify(process.env.DEFAULT_GATEWAY_URL || env['DEFAULT_GATEWAY_URL'] || ''),
+      // DEFAULT_GATEWAY_URL must NOT be baked in — it forces server mode for all users.
+      // Server mode is configured via ~/.openclaw/openclaw.json instead.
+      'process.env.DEFAULT_GATEWAY_URL': JSON.stringify(''),
       'process.env.GOOGLE_OAUTH_CLIENT_ID': JSON.stringify(process.env.GOOGLE_OAUTH_CLIENT_ID || env['GOOGLE_OAUTH_CLIENT_ID'] || ''),
       'process.env.GOOGLE_OAUTH_CLIENT_SECRET': JSON.stringify(process.env.GOOGLE_OAUTH_CLIENT_SECRET || env['GOOGLE_OAUTH_CLIENT_SECRET'] || ''),
       'process.env.CLERK_SECRET_KEY': JSON.stringify(process.env.CLERK_SECRET_KEY || env['CLERK_SECRET_KEY'] || ''),

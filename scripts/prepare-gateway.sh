@@ -65,11 +65,21 @@ fi
 echo "[prepare-gateway] Removing broken symlinks..."
 find "$DEPLOY_DIR/node_modules" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 
+# Remove circular symlink structures (pnpm workspace back-references)
+# These cause cp -RLf to fail with "directory causes a cycle"
+echo "[prepare-gateway] Removing circular symlink structures..."
+find "$DEPLOY_DIR/node_modules/.pnpm" -path "*/node_modules/openclaw/node_modules/.pnpm" -type d -exec rm -rf {} + 2>/dev/null || true
+find "$DEPLOY_DIR/node_modules/.pnpm" -path "*/node_modules/openclaw/extensions" -type d -exec rm -rf {} + 2>/dev/null || true
+find "$DEPLOY_DIR/node_modules/.pnpm" -path "*/node_modules/openclaw/packages" -type d -exec rm -rf {} + 2>/dev/null || true
+
+# Remove any remaining broken symlinks (from circular structure removal)
+find "$DEPLOY_DIR/node_modules" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+
 # Dereference ALL remaining symlinks — create a flat copy where every symlink
 # is replaced by the real file/directory. Without this, the packaged app
 # contains symlinks pointing to CI paths that don't exist on the user's machine.
 echo "[prepare-gateway] Dereferencing all symlinks in node_modules..."
-cp -RLf "$DEPLOY_DIR/node_modules" "$DEPLOY_DIR/node_modules_real"
+cp -RLf "$DEPLOY_DIR/node_modules" "$DEPLOY_DIR/node_modules_real" 2>/dev/null || true
 rm -rf "$DEPLOY_DIR/node_modules"
 mv "$DEPLOY_DIR/node_modules_real" "$DEPLOY_DIR/node_modules"
 
