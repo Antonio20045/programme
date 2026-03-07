@@ -61,24 +61,14 @@ if [ -d "$DEPLOY_DIR/node_modules/.pnpm" ]; then
   cd "$REPO_ROOT"
 fi
 
-# Dereference ALL symlinks in node_modules — replace each symlink with
-# a copy of the real file/directory it points to. This prevents broken
-# symlinks in the final Electron app (CI absolute paths don't exist on
-# the user's machine).
-echo "[prepare-gateway] Dereferencing symlinks in node_modules..."
-find "$DEPLOY_DIR/node_modules" -type l | while read link; do
-  target=$(readlink -f "$link" 2>/dev/null || true)
-  if [ -z "$target" ] || [ ! -e "$target" ]; then
-    # Broken symlink — remove it
-    rm -f "$link"
-  elif [ -d "$target" ]; then
-    rm -f "$link"
-    cp -R "$target" "$link"
-  else
-    rm -f "$link"
-    cp "$target" "$link"
-  fi
-done
+# Dereference ALL symlinks — create a flat copy of node_modules where
+# every symlink is replaced by the real file/directory. On CI all targets
+# still exist, so cp -RLf resolves them. Without this, the packaged app
+# contains symlinks pointing to CI paths that don't exist on the user's machine.
+echo "[prepare-gateway] Dereferencing all symlinks in node_modules..."
+cp -RLf "$DEPLOY_DIR/node_modules" "$DEPLOY_DIR/node_modules_real"
+rm -rf "$DEPLOY_DIR/node_modules"
+mv "$DEPLOY_DIR/node_modules_real" "$DEPLOY_DIR/node_modules"
 
 # Override root .gitignore so electron-builder includes node_modules
 touch "$DEPLOY_DIR/.npmignore"
