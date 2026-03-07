@@ -61,8 +61,24 @@ if [ -d "$DEPLOY_DIR/node_modules/.pnpm" ]; then
   cd "$REPO_ROOT"
 fi
 
-# Clean up orphaned symlinks
-find "$DEPLOY_DIR/node_modules" -maxdepth 2 -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+# Dereference ALL symlinks in node_modules — replace each symlink with
+# a copy of the real file/directory it points to. This prevents broken
+# symlinks in the final Electron app (CI absolute paths don't exist on
+# the user's machine).
+echo "[prepare-gateway] Dereferencing symlinks in node_modules..."
+find "$DEPLOY_DIR/node_modules" -type l | while read link; do
+  target=$(readlink -f "$link" 2>/dev/null || true)
+  if [ -z "$target" ] || [ ! -e "$target" ]; then
+    # Broken symlink — remove it
+    rm -f "$link"
+  elif [ -d "$target" ]; then
+    rm -f "$link"
+    cp -R "$target" "$link"
+  else
+    rm -f "$link"
+    cp "$target" "$link"
+  fi
+done
 
 # Override root .gitignore so electron-builder includes node_modules
 touch "$DEPLOY_DIR/.npmignore"
