@@ -25,6 +25,7 @@ extraResources:
     to: gateway
     filter:
       - "**/*"
+      - "!node_modules/**"
       - "!src/**"
       - "!test/**"
       - "!**/*.test.ts"
