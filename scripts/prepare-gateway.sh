@@ -75,13 +75,48 @@ find "$DEPLOY_DIR/node_modules/.pnpm" -path "*/node_modules/openclaw/packages" -
 # Remove any remaining broken symlinks (from circular structure removal)
 find "$DEPLOY_DIR/node_modules" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 
-# Dereference ALL remaining symlinks — create a flat copy where every symlink
-# is replaced by the real file/directory. Without this, the packaged app
-# contains symlinks pointing to CI paths that don't exist on the user's machine.
-echo "[prepare-gateway] Dereferencing all symlinks in node_modules..."
-cp -RLf "$DEPLOY_DIR/node_modules" "$DEPLOY_DIR/node_modules_real" 2>/dev/null || true
-rm -rf "$DEPLOY_DIR/node_modules"
-mv "$DEPLOY_DIR/node_modules_real" "$DEPLOY_DIR/node_modules"
+# Dereference symlinks individually — cp -RLf on the entire tree fails silently
+# on circular references and drops packages. Instead, resolve each symlink one by one.
+echo "[prepare-gateway] Dereferencing symlinks in node_modules..."
+find "$DEPLOY_DIR/node_modules" -type l | while IFS= read -r link; do
+  target="$(readlink -f "$link" 2>/dev/null || true)"
+  if [ -n "$target" ] && [ -e "$target" ]; then
+    rm -f "$link"
+    cp -R "$target" "$link" 2>/dev/null || true
+  else
+    rm -f "$link"
+  fi
+done
+
+# Ensure all hoisted packages from .pnpm/node_modules are at the top level.
+# pnpm deploy creates top-level symlinks → .pnpm/pkg/node_modules/pkg, but after
+# symlink resolution some may be missing. Copy from the flat .pnpm/node_modules/ store.
+echo "[prepare-gateway] Ensuring hoisted packages are present..."
+if [ -d "$DEPLOY_DIR/node_modules/.pnpm/node_modules" ]; then
+  for pkg in "$DEPLOY_DIR/node_modules/.pnpm/node_modules"/*; do
+    name="$(basename "$pkg")"
+    # Skip @scoped packages (handled separately) and dotfiles
+    [ "${name#.}" != "$name" ] && continue
+    if [ ! -e "$DEPLOY_DIR/node_modules/$name" ]; then
+      cp -R "$pkg" "$DEPLOY_DIR/node_modules/$name" 2>/dev/null || true
+    fi
+  done
+  # Handle @scoped packages
+  for scope in "$DEPLOY_DIR/node_modules/.pnpm/node_modules"/@*; do
+    [ -d "$scope" ] || continue
+    scope_name="$(basename "$scope")"
+    mkdir -p "$DEPLOY_DIR/node_modules/$scope_name"
+    for pkg in "$scope"/*; do
+      name="$(basename "$pkg")"
+      if [ ! -e "$DEPLOY_DIR/node_modules/$scope_name/$name" ]; then
+        cp -R "$pkg" "$DEPLOY_DIR/node_modules/$scope_name/$name" 2>/dev/null || true
+      fi
+    done
+  done
+fi
+
+# Final cleanup: remove any remaining broken symlinks
+find "$DEPLOY_DIR/node_modules" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 
 # Override root .gitignore so electron-builder includes node_modules
 touch "$DEPLOY_DIR/.npmignore"
