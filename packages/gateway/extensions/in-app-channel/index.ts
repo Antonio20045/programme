@@ -38,10 +38,17 @@ const plugin = {
     // ── Full channel registration (lazy, so import failures don't block /health) ──
     let channelReady = false;
     try {
-      // Dynamic import to avoid top-level import failures when src/ is unavailable
+      // Pre-compiled CJS bundle (built by prepare-gateway.sh with tsdown).
+      // Falls back to .ts source via jiti in dev mode.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { InAppChannelAdapter, createInAppPlugin } =
-        require("../../channels/in-app.js") as typeof import("../../channels/in-app.js");
+      let channelModule: typeof import("../../channels/in-app.js");
+      try {
+        channelModule = require("../../channels/in-app.cjs");
+      } catch {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        channelModule = require("../../channels/in-app.js");
+      }
+      const { InAppChannelAdapter, createInAppPlugin } = channelModule;
       const adapter = new InAppChannelAdapter();
       api.registerChannel({ plugin: createInAppPlugin(adapter) });
       api.registerHttpHandler(adapter.handleRequest.bind(adapter));

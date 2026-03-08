@@ -26,18 +26,14 @@ extraResources:
     filter:
       - "**/*"
       - "!node_modules/**"
+      - "!src/**"
       - "!test/**"
       - "!**/*.test.ts"
-      - "!**/*.test.js"
-      - "!**/*.spec.ts"
       - "!docs/**"
       - "!*.md"
       - "!tsconfig*.json"
       - "!tsdown.config.ts"
       - "!vitest*.config.ts"
-      - "!src/**/*.test.ts"
-      - "!src/**/*.test.js"
-      - "!src/**/*.spec.ts"
 
 mac:
   target:
