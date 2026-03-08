@@ -32,6 +32,24 @@ find "$GATEWAY_DIR/extensions/in-app-channel" -maxdepth 1 -type f -exec cp {} "$
 mkdir -p "$DEPLOY_DIR/channels"
 cp "$GATEWAY_DIR/channels/in-app.ts" "$DEPLOY_DIR/channels/"
 
+# Gateway source files — in-app.ts and extension/index.ts import from ../src/, ../config.js,
+# ../tool-router.js etc. These source files are NOT included by pnpm deploy (only dist/ is).
+# We copy them into the bundle so jiti can resolve them at runtime.
+echo "[prepare-gateway] Copying gateway source files for channel adapter..."
+cp "$GATEWAY_DIR/config.ts" "$DEPLOY_DIR/"
+cp "$GATEWAY_DIR/tool-router.ts" "$DEPLOY_DIR/"
+cp -R "$GATEWAY_DIR/src" "$DEPLOY_DIR/src"
+
+# Tools source files — in-app.ts imports from ../../tools/src/ (relative to channels/)
+# In the packed app: Resources/gateway/channels/ → ../../tools/src/ = Resources/tools/src/
+# We create a sibling tools-bundle/ next to gateway-bundle/ that after-pack.js will copy.
+TOOLS_SRC="$REPO_ROOT/packages/tools/src"
+TOOLS_DEST="$REPO_ROOT/apps/desktop/tools-bundle/src"
+echo "[prepare-gateway] Copying tools source files..."
+rm -rf "$REPO_ROOT/apps/desktop/tools-bundle"
+mkdir -p "$TOOLS_DEST"
+cp "$TOOLS_SRC"/*.ts "$TOOLS_DEST/"
+
 # ── Pruning: Remove dependencies not imported by dist/ ──
 # IMPORTANT: Only prune packages that do NOT appear in dist/ imports.
 # Channel SDKs (@whiskeysockets, grammy, @slack, @buape, @line, @aws-sdk,

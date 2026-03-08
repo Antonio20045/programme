@@ -12,3 +12,4 @@ release/
 
 # Gateway bundle for packaged Electron app
 apps/desktop/gateway-bundle/
+apps/desktop/tools-bundle/

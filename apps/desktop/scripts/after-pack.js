@@ -35,4 +35,14 @@ exports.default = async function (context) {
 
   const size = execSync(`du -sh "${dest}"`).toString().split('\t')[0]
   console.log(`[after-pack] Done. node_modules size: ${size}`)
+
+  // Copy tools source files — in-app.ts imports from ../../tools/src/ (relative to gateway/channels/)
+  // In the packed app: Resources/gateway/channels/../../tools/src/ = Resources/tools/src/
+  const toolsSrc = path.join(projectDir, 'tools-bundle', 'src')
+  if (fs.existsSync(toolsSrc)) {
+    const toolsDest = path.join(resourcesDir, 'tools', 'src')
+    console.log(`[after-pack] Copying tools: ${toolsSrc} -> ${toolsDest}`)
+    fs.cpSync(toolsSrc, toolsDest, { recursive: true })
+    console.log('[after-pack] Tools source files copied.')
+  }
 }
