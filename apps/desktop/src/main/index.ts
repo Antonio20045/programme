@@ -487,7 +487,7 @@ function ensureGatewayConfig(): void {
     }
   }
 
-  // 3. In-App-Channel Extension-Pfad registrieren
+  // 3. In-App-Channel Extension-Pfad registrieren (replace ALL paths with single correct one)
   const plugins = (config['plugins'] ?? {}) as Record<string, unknown>
   const load = (plugins['load'] ?? {}) as Record<string, unknown>
   const paths = Array.isArray(load['paths']) ? (load['paths'] as string[]) : []
@@ -495,16 +495,19 @@ function ensureGatewayConfig(): void {
     ? path.join(process.resourcesPath, 'gateway', 'extensions', 'in-app-channel')
     : path.join(__dirname, '../../../../packages/gateway/extensions/in-app-channel')
   const resolvedDir = path.resolve(extensionDir)
-  // Remove stale extension paths that no longer exist on disk
-  const cleanedPaths = paths.filter((p) => {
-    try { return fs.existsSync(p) } catch { return false } // eslint-disable-line security/detect-non-literal-fs-filename
-  })
-  if (!cleanedPaths.includes(resolvedDir)) {
-    cleanedPaths.push(resolvedDir)
-  }
-  if (cleanedPaths.length !== paths.length || !paths.includes(resolvedDir)) {
-    load['paths'] = cleanedPaths
+  // Replace all paths with the single correct one — prevents duplicate plugin warnings
+  if (paths.length !== 1 || paths[0] !== resolvedDir) {
+    load['paths'] = [resolvedDir]
     plugins['load'] = load
+    config['plugins'] = plugins
+    changed = true
+  }
+
+  // 5. Memory-Plugin deaktivieren (memory-core existiert nicht im Bundle)
+  const slots = (plugins['slots'] ?? {}) as Record<string, unknown>
+  if (slots['memory'] !== 'none') {
+    slots['memory'] = 'none'
+    plugins['slots'] = slots
     config['plugins'] = plugins
     changed = true
   }
