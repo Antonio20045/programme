@@ -5,14 +5,32 @@
  * Dependencies: archiver (create), yauzl (read/extract).
  */
 
-import archiver from 'archiver'
 import * as fs from 'node:fs'
 import * as fsPromises from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { pipeline } from 'node:stream/promises'
-import * as yauzl from 'yauzl'
 import type { AgentToolResult, ExtendedAgentTool, JSONSchema } from './types'
+
+// Lazy-load npm deps so the module can be imported without them being installed
+// (e.g. when loaded in the production gateway bundle via jiti)
+import type archiver from 'archiver'
+import type * as yauzlTypes from 'yauzl'
+
+type ArchiverFn = typeof archiver
+let _archiver: ArchiverFn | null = null
+let _yauzl: typeof yauzlTypes | null = null
+async function getArchiver(): Promise<ArchiverFn> {
+  if (!_archiver) {
+    const mod = await import('archiver')
+    _archiver = mod.default ?? (mod as unknown as ArchiverFn)
+  }
+  return _archiver
+}
+async function getYauzl(): Promise<typeof yauzlTypes> {
+  if (!_yauzl) _yauzl = await import('yauzl')
+  return _yauzl
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -169,9 +187,10 @@ function textResult(text: string): AgentToolResult {
 }
 
 // Promisified yauzl.open
-function openZip(filePath: string): Promise<yauzl.ZipFile> {
+async function openZip(filePath: string): Promise<yauzlTypes.ZipFile> {
+  const yz = await getYauzl()
   return new Promise((resolve, reject) => {
-    yauzl.open(filePath, { lazyEntries: true }, (err, zipfile) => {
+    yz.open(filePath, { lazyEntries: true }, (err: Error | null, zipfile?: yauzlTypes.ZipFile) => {
       if (err) return reject(err)
       if (!zipfile) return reject(new Error('Failed to open ZIP file'))
       resolve(zipfile)
@@ -180,10 +199,10 @@ function openZip(filePath: string): Promise<yauzl.ZipFile> {
 }
 
 // Read all entries from a zip file
-function readEntries(zipfile: yauzl.ZipFile): Promise<yauzl.Entry[]> {
+function readEntries(zipfile: yauzlTypes.ZipFile): Promise<yauzlTypes.Entry[]> {
   return new Promise((resolve, reject) => {
-    const entries: yauzl.Entry[] = []
-    zipfile.on('entry', (entry: yauzl.Entry) => {
+    const entries: yauzlTypes.Entry[] = []
+    zipfile.on('entry', (entry: yauzlTypes.Entry) => {
       entries.push(entry)
       zipfile.readEntry()
     })
@@ -194,9 +213,9 @@ function readEntries(zipfile: yauzl.ZipFile): Promise<yauzl.Entry[]> {
 }
 
 // Open read stream for an entry
-function openReadStream(zipfile: yauzl.ZipFile, entry: yauzl.Entry): Promise<NodeJS.ReadableStream> {
+function openReadStream(zipfile: yauzlTypes.ZipFile, entry: yauzlTypes.Entry): Promise<NodeJS.ReadableStream> {
   return new Promise((resolve, reject) => {
-    zipfile.openReadStream(entry, (err, stream) => {
+    zipfile.openReadStream(entry, (err: Error | null, stream?: NodeJS.ReadableStream) => {
       if (err) return reject(err)
       if (!stream) return reject(new Error('No stream returned'))
       resolve(stream)
@@ -243,7 +262,8 @@ export function createArchiveTool(config?: ArchiveConfig): ExtendedAgentTool {
           }
 
           const output = fs.createWriteStream(outputPath)
-          const archive = archiver('zip', { zlib: { level: 9 } })
+          const archiverFn = await getArchiver()
+          const archive = archiverFn('zip', { zlib: { level: 9 } })
 
           const pipelinePromise = pipeline(archive, output)
 
@@ -304,7 +324,7 @@ export function createArchiveTool(config?: ArchiveConfig): ExtendedAgentTool {
           const zipfile2 = await openZip(archivePath)
 
           await new Promise<void>((resolve, reject) => {
-            zipfile2.on('entry', (entry: yauzl.Entry) => {
+            zipfile2.on('entry', (entry: yauzlTypes.Entry) => {
               const fileName = entry.fileName
 
               // Zip Slip check
