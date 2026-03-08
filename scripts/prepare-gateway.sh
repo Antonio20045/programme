@@ -40,7 +40,10 @@ cat > "$TSDOWN_TMP" << 'TSDOWN_EOF'
 import { defineConfig } from "tsdown";
 export default defineConfig({ entry: "channels/in-app.ts", format: "cjs", platform: "node", fixedExtension: false });
 TSDOWN_EOF
+# tsdown may exit non-zero due to warnings — rely on file existence check below
+set +e
 pnpm -C packages/gateway exec tsdown --config .tsdown-channel.ts --outDir "$CHANNEL_BUILD_DIR" --no-clean 2>&1 | tail -5
+set -e
 rm -f "$TSDOWN_TMP"
 if [ ! -f "$CHANNEL_BUILD_DIR/in-app.cjs" ]; then
   echo "[prepare-gateway] ERROR: Failed to compile channel adapter"
