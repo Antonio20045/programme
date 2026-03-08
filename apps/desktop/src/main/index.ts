@@ -495,12 +495,30 @@ function ensureGatewayConfig(): void {
     ? path.join(process.resourcesPath, 'gateway', 'extensions', 'in-app-channel')
     : path.join(__dirname, '../../../../packages/gateway/extensions/in-app-channel')
   const resolvedDir = path.resolve(extensionDir)
-  if (!paths.includes(resolvedDir)) {
-    paths.push(resolvedDir)
-    load['paths'] = paths
+  // Remove stale extension paths that no longer exist on disk
+  const cleanedPaths = paths.filter((p) => {
+    try { return fs.existsSync(p) } catch { return false } // eslint-disable-line security/detect-non-literal-fs-filename
+  })
+  if (!cleanedPaths.includes(resolvedDir)) {
+    cleanedPaths.push(resolvedDir)
+  }
+  if (cleanedPaths.length !== paths.length || !paths.includes(resolvedDir)) {
+    load['paths'] = cleanedPaths
     plugins['load'] = load
     config['plugins'] = plugins
     changed = true
+  }
+
+  // 4. Unbekannte Top-Level-Keys entfernen die OpenClaw's Config-Validierung blockieren
+  const knownKeys = new Set([
+    'meta', 'env', 'wizard', 'update', 'auth', 'agents', 'commands',
+    'hooks', 'gateway', 'plugins', 'channels', 'providers', 'llm',
+  ])
+  for (const key of Object.keys(config)) {
+    if (!knownKeys.has(key)) {
+      delete config[key] // eslint-disable-line @typescript-eslint/no-dynamic-delete
+      changed = true
+    }
   }
 
   if (changed) {
@@ -628,7 +646,11 @@ function setupGateway(autoStart = true): void {
   })
 
   gatewayManager.onLog((stream, data) => {
-    if (!app.isPackaged) {
+    if (app.isPackaged) {
+      // In production: write gateway logs to file for debugging
+      const logPath = path.join(app.getPath('userData'), 'gateway.log')
+      fs.appendFileSync(logPath, `[${stream}] ${data}`, 'utf-8') // eslint-disable-line security/detect-non-literal-fs-filename
+    } else {
       process.stderr.write(`[gateway:${stream}] ${data}`)
     }
   })

@@ -117,20 +117,29 @@ fi
 
 # Resolve version conflicts: pnpm's virtual store gives each package its own deps.
 # After flattening, a top-level package may need a DIFFERENT version of a dep than
-# what's hoisted. Detect these and create nested node_modules for correct resolution.
+# what's hoisted. Only apply fixes from the .pnpm entry that matches the top-level
+# package version (not from other versions of the same package).
 echo "[prepare-gateway] Resolving version conflicts..."
 PNPM_DIR="$DEPLOY_DIR/node_modules/.pnpm"
 if [ -d "$PNPM_DIR" ]; then
-  # For each versioned package dir in .pnpm (e.g. .pnpm/brace-expansion@5.0.2)
   for pkg_store in "$PNPM_DIR"/*/node_modules; do
     [ -d "$pkg_store" ] || continue
-    # Get the package's own name (last entry in its node_modules)
     pkg_dir_name="$(basename "$(dirname "$pkg_store")")"
     pkg_name="${pkg_dir_name%%@[0-9]*}"  # brace-expansion@5.0.2 → brace-expansion
 
     # Find the corresponding top-level directory
     top_pkg="$DEPLOY_DIR/node_modules/$pkg_name"
     [ -d "$top_pkg" ] || continue
+
+    # CRITICAL: Only apply deps from the .pnpm entry that matches the top-level version.
+    # e.g. if top-level minimatch is v10.2.0, only use deps from .pnpm/minimatch@10.2.0,
+    # NOT from .pnpm/minimatch@3.1.2 (which would have different, incompatible deps).
+    top_pkg_ver=""
+    [ -f "$top_pkg/package.json" ] && top_pkg_ver="$(node -e "console.log(JSON.parse(require('fs').readFileSync('$top_pkg/package.json','utf8')).version)" 2>/dev/null || true)"
+    pnpm_pkg_ver="${pkg_dir_name##*@}"  # brace-expansion@5.0.2 → 5.0.2
+    if [ -n "$top_pkg_ver" ] && [ -n "$pnpm_pkg_ver" ] && [ "$top_pkg_ver" != "$pnpm_pkg_ver" ]; then
+      continue  # Skip — this .pnpm entry is for a different version than what's at top-level
+    fi
 
     # Check each dep in the package's .pnpm node_modules
     for dep in "$pkg_store"/*; do
@@ -149,11 +158,10 @@ if [ -d "$PNPM_DIR" ]; then
       [ -f "$top_dep/package.json" ] && top_ver="$(node -e "console.log(JSON.parse(require('fs').readFileSync('$top_dep/package.json','utf8')).version)" 2>/dev/null || true)"
 
       if [ -n "$dep_ver" ] && [ -n "$top_ver" ] && [ "$dep_ver" != "$top_ver" ]; then
-        # Version mismatch — create nested node_modules for correct resolution
         mkdir -p "$top_pkg/node_modules"
         if [ ! -e "$top_pkg/node_modules/$dep_name" ]; then
           cp -R "$dep" "$top_pkg/node_modules/$dep_name" 2>/dev/null || true
-          echo "  Fixed: $pkg_name needs $dep_name@$dep_ver (top-level has v$top_ver)"
+          echo "  Fixed: $pkg_name@$top_pkg_ver needs $dep_name@$dep_ver (top-level has v$top_ver)"
         fi
       fi
     done
