@@ -34,16 +34,18 @@ find "$GATEWAY_DIR/extensions/in-app-channel" -maxdepth 1 -type f -exec cp {} "$
 echo "[prepare-gateway] Pre-compiling channel adapter with tsdown..."
 CHANNEL_BUILD_DIR="$DEPLOY_DIR/channels"
 mkdir -p "$CHANNEL_BUILD_DIR"
-pnpm -C packages/gateway exec tsdown channels/in-app.ts \
-  --format cjs \
-  --platform node \
-  --outDir "$CHANNEL_BUILD_DIR" \
-  --no-clean \
-  2>/dev/null || {
-    echo "[prepare-gateway] ERROR: Failed to compile channel adapter"
-    exit 1
-  }
-# tsdown produces in-app.cjs + chunk files — rename main file so jiti/require finds it
+# Create temporary tsdown config to avoid picking up gateway's main config
+TSDOWN_TMP="$GATEWAY_DIR/.tsdown-channel.ts"
+cat > "$TSDOWN_TMP" << 'TSDOWN_EOF'
+import { defineConfig } from "tsdown";
+export default defineConfig({ entry: "channels/in-app.ts", format: "cjs", platform: "node", fixedExtension: false });
+TSDOWN_EOF
+pnpm -C packages/gateway exec tsdown --config .tsdown-channel.ts --outDir "$CHANNEL_BUILD_DIR" --no-clean 2>&1 | tail -5
+rm -f "$TSDOWN_TMP"
+if [ ! -f "$CHANNEL_BUILD_DIR/in-app.cjs" ]; then
+  echo "[prepare-gateway] ERROR: Failed to compile channel adapter"
+  exit 1
+fi
 # Also keep the .ts source as fallback for dev mode
 cp "$GATEWAY_DIR/channels/in-app.ts" "$CHANNEL_BUILD_DIR/"
 
