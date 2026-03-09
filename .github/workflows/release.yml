@@ -55,9 +55,8 @@ jobs:
         run: npx electron-builder --config electron-builder.yml ${{ matrix.platform }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS Code Signing (optional — set in repo secrets)
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # macOS Code Signing — ad-hoc signing (no Developer ID configured)
+          CSC_IDENTITY_AUTO_DISCOVERY: false
           # macOS Notarization (optional)
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
