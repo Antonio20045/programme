@@ -87,8 +87,11 @@ find "$DEPLOY_DIR/node_modules" -type l ! -exec test -e {} \; -delete 2>/dev/nul
 
 # Remove circular symlink structures (pnpm workspace back-references)
 # These cause cp -RLf to fail with "directory causes a cycle"
+# The openclaw package in the bundle doesn't need its own node_modules —
+# all deps are already hoisted to the top level.
 echo "[prepare-gateway] Removing circular symlink structures..."
-find "$DEPLOY_DIR/node_modules/.pnpm" -path "*/node_modules/openclaw/node_modules/.pnpm" -type d -exec rm -rf {} + 2>/dev/null || true
+rm -rf "$DEPLOY_DIR/node_modules/openclaw/node_modules" 2>/dev/null || true
+find "$DEPLOY_DIR/node_modules/.pnpm" -path "*/node_modules/openclaw/node_modules" -type d -exec rm -rf {} + 2>/dev/null || true
 find "$DEPLOY_DIR/node_modules/.pnpm" -path "*/node_modules/openclaw/extensions" -type d -exec rm -rf {} + 2>/dev/null || true
 find "$DEPLOY_DIR/node_modules/.pnpm" -path "*/node_modules/openclaw/packages" -type d -exec rm -rf {} + 2>/dev/null || true
 
