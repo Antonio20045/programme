@@ -24,6 +24,7 @@ import type { ExtendedAgentTool, OAuthContext } from "../../tools/src/types.js";
 import type { ResponseModeContext } from "../src/persona/output-monitor.js";
 import type { ConfirmationManager, ConfirmationDecision } from "../tool-router";
 import type { DesktopAgentBridge } from "../tool-router";
+import type { AnyAgentTool } from "../src/agents/tools/common.js";
 import {
   initAgentCron,
   registerAllAgentCronJobs,
@@ -45,7 +46,22 @@ import {
   executeApproval,
   rejectApproval,
 } from "../../tools/src/pending-approvals.js";
-import { withUserTools, withDisabledTools } from "../../tools/src/register.js";
+import { withUserTools, withDisabledTools, getCurrentUserTools, initTools } from "../../tools/src/register.js";
+import { runEmbeddedPiAgent } from "../src/agents/pi-embedded-runner.js";
+import { resolveDefaultAgentId, resolveAgentWorkspaceDir } from "../src/agents/agent-scope.js";
+import { resolveAgentTimeoutMs } from "../src/agents/timeout.js";
+import { resolveDefaultAgentWorkspaceDir } from "../src/agents/workspace.js";
+import { loadConfig } from "../src/config/config.js";
+import { resolveSessionTranscriptPath } from "../src/config/sessions/paths.js";
+import { resolveGatewayPort } from "../src/config/paths.js";
+import {
+  ConfirmationManager as ConfirmationManagerImpl,
+  DesktopAgentBridge as DesktopAgentBridgeImpl,
+  AGENT_WS_PORT_OFFSET,
+  readAgentToken,
+  adaptToolsForPlugin,
+} from "../tool-router.js";
+import http from "node:http";
 import { getDisabledTools, getUserDefaultModel } from "../config.js";
 import { getPool } from "../src/database/index.js";
 import { runMigrations } from "../src/database/migrate.js";
@@ -2186,6 +2202,251 @@ export class InAppChannelAdapter {
     this.sse.clear();
     this.sessions.clear();
     this.confirmationManager?.destroy();
+  }
+}
+
+// ─── Minimal Plugin API interface for wiring functions ───────
+// Avoids depending on "openclaw/plugin-sdk" which is only available in the jiti context.
+interface PluginApi {
+  logger: { info?: (msg: string) => void; warn?: (msg: string) => void; error?: (msg: string) => void };
+  on: (event: string, handler: (data: { port: number }) => void) => void;
+  registerTool: (factory: () => AnyAgentTool[], opts: { names: string[] }) => void;
+}
+
+// ─── Wiring functions (called from index.ts after async import) ──────
+
+/**
+ * Connect adapter → OpenClaw agent runner (pi-embedded-runner).
+ */
+export function wireMessageHandler(adapter: InAppChannelAdapter, api: PluginApi): void {
+  try {
+    const cfg = loadConfig();
+    const agentId = resolveDefaultAgentId(cfg);
+    const workspaceDir =
+      resolveAgentWorkspaceDir(cfg, agentId) ?? resolveDefaultAgentWorkspaceDir();
+
+    adapter.setMessageHandler(
+      async ({ sessionId, text, model, provider, fallbackModel, extraSystemPrompt }) => {
+        const runId = randomUUID();
+        const sessionFile = resolveSessionTranscriptPath(sessionId, agentId);
+        const timeoutMs = resolveAgentTimeoutMs({ cfg });
+
+        // Track whether tokens were already streamed (prevents garbled output on fallback)
+        let hasEmittedTokens = false;
+
+        const buildAgentParams = (runProvider: string, runModel: string) => ({
+          sessionId,
+          sessionKey: sessionId,
+          agentId,
+          sessionFile,
+          workspaceDir,
+          runId: randomUUID(),
+          config: cfg,
+          prompt: text,
+          timeoutMs,
+          lane: "in-app" as const,
+          messageChannel: "in-app" as const,
+          messageProvider: "in-app" as const,
+          provider: runProvider,
+          model: runModel,
+          extraSystemPrompt,
+
+          onPartialReply: (payload: { text?: string }) => {
+            if (payload.text) {
+              hasEmittedTokens = true;
+              adapter.emitSSE(sessionId, { type: "token", data: payload.text });
+            }
+          },
+
+          onAgentEvent: (evt: { stream: string; data: Record<string, unknown> }) => {
+            if (evt.stream === "tool") {
+              const phase = evt.data["phase"] as string | undefined;
+              if (phase === "start") {
+                adapter.emitSSE(sessionId, {
+                  type: "tool_start",
+                  data: { toolName: evt.data["name"], params: evt.data["params"] },
+                });
+              } else if (phase === "end") {
+                adapter.emitSSE(sessionId, {
+                  type: "tool_result",
+                  data: { toolName: evt.data["name"], result: evt.data["result"] },
+                });
+              }
+            }
+          },
+        });
+
+        const extractFinalText = (result: unknown): string =>
+          (result as { payloads?: Array<{ text?: string }> }).payloads
+            ?.map((p) => p.text ?? "")
+            .join("\n")
+            .trim() ?? "";
+
+        const activeProvider = provider ?? "anthropic";
+        const activeModel = model ?? "claude-opus-4-6";
+
+        try {
+          // ── Primary: try configured provider (default: Gemini) ──
+          const result = await runEmbeddedPiAgent(buildAgentParams(activeProvider, activeModel));
+          adapter.deliverResponse(sessionId, extractFinalText(result));
+        } catch (primaryError) {
+          // ── Retry: once with 2s delay (only if no tokens streamed yet) ──
+          if (!hasEmittedTokens) {
+            await new Promise((r) => setTimeout(r, 2_000));
+            try {
+              hasEmittedTokens = false;
+              const retryResult = await runEmbeddedPiAgent(buildAgentParams(activeProvider, activeModel));
+              adapter.deliverResponse(sessionId, extractFinalText(retryResult));
+              return;
+            } catch {
+              // Retry failed — fall through to fallback
+            }
+          }
+
+          // ── Fallback: Anthropic (only if no tokens were streamed yet) ──
+          if (!hasEmittedTokens && fallbackModel) {
+            const slashIdx = fallbackModel.indexOf("/");
+            const fbProvider = slashIdx > 0 ? fallbackModel.slice(0, slashIdx) : "anthropic";
+            const fbModel = slashIdx > 0 ? fallbackModel.slice(slashIdx + 1) : fallbackModel;
+
+            api.logger.warn?.(
+              `[in-app-channel] ${activeProvider}/${activeModel} failed, falling back to ${fbProvider}/${fbModel}`,
+            );
+            adapter.emitSSE(sessionId, {
+              type: "token",
+              data: "\n\n> _Gemini nicht verfügbar — wechsle zu Anthropic..._\n\n",
+            });
+
+            hasEmittedTokens = false;
+            const fallbackResult = await runEmbeddedPiAgent(buildAgentParams(fbProvider, fbModel));
+            adapter.deliverResponse(sessionId, extractFinalText(fallbackResult));
+          } else {
+            throw primaryError;
+          }
+        }
+      },
+    );
+
+    api.logger.info?.("[in-app-channel] messageHandler wired to pi-embedded-runner");
+  } catch (err) {
+    api.logger.warn?.(`[in-app-channel] messageHandler wiring failed: ${String(err)}`);
+  }
+}
+
+/**
+ * Wire ConfirmationManager + DesktopAgentBridge.
+ * Returns the bridge instance (or null) so index.ts can use it for pendingBridge.
+ */
+export function wireToolRouter(adapter: InAppChannelAdapter, api: PluginApi): DesktopAgentBridgeImpl | null {
+  try {
+    // ── ConfirmationManager ──
+    const confirmationManager = new ConfirmationManagerImpl();
+    adapter.setConfirmationManager(confirmationManager);
+    api.logger.info?.("[in-app-channel] ConfirmationManager wired");
+
+    // ── DesktopAgentBridge (WS server for desktop tool execution) ──
+    const cfg = loadConfig();
+    const gatewayPort = resolveGatewayPort(cfg);
+    const token = readAgentToken() ?? process.env["OPENCLAW_AUTH_TOKEN"] ?? "";
+    const clerkSecretKey = process.env["CLERK_SECRET_KEY"] ?? "";
+    const bridgePath = process.env["AGENT_BRIDGE_PATH"]; // Railway: '/agent'
+    const hasToken = token !== "";
+    const hasClerk = clerkSecretKey !== "";
+
+    if (hasToken || hasClerk) {
+      // Auth options: Clerk JWT OR static token (never both — constructor validates)
+      const authOptions = hasClerk ? { clerkSecretKey } : { token };
+
+      if (bridgePath) {
+        // ── Attached Mode (Railway / Single-Port) ──
+        const bridge = new DesktopAgentBridgeImpl({ path: bridgePath, ...authOptions });
+        bridge.start(); // creates noServer WSS
+        adapter.setAgentBridge(bridge);
+
+        // Trigger self-request to /health after gateway starts to capture HTTP server
+        api.on("gateway_start", ({ port }: { port: number }) => {
+          let attempts = 0;
+          const maxAttempts = 3;
+
+          function probe(): void {
+            attempts++;
+            const req = http.get(`http://127.0.0.1:${String(port)}/health`, (res) => {
+              res.resume();
+              if (res.statusCode !== 200 && attempts < maxAttempts) {
+                setTimeout(probe, 100);
+              }
+            });
+            req.on("error", () => {
+              if (attempts < maxAttempts) setTimeout(probe, 100);
+            });
+          }
+          // Short delay so routes are bound
+          setTimeout(probe, 50);
+        });
+
+        api.logger.info?.(
+          `[in-app-channel] DesktopAgentBridge in attached mode on path ${bridgePath} (auth: ${hasClerk ? "clerk" : "static"})`,
+        );
+        return bridge;
+      } else {
+        // ── Standalone Mode (Lokal / Desktop) ──
+        const bridge = new DesktopAgentBridgeImpl({
+          port: gatewayPort + AGENT_WS_PORT_OFFSET,
+          ...authOptions,
+        });
+        bridge.start();
+        adapter.setAgentBridge(bridge);
+        api.logger.info?.(
+          `[in-app-channel] DesktopAgentBridge started on port ${String(gatewayPort + AGENT_WS_PORT_OFFSET)} (auth: ${hasClerk ? "clerk" : "static"})`,
+        );
+        return null; // standalone doesn't need pendingBridge
+      }
+    } else {
+      api.logger.warn?.(
+        "[in-app-channel] No agent token or Clerk secret — DesktopAgentBridge not started",
+      );
+      return null;
+    }
+  } catch (err) {
+    api.logger.warn?.(`[in-app-channel] tool-router wiring failed: ${String(err)}`);
+    return null;
+  }
+}
+
+/**
+ * Register desktop tools as plugin tools for LLM visibility.
+ */
+export function wireDesktopTools(adapter: InAppChannelAdapter, api: PluginApi): void {
+  try {
+    // Ensure tools are initialized before reading the registry
+    initTools();
+
+    // Collect tool names eagerly for plugin registration metadata
+    const toolNames = [...getAllTools().keys()];
+
+    api.registerTool(
+      () => {
+        // 1. Global tools (filesystem, shell, browser, etc.)
+        const globalTools = [...getAllTools().values()];
+
+        // 2. Per-request user tools from AsyncLocalStorage (gmail, calendar, notes, etc.)
+        const userTools = getCurrentUserTools() ?? [];
+
+        // 3. Combine and adapt with bridge routing
+        const bridge = adapter.getAgentBridge();
+        const allTools = [...globalTools, ...userTools];
+        const adapted = adaptToolsForPlugin(allTools as Parameters<typeof adaptToolsForPlugin>[0], bridge);
+        // Cast: adapted tools conform to AnyAgentTool at runtime (name, label, description, parameters, execute)
+        return adapted as unknown as AnyAgentTool[];
+      },
+      {
+        names: toolNames,
+      },
+    );
+
+    api.logger.info?.("[in-app-channel] Desktop tools registered as plugin tools");
+  } catch (err) {
+    api.logger.warn?.(`[in-app-channel] Desktop tools wiring failed: ${String(err)}`);
   }
 }
 
