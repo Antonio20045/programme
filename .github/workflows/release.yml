@@ -52,9 +52,9 @@ jobs:
 
       - name: Build installer
         working-directory: apps/desktop
+        shell: bash
         run: |
-          # Increase open file limit — macOS ad-hoc signing opens every file in gateway/node_modules
-          ulimit -n 65536 2>/dev/null || true
+          if [[ "$RUNNER_OS" == "macOS" ]]; then ulimit -n 65536; fi
           npx electron-builder --config electron-builder.yml ${{ matrix.platform }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

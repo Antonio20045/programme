@@ -204,6 +204,23 @@ find "$DEPLOY_DIR/node_modules" -type l ! -exec test -e {} \; -delete 2>/dev/nul
 echo "[prepare-gateway] Removing openclaw internal node_modules..."
 rm -rf "$DEPLOY_DIR/node_modules/openclaw/node_modules" 2>/dev/null || true
 
+# Remove openclaw source/dev files — only dist/ and package.json are needed at runtime.
+# This reduces file count significantly (3000+ files) which prevents EMFILE during macOS code signing.
+echo "[prepare-gateway] Removing openclaw non-runtime files..."
+cd "$DEPLOY_DIR/node_modules/openclaw"
+find . -maxdepth 1 -type d \( \
+  -name src -o -name __tests__ -o -name apps -o -name assets -o \
+  -name Swabble -o -name packages -o -name skills \
+\) -exec rm -rf {} + 2>/dev/null || true
+find . -maxdepth 1 -type f \( \
+  -name "*.md" -o -name "*.yml" -o -name "*.yaml" -o \
+  -name "Dockerfile*" -o -name "docker-compose*" -o \
+  -name ".eslintrc*" -o -name ".prettierrc*" -o \
+  -name "tsconfig*" -o -name "vitest*" -o -name "tsdown*" -o \
+  -name "*.xml" -o -name "LICENSE" \
+\) -delete 2>/dev/null || true
+cd "$REPO_ROOT"
+
 # Remove non-runtime files to reduce file count (macOS ad-hoc signing opens every file)
 echo "[prepare-gateway] Removing non-runtime files from node_modules..."
 find "$DEPLOY_DIR/node_modules" -type f \( \
