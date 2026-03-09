@@ -35,53 +35,55 @@ const plugin = {
     });
     api.logger.info?.("[in-app-channel] /health route registered");
 
-    // ── Full channel registration (lazy, so import failures don't block /health) ──
-    let channelReady = false;
-    try {
-      // Pre-compiled CJS bundle (built by prepare-gateway.sh with tsdown).
-      // Falls back to .ts source via jiti in dev mode.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      let channelModule: typeof import("../../channels/in-app.js");
-      try {
-        channelModule = require("../../channels/in-app.cjs");
-      } catch {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        channelModule = require("../../channels/in-app.js");
+    // ── Full channel registration (async — ESM import for production bundle) ──
+    // Register a temporary 503 handler while async loading completes
+    let channelLoaded = false;
+    api.registerHttpHandler(async (req, res) => {
+      const url = new URL(req.url ?? "/", "http://localhost");
+      if (!channelLoaded && url.pathname.startsWith("/api/")) {
+        res.writeHead(503, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({ error: "In-App Channel wird geladen..." }),
+        );
+        return true;
       }
-      const { InAppChannelAdapter, createInAppPlugin } = channelModule;
-      const adapter = new InAppChannelAdapter();
-      api.registerChannel({ plugin: createInAppPlugin(adapter) });
-      api.registerHttpHandler(adapter.handleRequest.bind(adapter));
-      api.logger.info?.("[in-app-channel] channel + HTTP handler registered");
+      return false;
+    });
 
-      // ── Wire messageHandler: connect adapter → OpenClaw agent runner ──
-      wireMessageHandler(adapter, api);
-
-      // ── Wire ConfirmationManager + DesktopAgentBridge ──
-      wireToolRouter(adapter, api);
-
-      // ── Register desktop tools as plugin tools for LLM visibility ──
-      wireDesktopTools(adapter, api);
-      channelReady = true;
-    } catch (err) {
-      const msg = err instanceof Error ? (err.stack ?? String(err)) : String(err);
-      api.logger.error?.(`[in-app-channel] CRITICAL — channel registration failed: ${msg}`);
-    }
-
-    // Fallback: return 503 for /api/* when channel failed to load
-    if (!channelReady) {
-      api.registerHttpHandler(async (req, res) => {
-        const url = new URL(req.url ?? "/", "http://localhost");
-        if (url.pathname.startsWith("/api/")) {
-          res.writeHead(503, { "Content-Type": "application/json" });
-          res.end(
-            JSON.stringify({ error: "In-App Channel nicht initialisiert. Gateway-Logs prüfen." }),
-          );
-          return true;
+    // Async channel loading — ESM import for pre-compiled bundle, jiti require as fallback
+    void (async () => {
+      try {
+        let channelModule: typeof import("../../channels/in-app.js");
+        try {
+          // Pre-compiled ESM bundle (built by prepare-gateway.sh with tsdown)
+          const resolved = require.resolve("../../channels/in-app.mjs");
+          const fileUrl = "file://" + resolved;
+          channelModule = await import(fileUrl) as typeof channelModule;
+        } catch {
+          // Dev mode: fall back to .ts source via jiti
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          channelModule = require("../../channels/in-app.js");
         }
-        return false;
-      });
-    }
+        const { InAppChannelAdapter, createInAppPlugin } = channelModule;
+        const adapter = new InAppChannelAdapter();
+        api.registerChannel({ plugin: createInAppPlugin(adapter) });
+        api.registerHttpHandler(adapter.handleRequest.bind(adapter));
+        api.logger.info?.("[in-app-channel] channel + HTTP handler registered");
+
+        // ── Wire messageHandler: connect adapter → OpenClaw agent runner ──
+        wireMessageHandler(adapter, api);
+
+        // ── Wire ConfirmationManager + DesktopAgentBridge ──
+        wireToolRouter(adapter, api);
+
+        // ── Register desktop tools as plugin tools for LLM visibility ──
+        wireDesktopTools(adapter, api);
+        channelLoaded = true;
+      } catch (err) {
+        const msg = err instanceof Error ? (err.stack ?? String(err)) : String(err);
+        api.logger.error?.(`[in-app-channel] CRITICAL — channel registration failed: ${msg}`);
+      }
+    })();
   },
 };
 
