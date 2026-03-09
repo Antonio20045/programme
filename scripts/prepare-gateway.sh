@@ -38,7 +38,14 @@ mkdir -p "$CHANNEL_BUILD_DIR"
 TSDOWN_TMP="$GATEWAY_DIR/.tsdown-channel.ts"
 cat > "$TSDOWN_TMP" << 'TSDOWN_EOF'
 import { defineConfig } from "tsdown";
-export default defineConfig({ entry: "channels/in-app.ts", format: "cjs", platform: "node", fixedExtension: false });
+export default defineConfig({
+  entry: "channels/in-app.ts",
+  format: "cjs",
+  platform: "node",
+  fixedExtension: false,
+  // ESM-only packages must be bundled inline — CJS require() cannot load them
+  noExternal: ["@mariozechner/pi-ai", "@mariozechner/pi-coding-agent"],
+});
 TSDOWN_EOF
 # tsdown may exit non-zero due to warnings — rely on file existence check below
 set +e
