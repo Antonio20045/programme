@@ -2541,41 +2541,51 @@ export function createInAppPlugin(adapter: InAppChannelAdapter): {
 
     gateway: {
       startAccount: async (ctx: { log?: { info: (msg: string) => void } }) => {
-        if (isUsingSQLite()) {
-          // Eagerly init SQLite store (creates tables if needed)
-          getSQLiteStore();
-          ctx.log?.info(`[in-app] SQLite store initialized at ${String(SQLITE_PATH)}`);
-        } else if (process.env["DATABASE_URL"]) {
-          // Run PostgreSQL migrations on startup
-          try {
-            const pool = getPool();
-            await runMigrations(pool);
-            await upsertProviderFromEnv(pool);
-            ctx.log?.info("[in-app] database migrations applied");
-          } catch (err) {
-            ctx.log?.info(`[in-app] migration warning: ${String(err)}`);
-          }
+        // IMPORTANT: This must NEVER reject — OpenClaw core's catch handler crashes
+        // with "Cannot read properties of undefined (reading 'error')" when the
+        // channelLogs map is missing our entry (async registration timing issue).
+        try {
+          if (isUsingSQLite()) {
+            // Eagerly init SQLite store (creates tables if needed)
+            getSQLiteStore();
+            ctx.log?.info(`[in-app] SQLite store initialized at ${String(SQLITE_PATH)}`);
+          } else if (process.env["DATABASE_URL"]) {
+            // Run PostgreSQL migrations on startup
+            try {
+              const pool = getPool();
+              await runMigrations(pool);
+              await upsertProviderFromEnv(pool);
+              ctx.log?.info("[in-app] database migrations applied");
+            } catch (err) {
+              ctx.log?.info(`[in-app] migration warning: ${String(err)}`);
+            }
 
-          // Initialize agent cron system (only in PostgreSQL mode)
-          try {
-            const pool = getPool();
-            const llmClient = createLlmClient();
-            initAgentCron({
-              pool,
-              llmClient,
-              onResult: (userId, agentId, result) =>
-                adapter.handleProactiveResult(userId, agentId, result),
-            });
-            const jobCount = await registerAllAgentCronJobs();
-            registerLifecycleCron();
-            ctx.log?.info(
-              `[in-app] ${String(jobCount)} agent cron jobs + lifecycle cron registered`,
-            );
-          } catch (err) {
-            ctx.log?.info(`[in-app] cron init warning: ${String(err)}`);
+            // Initialize agent cron system (only in PostgreSQL mode)
+            try {
+              const pool = getPool();
+              const llmClient = createLlmClient();
+              initAgentCron({
+                pool,
+                llmClient,
+                onResult: (userId, agentId, result) =>
+                  adapter.handleProactiveResult(userId, agentId, result),
+              });
+              const jobCount = await registerAllAgentCronJobs();
+              registerLifecycleCron();
+              ctx.log?.info(
+                `[in-app] ${String(jobCount)} agent cron jobs + lifecycle cron registered`,
+              );
+            } catch (err) {
+              ctx.log?.info(`[in-app] cron init warning: ${String(err)}`);
+            }
           }
+          ctx.log?.info("[in-app] channel ready — waiting for HTTP connections");
+        } catch (err) {
+          // Swallow to prevent OpenClaw crash — channelLogs map is missing our
+          // "in-app" entry because we register async, so the core catch handler
+          // does `log.error?.(...)` on undefined which is a TypeError.
+          console.error("[in-app] startAccount error (swallowed):", err);
         }
-        ctx.log?.info("[in-app] channel ready — waiting for HTTP connections");
       },
     },
   };

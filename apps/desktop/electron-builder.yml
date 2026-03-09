@@ -42,7 +42,6 @@ mac:
   hardenedRuntime: true
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.inherit.plist
-  identity: null
   notarize: false
 
 win:
