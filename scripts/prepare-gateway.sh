@@ -194,6 +194,12 @@ fi
 # Final cleanup: remove any remaining broken symlinks
 find "$DEPLOY_DIR/node_modules" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 
+# Remove openclaw's own node_modules — only contains back-references to
+# workspace packages. All real deps are already hoisted to the top level.
+# This MUST run after symlink resolution (which can recreate it from .pnpm store).
+echo "[prepare-gateway] Removing openclaw internal node_modules..."
+rm -rf "$DEPLOY_DIR/node_modules/openclaw/node_modules" 2>/dev/null || true
+
 # Override root .gitignore so electron-builder includes node_modules
 touch "$DEPLOY_DIR/.npmignore"
 
