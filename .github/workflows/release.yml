@@ -52,7 +52,10 @@ jobs:
 
       - name: Build installer
         working-directory: apps/desktop
-        run: npx electron-builder --config electron-builder.yml ${{ matrix.platform }} --publish always
+        run: |
+          # Increase open file limit — macOS ad-hoc signing opens every file in gateway/node_modules
+          ulimit -n 65536 2>/dev/null || true
+          npx electron-builder --config electron-builder.yml ${{ matrix.platform }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # macOS Code Signing — ad-hoc signing (no Developer ID configured)

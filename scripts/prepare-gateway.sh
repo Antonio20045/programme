@@ -204,6 +204,19 @@ find "$DEPLOY_DIR/node_modules" -type l ! -exec test -e {} \; -delete 2>/dev/nul
 echo "[prepare-gateway] Removing openclaw internal node_modules..."
 rm -rf "$DEPLOY_DIR/node_modules/openclaw/node_modules" 2>/dev/null || true
 
+# Remove non-runtime files to reduce file count (macOS ad-hoc signing opens every file)
+echo "[prepare-gateway] Removing non-runtime files from node_modules..."
+find "$DEPLOY_DIR/node_modules" -type f \( \
+  -name "*.d.ts" -o -name "*.d.mts" -o -name "*.d.cts" -o \
+  -name "*.map" -o -name "*.ts.map" -o \
+  -name "CHANGELOG*" -o -name "CHANGES*" -o -name "HISTORY*" -o \
+  -name "*.md" -o -name "*.markdown" -o \
+  -name ".eslintrc*" -o -name ".prettierrc*" -o -name ".editorconfig" -o \
+  -name "tsconfig*.json" -o -name ".npmignore" -o -name ".gitattributes" \
+\) -delete 2>/dev/null || true
+# Remove empty dist-types directories left after .d.ts removal
+find "$DEPLOY_DIR/node_modules" -type d -name "dist-types" -empty -delete 2>/dev/null || true
+
 # Override root .gitignore so electron-builder includes node_modules
 touch "$DEPLOY_DIR/.npmignore"
 
