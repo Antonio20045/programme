@@ -36,6 +36,7 @@ extraResources:
       - "!vitest*.config.ts"
 
 mac:
+  identity: null
   target:
     - target: zip
       arch: [x64, arm64]
