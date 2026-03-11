@@ -644,8 +644,31 @@ function setupGateway(autoStart = true): void {
     if (status === 'online') {
       syncAllTokensToGateway().catch(() => {})
       connectNotificationStream()
+
+      // Connect Desktop Agent to local bridge (port = gateway + 1)
+      if (!desktopAgent) {
+        const localToken = readAgentTokenFromFile() ?? ''
+        desktopAgent = new DesktopAgent(
+          `ws://127.0.0.1:${String(18789 + 1)}`,
+          () => ({ kind: 'static', value: localToken }),
+        )
+        desktopAgent.onConnect = () => {
+          const win = mainWindow
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('agent:status-changed', 'connected')
+          }
+        }
+        desktopAgent.onDisconnect = () => {
+          const win = mainWindow
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('agent:status-changed', 'disconnected')
+          }
+        }
+      }
+      desktopAgent.connect()
     } else {
       disconnectNotificationStream()
+      desktopAgent?.disconnect()
     }
   })
 
