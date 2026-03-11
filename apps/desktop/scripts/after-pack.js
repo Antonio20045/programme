@@ -2,6 +2,9 @@ const path = require('path')
 const fs = require('fs')
 const { execSync } = require('child_process')
 
+// electron-builder Arch enum: 0=ia32, 1=x64, 2=armv7l, 3=arm64, 4=universal
+const ARCH_NAME = { 0: 'ia32', 1: 'x64', 2: 'armv7l', 3: 'arm64', 4: 'universal' }
+
 exports.default = async function (context) {
   const projectDir = context.packager.projectDir
   const src = path.join(projectDir, 'gateway-bundle', 'node_modules')
@@ -32,6 +35,34 @@ exports.default = async function (context) {
 
   // Symlinks are already resolved by prepare-gateway.sh — plain copy is sufficient
   fs.cpSync(src, dest, { recursive: true })
+
+  // Rebuild native modules for the target architecture.
+  // prepare-gateway.sh compiled them for the CI runner's arch (e.g. arm64),
+  // but the target may differ (e.g. x64). The gateway runs under Electron's
+  // Node (process.execPath), so we must compile against Electron's headers.
+  const arch = ARCH_NAME[context.arch] || 'x64'
+  const electronVersion = context.packager.config.electronVersion
+    || require(path.join(projectDir, 'node_modules', 'electron', 'package.json')).version
+  const gatewayDir = path.join(resourcesDir, 'gateway')
+
+  console.log(`[after-pack] Rebuilding native modules for ${context.electronPlatformName}-${arch} (Electron ${electronVersion})...`)
+  execSync(
+    `npx @electron/rebuild --force --arch=${arch} --electron-version=${electronVersion} --module-dir="${gatewayDir}"`,
+    { stdio: 'inherit', cwd: projectDir, timeout: 300_000 }
+  )
+
+  // Verify native binary architecture (macOS only — `file` command)
+  if (context.electronPlatformName === 'darwin') {
+    const bsqlite = path.join(dest, 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node')
+    if (fs.existsSync(bsqlite)) {
+      const fileInfo = execSync(`file "${bsqlite}"`).toString().trim()
+      console.log(`[after-pack] Verify: ${fileInfo}`)
+      const expected = arch === 'x64' ? 'x86_64' : 'arm64'
+      if (!fileInfo.includes(expected)) {
+        throw new Error(`[after-pack] Architecture mismatch! Expected ${expected} but got: ${fileInfo}`)
+      }
+    }
+  }
 
   const size = execSync(`du -sh "${dest}"`).toString().split('\t')[0]
   console.log(`[after-pack] Done. node_modules size: ${size}`)
