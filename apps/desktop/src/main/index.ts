@@ -262,12 +262,13 @@ function createWindow(): void {
   const clerkCsp = (process.env.CLERK_PUBLISHABLE_KEY ?? '').length > 0
     ? ' https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com'
     : ''
+  const gatewayOrigin = readGatewayConfig().serverUrl || 'http://127.0.0.1:18789'
   mainWindow.webContents.session.webRequest.onHeadersReceived(
     { urls: ['http://localhost:*/*', 'https://*/*', 'file://*'] },
     (details, callback) => {
     const csp = app.isPackaged
-      ? `default-src 'self'; script-src 'self'${clerkCsp}; style-src 'self' 'unsafe-inline'; connect-src 'self'${clerkCsp} https://clerk-telemetry.com https://challenges.cloudflare.com; img-src 'self' https://img.clerk.com; worker-src 'self' blob:; frame-src 'self'${clerkCsp} https://challenges.cloudflare.com https://accounts.google.com`
-      : `default-src 'self' ws://localhost:5173; script-src 'self' 'unsafe-inline'${clerkCsp}; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:5173 http://localhost:5173 http://127.0.0.1:18789${clerkCsp} https://clerk-telemetry.com https://challenges.cloudflare.com; img-src 'self' https://img.clerk.com; worker-src 'self' blob:; frame-src 'self'${clerkCsp} https://challenges.cloudflare.com https://accounts.google.com`
+      ? `default-src 'self'; script-src 'self'${clerkCsp}; style-src 'self' 'unsafe-inline'; connect-src 'self' ${gatewayOrigin}${clerkCsp} https://clerk-telemetry.com https://challenges.cloudflare.com; img-src 'self' https://img.clerk.com; worker-src 'self' blob:; frame-src 'self'${clerkCsp} https://challenges.cloudflare.com https://accounts.google.com`
+      : `default-src 'self' ws://localhost:5173; script-src 'self' 'unsafe-inline'${clerkCsp}; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:5173 http://localhost:5173 ${gatewayOrigin}${clerkCsp} https://clerk-telemetry.com https://challenges.cloudflare.com; img-src 'self' https://img.clerk.com; worker-src 'self' blob:; frame-src 'self'${clerkCsp} https://challenges.cloudflare.com https://accounts.google.com`
     callback({
       responseHeaders: {
         ...details.responseHeaders,
