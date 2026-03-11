@@ -46,10 +46,16 @@ exports.default = async function (context) {
   const gatewayDir = path.join(resourcesDir, 'gateway')
 
   console.log(`[after-pack] Rebuilding native modules for ${context.electronPlatformName}-${arch} (Electron ${electronVersion})...`)
-  execSync(
-    `npx @electron/rebuild --force --arch=${arch} --electron-version=${electronVersion} --module-dir="${gatewayDir}"`,
-    { stdio: 'inherit', cwd: projectDir, timeout: 300_000 }
-  )
+  // Use programmatic API — @electron/rebuild is a transitive dep of electron-builder
+  const { rebuild } = require(require.resolve('@electron/rebuild', {
+    paths: [projectDir, path.join(projectDir, 'node_modules')]
+  }))
+  await rebuild({
+    buildPath: gatewayDir,
+    electronVersion,
+    arch,
+    force: true,
+  })
 
   // Verify native binary architecture (macOS only — `file` command)
   if (context.electronPlatformName === 'darwin') {
