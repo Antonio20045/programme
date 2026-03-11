@@ -21,6 +21,8 @@ import type { GitAdapter, StatusResult, LogEntry, BranchResult, CommitResult, Bl
 import type { AppLauncherAdapter } from '@ki-assistent/tools/app-launcher'
 import { ALLOWED_APPS } from '@ki-assistent/tools/app-launcher'
 import type { MediaAdapter, NowPlayingInfo } from '@ki-assistent/tools/media-control'
+import type { DesktopControlAdapter } from '@ki-assistent/tools/desktop-control'
+import { KEY_CODES } from '@ki-assistent/tools/desktop-control'
 
 const execFileAsync = promisify(nodeExecFile)
 
@@ -324,6 +326,125 @@ function createMediaControlAdapter(): MediaAdapter {
   }
 }
 
+// ─── Desktop Control Adapter ────────────────────────────────
+
+function createDesktopControlAdapter(): DesktopControlAdapter {
+  async function runJxa(script: string): Promise<string> {
+    const { stdout } = await execFileAsync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script], {
+      timeout: 5_000,
+    })
+    return stdout.trim()
+  }
+
+  async function runOsascript(script: string): Promise<string> {
+    const { stdout } = await execFileAsync('/usr/bin/osascript', ['-e', script], {
+      timeout: 5_000,
+    })
+    return stdout.trim()
+  }
+
+  function buildMouseEventScript(
+    eventDown: string,
+    eventUp: string,
+    x: number,
+    y: number,
+  ): string {
+    return [
+      'ObjC.import("CoreGraphics");',
+      `var p = $.CGPointMake(${String(x)}, ${String(y)});`,
+      `var down = $.CGEventCreateMouseEvent(null, $.${eventDown}, p, 0);`,
+      `var up = $.CGEventCreateMouseEvent(null, $.${eventUp}, p, 0);`,
+      '$.CGEventPost($.kCGHIDEventTap, down);',
+      '$.CGEventPost($.kCGHIDEventTap, up);',
+    ].join('\n')
+  }
+
+  return {
+    click: async (x: number, y: number): Promise<void> => {
+      await runJxa(buildMouseEventScript('kCGEventLeftMouseDown', 'kCGEventLeftMouseUp', x, y))
+    },
+
+    doubleClick: async (x: number, y: number): Promise<void> => {
+      const script = [
+        'ObjC.import("CoreGraphics");',
+        `var p = $.CGPointMake(${String(x)}, ${String(y)});`,
+        'var down1 = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseDown, p, 0);',
+        'var up1 = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseUp, p, 0);',
+        'var down2 = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseDown, p, 0);',
+        '$.CGEventSetIntegerValueField(down2, $.kCGMouseEventClickState, 2);',
+        'var up2 = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseUp, p, 0);',
+        '$.CGEventSetIntegerValueField(up2, $.kCGMouseEventClickState, 2);',
+        '$.CGEventPost($.kCGHIDEventTap, down1);',
+        '$.CGEventPost($.kCGHIDEventTap, up1);',
+        '$.CGEventPost($.kCGHIDEventTap, down2);',
+        '$.CGEventPost($.kCGHIDEventTap, up2);',
+      ].join('\n')
+      await runJxa(script)
+    },
+
+    rightClick: async (x: number, y: number): Promise<void> => {
+      await runJxa(buildMouseEventScript('kCGEventRightMouseDown', 'kCGEventRightMouseUp', x, y))
+    },
+
+    type: async (text: string): Promise<void> => {
+      // Escape for AppleScript: backslashes and double quotes
+      const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      await runOsascript(
+        `tell application "System Events" to keystroke "${escaped}"`,
+      )
+    },
+
+    keystroke: async (key: string, modifiers?: readonly string[]): Promise<void> => {
+      const keyCode = KEY_CODES[key]
+
+      if (keyCode !== undefined) {
+        // Special key — use key code
+        const modStr = modifiers && modifiers.length > 0
+          ? ` using {${modifiers.map((m) => `${m} down`).join(', ')}}`
+          : ''
+        await runOsascript(
+          `tell application "System Events" to key code ${String(keyCode)}${modStr}`,
+        )
+      } else {
+        // Regular character — use keystroke
+        const modStr = modifiers && modifiers.length > 0
+          ? ` using {${modifiers.map((m) => `${m} down`).join(', ')}}`
+          : ''
+        await runOsascript(
+          `tell application "System Events" to keystroke "${key}"${modStr}`,
+        )
+      }
+    },
+
+    scroll: async (direction: 'up' | 'down' | 'left' | 'right', amount: number): Promise<void> => {
+      let dy = 0
+      let dx = 0
+      switch (direction) {
+        case 'up': dy = amount; break
+        case 'down': dy = -amount; break
+        case 'left': dx = amount; break
+        case 'right': dx = -amount; break
+      }
+      const script = [
+        'ObjC.import("CoreGraphics");',
+        `var e = $.CGEventCreateScrollWheelEvent(null, 0, 2, ${String(dy)}, ${String(dx)});`,
+        '$.CGEventPost($.kCGHIDEventTap, e);',
+      ].join('\n')
+      await runJxa(script)
+    },
+
+    getCursorPosition: async (): Promise<{ x: number; y: number }> => {
+      const result = await runJxa([
+        'ObjC.import("CoreGraphics");',
+        'var e = $.CGEventCreate(null);',
+        'var p = $.CGEventGetLocation(e);',
+        'JSON.stringify({x: p.x, y: p.y});',
+      ].join('\n'))
+      return JSON.parse(result) as { x: number; y: number }
+    },
+  }
+}
+
 // ─── Tool Initialization ────────────────────────────────────
 
 initTools(
@@ -333,6 +454,7 @@ initTools(
     git: createGitAdapter(),
     appLauncher: createAppLauncherAdapter(),
     mediaControl: createMediaControlAdapter(),
+    desktopControl: createDesktopControlAdapter(),
   },
   {
     allowedDirectories: [process.env['HOME'] ?? '/Users'],

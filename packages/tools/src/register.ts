@@ -29,6 +29,7 @@ import { createScreenshotTool, type ScreenshotAdapter } from './screenshot'
 import { createGitTool, type GitAdapter } from './git-tools'
 import { createAppLauncherTool, type AppLauncherAdapter } from './app-launcher'
 import { createMediaControlTool, type MediaAdapter } from './media-control'
+import { createDesktopControlTool, type DesktopControlAdapter } from './desktop-control'
 import { createImageToolsTool } from './image-tools'
 import { createOcrTool } from './ocr'
 import { datetimeTool } from './datetime'
@@ -60,6 +61,7 @@ export interface ToolAdapters {
   readonly git?: GitAdapter
   readonly appLauncher?: AppLauncherAdapter
   readonly mediaControl?: MediaAdapter
+  readonly desktopControl?: DesktopControlAdapter
 }
 
 export interface ToolConfig {
@@ -106,6 +108,16 @@ const noopMediaAdapter: MediaAdapter = {
   getVolume: () => Promise.reject(new Error('Not available (no desktop adapter)')),
   mute: () => Promise.reject(new Error('Not available (no desktop adapter)')),
   getNowPlaying: () => Promise.reject(new Error('Not available (no desktop adapter)')),
+}
+
+const noopDesktopControlAdapter: DesktopControlAdapter = {
+  click: () => Promise.reject(new Error('Not available (no desktop adapter)')),
+  doubleClick: () => Promise.reject(new Error('Not available (no desktop adapter)')),
+  rightClick: () => Promise.reject(new Error('Not available (no desktop adapter)')),
+  type: () => Promise.reject(new Error('Not available (no desktop adapter)')),
+  keystroke: () => Promise.reject(new Error('Not available (no desktop adapter)')),
+  scroll: () => Promise.reject(new Error('Not available (no desktop adapter)')),
+  getCursorPosition: () => Promise.reject(new Error('Not available (no desktop adapter)')),
 }
 
 // ---------------------------------------------------------------------------
@@ -250,6 +262,7 @@ export function initTools(adapters?: ToolAdapters, config?: ToolConfig): void {
   registerTool(createGitTool(dirConfig, adapters?.git ?? noopGitAdapter))
   registerTool(createAppLauncherTool(dirConfig, adapters?.appLauncher ?? noopAppLauncherAdapter))
   registerTool(createMediaControlTool(adapters?.mediaControl ?? noopMediaAdapter))
+  registerTool(createDesktopControlTool(adapters?.desktopControl ?? noopDesktopControlAdapter))
 }
 
 /** @deprecated Use initTools() instead. */

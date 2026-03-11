@@ -124,7 +124,8 @@ const TOOL_PERSONAS: ReadonlyMap<string, ToolPersona> = new Map<string, ToolPers
       + 'Not for desktop apps — use app-launcher for those.',
   }],
   ['shell', {
-    description: 'I can run programs and commands on your computer.',
+    description: 'I can run programs and commands on your computer. '
+      + 'Use me for system tasks like installing software, managing processes, or running scripts.',
   }],
   ['system-info', {
     description: 'I can retrieve information about your computer.',
@@ -145,6 +146,11 @@ const TOOL_PERSONAS: ReadonlyMap<string, ToolPersona> = new Map<string, ToolPers
   }],
   ['media-control', {
     description: 'I can control media playback — play, pause, change volume.',
+  }],
+  ['desktop-control', {
+    description: 'I can control any open app like a user — click buttons, type text, press keyboard shortcuts. '
+      + 'Typical workflow: take a screenshot first, analyze what I see, then click or type. '
+      + 'Use me after opening an app with app-launcher. I work with every app on the screen.',
   }],
 
   // ── Desktop: Config-dependent ──
@@ -237,6 +243,11 @@ export function buildToolDescriptionHints(availableToolNames: readonly string[])
   if (!available.has('gmail') && !available.has('calendar') && available.has('connect-google')) {
     routingLines.push(
       '- Emails, inbox, or calendar without a connected account = Ask the user which provider they use, THEN call connect-google.',
+    )
+  }
+  if (available.has('desktop-control')) {
+    routingLines.push(
+      '- Interacting with a native app (click, type, fill fields) = screenshot first, then desktop-control.',
     )
   }
   if (available.has('web-search') || available.has('browser')) {
