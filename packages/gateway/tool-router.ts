@@ -361,12 +361,19 @@ export class DesktopAgentBridge {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<AgentToolResult> {
+    // Wait briefly for agent connection (startup race condition)
     if (!this.connected || !this.socket) {
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({ error: true, reason: 'Desktop Agent nicht verbunden' }),
-        }],
+      const connected = await waitForConnection(this)
+      if (!connected || !this.socket) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              error: true,
+              reason: 'Lokale Tools sind gerade nicht erreichbar. Bitte versuche es gleich nochmal.',
+            }),
+          }],
+        }
       }
     }
 
@@ -543,6 +550,24 @@ export class DesktopAgentBridge {
   }
 }
 
+/**
+ * Wait for the bridge to become connected (startup race condition).
+ * Returns immediately if already connected, otherwise polls every 500ms.
+ */
+async function waitForConnection(
+  bridge: DesktopAgentBridge,
+  timeoutMs = 5000,
+): Promise<boolean> {
+  if (bridge.isConnected()) return true
+  const interval = 500
+  const maxAttempts = Math.ceil(timeoutMs / interval)
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, interval))
+    if (bridge.isConnected()) return true
+  }
+  return false
+}
+
 // ─── Tool Wrapping ───────────────────────────────────────────
 
 /**
@@ -641,13 +666,16 @@ export function adaptToolsForPlugin(
       let result: AgentToolResult
 
       if (tool.runsOn === 'desktop') {
-        if (bridge?.isConnected()) {
+        if (bridge && await waitForConnection(bridge)) {
           result = await bridge.routeToolCall(toolCallId, tool.name, params)
         } else {
           result = {
             content: [{
               type: 'text',
-              text: JSON.stringify({ error: true, reason: 'Desktop Agent nicht verbunden' }),
+              text: JSON.stringify({
+                error: true,
+                reason: 'Lokale Tools sind gerade nicht erreichbar. Bitte versuche es gleich nochmal.',
+              }),
             }],
           }
         }

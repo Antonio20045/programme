@@ -402,9 +402,9 @@ describe('DesktopAgentBridge', () => {
     if (text && text.type === 'text') {
       const parsed = JSON.parse(text.text) as { error: boolean; reason: string }
       expect(parsed.error).toBe(true)
-      expect(parsed.reason).toContain('nicht verbunden')
+      expect(parsed.reason).toContain('nicht erreichbar')
     }
-  })
+  }, 10_000)
 
   it('handles tool_error from agent', async () => {
     const ws = await connectAgent(testPort, token, bridge)
@@ -574,7 +574,7 @@ describe('createConfirmableTools with bridge', () => {
       expect(parsed.error).toBe(true)
     }
     expect(tool.execute).not.toHaveBeenCalled()
-  })
+  }, 10_000)
 
   it('confirms then routes for desktop tool with requiresConfirmation', async () => {
     const emitFn = vi.fn()
