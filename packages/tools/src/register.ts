@@ -294,10 +294,13 @@ export function createOpenClawCodingTools(): OpenClawTool[] {
   }
 
   // Per-request user tools (only visible inside withUserTools callback)
+  // Deduplicate: skip user tools already present from global registry
+  const seen = new Set(result.map((t) => t.name))
   const userTools = userToolContext.getStore()
   if (userTools) {
     for (const tool of userTools) {
       if (disabled?.has(tool.name)) continue
+      if (seen.has(tool.name)) continue
       result.push(bridgeToOpenClaw(tool))
     }
   }

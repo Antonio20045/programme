@@ -22,6 +22,9 @@ const BASE_TOOLS: ReadonlySet<string> = new Set<string>([
   "filesystem",
   "web-search",
   "browser",
+  "desktop-control",
+  "screenshot",
+  "app-launcher",
 ]);
 
 // ─── Module State (Singleton) ───────────────────────────────

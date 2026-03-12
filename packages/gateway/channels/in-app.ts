@@ -1258,11 +1258,23 @@ export class InAppChannelAdapter {
           // ── LlmClient: only available in PostgreSQL mode ──
           const llmClient = isUsingSQLite() ? undefined : createLlmClient();
 
-          const rawUserTools = isUsingSQLite()
-            ? createLocalUserTools((data) => {
-                this.sse.emitAll({ type: "token_refreshed" as SSEEventType, data });
-              })
-            : await createUserTools(userId, getPool(), llmClient);
+          const rawUserTools: ExtendedAgentTool[] = [
+            ...(isUsingSQLite()
+              ? createLocalUserTools((data) => {
+                  this.sse.emitAll({ type: "token_refreshed" as SSEEventType, data });
+                })
+              : await createUserTools(userId, getPool(), llmClient)),
+          ];
+
+          // Merge global tools (desktop-control, screenshot, app-launcher, shell, etc.)
+          // so they appear in semantic routing and tool-description hints.
+          const userToolNames = new Set(rawUserTools.map((t) => t.name));
+          for (const tool of getAllTools().values()) {
+            if (!userToolNames.has(tool.name)) {
+              rawUserTools.push(tool);
+            }
+          }
+
           const userTools = applyToolPersonas(rawUserTools);
 
           // ── Semantic Router: filter to Top-K relevant tools ──
