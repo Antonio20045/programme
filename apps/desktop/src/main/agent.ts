@@ -537,9 +537,11 @@ export class DesktopAgent {
       this.ws = null
     }
 
+    console.log(`[DesktopAgent] Connecting to ${this.serverUrl}`)
     const ws = new WebSocket(this.serverUrl)
 
     ws.addEventListener('open', () => {
+      console.log('[DesktopAgent] WebSocket open, sending auth')
       // Authenticate immediately — fetch current token on every connect/reconnect
       const token = this.getToken()
       const authMsg = token.kind === 'clerk'
@@ -556,7 +558,8 @@ export class DesktopAgent {
       this.handleMessage(String(event.data))
     })
 
-    ws.addEventListener('close', () => {
+    ws.addEventListener('close', (event) => {
+      console.log(`[DesktopAgent] WebSocket closed: code=${String(event.code)} reason=${event.reason}`)
       this.ws = null
       this.setStatus('disconnected')
       this.clearStableTimer()
@@ -565,6 +568,7 @@ export class DesktopAgent {
     })
 
     ws.addEventListener('error', () => {
+      console.error('[DesktopAgent] WebSocket error')
       this.onError?.('WebSocket error')
       // 'close' event follows 'error', so reconnect is handled there
     })

@@ -2367,6 +2367,13 @@ export function wireToolRouter(adapter: InAppChannelAdapter, api: PluginApi): De
     adapter.setConfirmationManager(confirmationManager);
     api.logger.info?.("[in-app-channel] ConfirmationManager wired");
 
+    // Prevent double-init: plugin system may reload the channel after gateway boot.
+    // The second bridge would get EADDRINUSE and overwrite the working one.
+    if (adapter.getAgentBridge()) {
+      api.logger.info?.("[in-app-channel] DesktopAgentBridge already initialized — skipping re-init");
+      return null;
+    }
+
     // ── DesktopAgentBridge (WS server for desktop tool execution) ──
     const cfg = loadConfig();
     const gatewayPort = resolveGatewayPort(cfg);
