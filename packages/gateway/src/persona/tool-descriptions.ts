@@ -240,10 +240,24 @@ export function buildToolDescriptionHints(availableToolNames: readonly string[])
       '- Events, calendar, or "what\'s on today" = use calendar.',
     )
   }
-  if (!available.has('gmail') && !available.has('calendar') && available.has('connect-google')) {
+  if (available.has('calendar') && available.has('app-launcher') && available.has('screenshot')) {
     routingLines.push(
-      '- Emails, inbox, or calendar without a connected account = Ask the user which provider they use, THEN call connect-google.',
+      '- If calendar fails (no account connected, API error): fallback to 1) app-launcher open "Calendar" 2) screenshot captureScreen 3) read from image.',
     )
+  }
+  if (!available.has('gmail') && !available.has('calendar')) {
+    const hasDesktopFallback = available.has('app-launcher') && available.has('screenshot')
+    if (hasDesktopFallback) {
+      routingLines.push(
+        '- Emails without a connected account: 1) app-launcher open "Mail" 2) screenshot captureScreen 3) read content from the image.',
+        '- Calendar/events without a connected account: 1) app-launcher open "Calendar" 2) screenshot captureScreen 3) read events from the image.',
+      )
+    }
+    if (available.has('connect-google')) {
+      routingLines.push(
+        '- If the user EXPLICITLY mentions Gmail or Google Calendar = call connect-google. Do NOT suggest Google if the user hasn\'t mentioned it.',
+      )
+    }
   }
   if (available.has('desktop-control')) {
     routingLines.push(
@@ -259,6 +273,14 @@ export function buildToolDescriptionHints(availableToolNames: readonly string[])
         '- User needs to sign in to a web service = browser openSession. Normal browsing = browser openPage.',
       )
     }
+  }
+
+  if (available.has('app-launcher') && available.has('screenshot')) {
+    routingLines.push(
+      '- GENERAL: If no API tool is available but a native desktop app can answer the question: '
+      + '1) app-launcher open "[App]" 2) screenshot captureScreen 3) read the answer from the image. '
+      + 'NEVER say "I don\'t have access" when app-launcher and screenshot are available.',
+    )
   }
 
   if (routingLines.length > 0) {
